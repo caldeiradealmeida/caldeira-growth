@@ -3,8 +3,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import qrCode from "@/assets/qr-code.png";
-import { Smartphone } from "lucide-react";
+
+
 
 const RegistrationForm = () => {
   const { toast } = useToast();
@@ -61,9 +61,8 @@ const RegistrationForm = () => {
             </p>
           </div>
 
-          <div className="grid lg:grid-cols-2 gap-12 items-start">
-            {/* Formulário */}
-            <div className="bg-card border border-border rounded-2xl p-8 shadow-xl animate-in fade-in slide-in-from-left duration-700">
+          <div className="max-w-2xl mx-auto">
+            <div className="bg-card border border-border rounded-2xl p-8 shadow-xl animate-in fade-in slide-in-from-bottom duration-700">
               <form onSubmit={handleSubmit} className="space-y-6">
                 <div className="space-y-2">
                   <Label htmlFor="nome" className="text-base font-semibold">
@@ -148,31 +147,6 @@ const RegistrationForm = () => {
                   * Todos os campos são obrigatórios
                 </p>
               </form>
-            </div>
-
-            {/* QR Code */}
-            <div className="flex flex-col items-center justify-center space-y-6 animate-in fade-in slide-in-from-right duration-700 delay-300">
-              <div className="bg-card border border-border rounded-2xl p-8 shadow-xl text-center">
-                <div className="flex items-center justify-center mb-6">
-                  <Smartphone className="h-8 w-8 text-accent mr-2" />
-                  <h3 className="text-2xl font-bold text-foreground">
-                    Acesso Rápido
-                  </h3>
-                </div>
-                <p className="text-muted-foreground mb-6">
-                  Escaneie o QR Code com seu celular para acessar o formulário
-                </p>
-                <div className="bg-white p-6 rounded-xl inline-block shadow-lg">
-                  <img 
-                    src={qrCode} 
-                    alt="QR Code para acesso ao formulário de cadastro" 
-                    className="w-64 h-64"
-                  />
-                </div>
-                <p className="text-sm text-muted-foreground mt-6">
-                  Aponte a câmera do seu celular para o código
-                </p>
-              </div>
             </div>
           </div>
         </div>
