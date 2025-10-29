@@ -10,8 +10,7 @@ const RegistrationForm = () => {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Google Forms URL - você precisará substituir pelo URL real do seu formulário
-  const GOOGLE_FORM_URL = "https://forms.gle/YOUR_FORM_ID";
+  const GOOGLE_FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSf5OCGtYR1C9Dd7lOol9iTJnG6aznUlJIUM5ztcndo6W8Sk6A/viewform?usp=publish-editor";
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -22,11 +21,12 @@ const RegistrationForm = () => {
       nome: formData.get('nome'),
       celular: formData.get('celular'),
       email: formData.get('email'),
-      empresa: formData.get('empresa')
+      empresa: formData.get('empresa'),
+      cargo: formData.get('cargo')
     };
 
     // Validação básica
-    if (!data.nome || !data.email || !data.celular || !data.empresa) {
+    if (!data.nome || !data.email || !data.celular || !data.empresa || !data.cargo) {
       toast({
         title: "Erro",
         description: "Por favor, preencha todos os campos.",
@@ -121,7 +121,21 @@ const RegistrationForm = () => {
                   />
                 </div>
 
-                <Button 
+                <div className="space-y-2">
+                  <Label htmlFor="cargo" className="text-base font-semibold">
+                    Cargo *
+                  </Label>
+                  <Input
+                    id="cargo"
+                    name="cargo"
+                    type="text"
+                    placeholder="Seu cargo na empresa"
+                    required
+                    className="h-12 text-base"
+                  />
+                </div>
+
+                <Button
                   type="submit" 
                   size="lg"
                   disabled={isSubmitting}
