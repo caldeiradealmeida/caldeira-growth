@@ -1,4 +1,5 @@
 import { BookOpen, Target, TrendingUp } from "lucide-react";
+import authorPhoto from "@/assets/author-photo.jpg";
 
 const About = () => {
   const features = [
@@ -57,16 +58,23 @@ const About = () => {
           </div>
 
           <div className="bg-primary text-primary-foreground rounded-2xl p-8 md:p-12 animate-in fade-in slide-in-from-bottom duration-700 delay-500">
-            <h3 className="text-2xl md:text-3xl font-bold mb-4">
+            <h3 className="text-2xl md:text-3xl font-bold mb-6">
               Sobre o Autor
             </h3>
-            <p className="text-lg leading-relaxed text-primary-foreground/90">
-              <span className="font-bold text-accent">Denis Caldeira de Almeida</span> Ao longo de quase três décadas, Denis Caldeira de Almeida acumula a prática e o amor aos estudos para entregar caminhos de sucesso aos empreendedores. Liderou organizações de peso dentro de empresas como Telefônica, Google e Meta. Nesta última, foi o responsável pela organização de pequenas empresas para América Latina e receita na ordem de R$10 bilhões. 
+            <div className="flex flex-col md:flex-row gap-6 items-center md:items-start">
+              <img 
+                src={authorPhoto} 
+                alt="Denis Caldeira de Almeida" 
+                className="w-48 h-48 rounded-lg object-cover shadow-lg"
+              />
+              <p className="text-lg leading-relaxed text-primary-foreground/90">
+                <span className="font-bold text-accent">Denis Caldeira de Almeida</span> Ao longo de quase três décadas, Denis Caldeira de Almeida acumula a prática e o amor aos estudos para entregar caminhos de sucesso aos empreendedores. Liderou organizações de peso dentro de empresas como Telefônica, Google e Meta. Nesta última, foi o responsável pela organização de pequenas empresas para América Latina e receita na ordem de R$10 bilhões. 
 Mestre em engenharia econômica pela universidade de Pierre Mendes de Grenoble, França, estudou engenharia elétrica na FEI, MBA em economia na USP, além de treinamentos de estratégia e negócios em Wharton, Kellogg e Columbia.
 Fundador da Caldeira Growth, consultoria estratégica especializada em crescimento empresarial, gestão e transformação cultural, ajuda empresas a escalarem suas operações e aumentarem sua competitividade.
 Co-fundador da Prompt8.ai, empresa de agentes de inteligência artificial que customiza soluções em setores específicos da economia.
 
-            </p>
+              </p>
+            </div>
           </div>
         </div>
       </div>

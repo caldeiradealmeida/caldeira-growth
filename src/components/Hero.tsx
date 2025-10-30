@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import bookCover3D from "@/assets/book-cover-3d.png";
+import bookCover3D from "@/assets/book-cover-new.png";
 import { ArrowDown } from "lucide-react";
 
 const Hero = () => {
