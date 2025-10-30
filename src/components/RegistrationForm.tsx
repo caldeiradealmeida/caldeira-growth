@@ -3,7 +3,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import bookOnTable from "@/assets/book-on-table.png";
 
 
 
@@ -62,17 +61,7 @@ const RegistrationForm = () => {
             </p>
           </div>
 
-          <div className="grid lg:grid-cols-2 gap-8 items-center">
-            {/* Book Image */}
-            <div className="hidden lg:block animate-in fade-in slide-in-from-left duration-700">
-              <img 
-                src={bookOnTable} 
-                alt="Livro Cresça ou Desapareça sobre a mesa" 
-                className="w-full h-auto rounded-2xl shadow-2xl"
-              />
-            </div>
-
-            {/* Registration Form */}
+          <div className="max-w-2xl mx-auto">
             <div className="bg-card border border-border rounded-2xl p-8 shadow-xl animate-in fade-in slide-in-from-bottom duration-700">
               <form onSubmit={handleSubmit} className="space-y-6">
                 <div className="space-y-2">
