@@ -21,12 +21,13 @@ const RegistrationForm = () => {
       nome: formData.get('nome'),
       celular: formData.get('celular'),
       email: formData.get('email'),
+      endereco: formData.get('endereco'),
       empresa: formData.get('empresa'),
       cargo: formData.get('cargo')
     };
 
     // Validação básica
-    if (!data.nome || !data.email || !data.celular || !data.empresa || !data.cargo) {
+    if (!data.nome || !data.email || !data.celular || !data.endereco || !data.empresa || !data.cargo) {
       toast({
         title: "Erro",
         description: "Por favor, preencha todos os campos.",
@@ -101,6 +102,20 @@ const RegistrationForm = () => {
                     name="celular"
                     type="tel"
                     placeholder="(00) 00000-0000"
+                    required
+                    className="h-12 text-base"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="endereco" className="text-base font-semibold">
+                    Endereço Completo *
+                  </Label>
+                  <Input
+                    id="endereco"
+                    name="endereco"
+                    type="text"
+                    placeholder="Rua, número, bairro, cidade, estado, CEP"
                     required
                     className="h-12 text-base"
                   />
