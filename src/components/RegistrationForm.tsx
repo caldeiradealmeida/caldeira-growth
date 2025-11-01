@@ -50,25 +50,8 @@ const RegistrationForm = () => {
     }
 
     try {
-      // Envia os dados para o Google Apps Script em formato JSON
-      const response = await fetch(GOOGLE_SCRIPT_URL, {
-        method: 'POST',
-        mode: 'no-cors', // Google Apps Script requer no-cors para funcionar corretamente
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          nome: data.nome,
-          email: data.email,
-          celular: data.celular,
-          endereco: data.endereco,
-          empresa: data.empresa,
-          cargo: data.cargo
-        }),
-      });
-
       // Log para debug
-      console.log('Dados enviados para Google Sheets:', {
+      console.log('Enviando dados para Google Sheets:', {
         nome: data.nome,
         email: data.email,
         celular: data.celular,
@@ -76,6 +59,54 @@ const RegistrationForm = () => {
         empresa: data.empresa,
         cargo: data.cargo
       });
+
+      // Cria um iframe oculto para enviar o formulário ao Google Apps Script
+      const iframe = document.createElement('iframe');
+      iframe.style.display = 'none';
+      iframe.style.width = '0';
+      iframe.style.height = '0';
+      iframe.name = 'hidden_iframe_' + Date.now();
+      document.body.appendChild(iframe);
+
+      // Cria um formulário temporário para enviar os dados
+      const tempForm = document.createElement('form');
+      tempForm.method = 'POST';
+      tempForm.action = GOOGLE_SCRIPT_URL;
+      tempForm.target = iframe.name;
+      tempForm.style.display = 'none';
+
+      // Adiciona os campos ao formulário
+      const fields = [
+        { name: 'nome', value: data.nome },
+        { name: 'email', value: data.email },
+        { name: 'celular', value: data.celular },
+        { name: 'endereco', value: data.endereco },
+        { name: 'empresa', value: data.empresa },
+        { name: 'cargo', value: data.cargo }
+      ];
+
+      fields.forEach(field => {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = field.name;
+        input.value = field.value || '';
+        tempForm.appendChild(input);
+      });
+
+      document.body.appendChild(tempForm);
+      
+      // Submete o formulário
+      tempForm.submit();
+
+      // Remove o formulário e iframe após um delay
+      setTimeout(() => {
+        if (document.body.contains(tempForm)) {
+          document.body.removeChild(tempForm);
+        }
+        if (document.body.contains(iframe)) {
+          document.body.removeChild(iframe);
+        }
+      }, 3000);
 
       // Mostra mensagem de sucesso
       toast({
