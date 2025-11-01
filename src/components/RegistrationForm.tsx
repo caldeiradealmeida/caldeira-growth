@@ -71,33 +71,35 @@ const RegistrationForm = () => {
         cargo: data.cargo
       });
 
-      // Cria um novo FormData com os nomes corretos dos campos do Google Forms
-      const googleFormData = new FormData();
+      // Cria URLSearchParams (formato application/x-www-form-urlencoded)
+      // O Google Forms espera este formato, não multipart/form-data
+      const formParams = new URLSearchParams();
       
       // Mapeia os campos para os nomes do Google Forms
-      googleFormData.append(FIELD_MAPPING.email, data.email);
-      googleFormData.append(FIELD_MAPPING.endereco, data.endereco);
-      googleFormData.append(FIELD_MAPPING.nome, data.nome);
-      googleFormData.append(FIELD_MAPPING.celular, data.celular);
-      googleFormData.append(FIELD_MAPPING.empresa, data.empresa);
-      googleFormData.append(FIELD_MAPPING.cargo, data.cargo);
+      formParams.append(FIELD_MAPPING.email, data.email);
+      formParams.append(FIELD_MAPPING.endereco, data.endereco);
+      formParams.append(FIELD_MAPPING.nome, data.nome);
+      formParams.append(FIELD_MAPPING.celular, data.celular);
+      formParams.append(FIELD_MAPPING.empresa, data.empresa);
+      formParams.append(FIELD_MAPPING.cargo, data.cargo);
 
       // Adiciona campos obrigatórios do Google Forms (necessários para processamento)
-      googleFormData.append('fvv', '1');
-      googleFormData.append('partialResponse', '[null,null,""]');
-      googleFormData.append('pageHistory', '0');
-      googleFormData.append('fbzx', '-785259899754531839');
+      formParams.append('fvv', '1');
+      formParams.append('partialResponse', '[null,null,""]');
+      formParams.append('pageHistory', '0');
+      formParams.append('fbzx', '-785259899754531839');
 
       // Log dos dados que serão enviados
-      console.log('FormData preparado para envio:');
-      for (const [key, value] of googleFormData.entries()) {
+      console.log('Parâmetros preparados para envio:');
+      for (const [key, value] of formParams.entries()) {
         console.log(`${key}: ${value}`);
       }
 
-      // Envia usando fetch com mode: 'no-cors' (como na abordagem sugerida)
+      // Envia usando fetch com mode: 'no-cors'
+      // URLSearchParams automaticamente usa application/x-www-form-urlencoded
       await fetch(GOOGLE_FORM_SUBMIT_URL, {
         method: 'POST',
-        body: googleFormData,
+        body: formParams.toString(),
         mode: 'no-cors' // Modo importante para evitar erros de CORS
       });
 
