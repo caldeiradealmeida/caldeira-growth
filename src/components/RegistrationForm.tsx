@@ -11,8 +11,8 @@ const RegistrationForm = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
 
-  // URL do endpoint do Google Forms para receber dados
-  const GOOGLE_FORM_SUBMIT_URL = "https://docs.google.com/forms/u/0/d/e/1FAIpQLSf5OCGtYR1C9Dd7lOol9iTJnG6aznUlJIUM5ztcndo6W8Sk6A/formResponse";
+  // URL do endpoint do Google Forms para receber dados (sem /u/0/ para permitir envios públicos)
+  const GOOGLE_FORM_SUBMIT_URL = "https://docs.google.com/forms/d/e/1FAIpQLSf5OCGtYR1C9Dd7lOol9iTJnG6aznUlJIUM5ztcndo6W8Sk6A/formResponse";
 
   // Mapeamento dos campos do formulário para os IDs do Google Forms
   const FIELD_MAPPING: Record<string, string> = {
@@ -103,13 +103,15 @@ const RegistrationForm = () => {
         mode: 'no-cors' // Modo importante para evitar erros de CORS
       });
 
-      // Com mode: 'no-cors', não conseguimos ver a resposta, mas assumimos sucesso
-      console.log('Formulário enviado com sucesso!');
+      // Com mode: 'no-cors', não conseguimos ler a resposta do Google Forms
+      // O .then() dispara assim que o navegador envia, sem confirmar sucesso
+      // Então, assumimos o sucesso e atualizamos a interface
+      console.log('Requisição enviada para o Google Forms. Verifique sua planilha para confirmar.');
 
       // Mostra mensagem de sucesso
       toast({
-        title: "Cadastro realizado com sucesso!",
-        description: "Seu cadastro foi enviado. Obrigado pelo interesse!",
+        title: "Cadastro enviado!",
+        description: "Sua solicitação foi enviada. Verifique sua planilha do Google Forms.",
       });
 
       // Limpa o formulário
