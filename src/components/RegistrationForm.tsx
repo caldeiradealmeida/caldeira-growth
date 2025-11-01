@@ -85,7 +85,9 @@ const RegistrationForm = () => {
 
       // Adiciona campos obrigatórios do Google Forms (necessários para processamento)
       // partialResponse deve conter o valor do fbzx dentro do array
-      const fbzxValue = '-785259899754531839';
+      // IMPORTANTE: Este token (fbzx) é gerado pelo Google Forms e pode expirar
+      // Se parar de funcionar, pegue um novo token do código-fonte do formulário
+      const fbzxValue = '645556721779982859';
       formParams.append('fvv', '1');
       formParams.append('partialResponse', `[null,null,"${fbzxValue}"]`);
       formParams.append('pageHistory', '0');
