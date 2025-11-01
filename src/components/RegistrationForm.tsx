@@ -82,6 +82,12 @@ const RegistrationForm = () => {
       googleFormData.append(FIELD_MAPPING.empresa, data.empresa);
       googleFormData.append(FIELD_MAPPING.cargo, data.cargo);
 
+      // Adiciona campos obrigatórios do Google Forms (necessários para processamento)
+      googleFormData.append('fvv', '1');
+      googleFormData.append('partialResponse', '[null,null,""]');
+      googleFormData.append('pageHistory', '0');
+      googleFormData.append('fbzx', '-785259899754531839');
+
       // Log dos dados que serão enviados
       console.log('FormData preparado para envio:');
       for (const [key, value] of googleFormData.entries()) {
