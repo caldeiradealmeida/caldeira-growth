@@ -25,7 +25,10 @@ const RegistrationForm = () => {
   };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    // Previne o comportamento padrão do formulário (evita redirecionamento)
     e.preventDefault();
+    e.stopPropagation();
+    
     setIsSubmitting(true);
 
     const formData = new FormData(e.currentTarget);
@@ -68,7 +71,7 @@ const RegistrationForm = () => {
       googleFormData.append("pageHistory", "0");
       googleFormData.append("fbzx", "-785259899754531839");
 
-      // Envia os dados para o Google Forms
+      // Envia os dados para o Google Forms usando fetch com no-cors
       // Nota: Usamos 'no-cors' porque o Google Forms não permite CORS
       // Isso significa que não podemos verificar a resposta, mas o envio funciona
       await fetch(GOOGLE_FORM_SUBMIT_URL, {
@@ -79,13 +82,17 @@ const RegistrationForm = () => {
         },
         body: googleFormData.toString(),
       });
+
+      // Mostra mensagem de sucesso
       toast({
         title: "Cadastro realizado com sucesso!",
         description: "Seu cadastro foi enviado. Obrigado pelo interesse!",
       });
 
-      // Limpa o formulário
-      e.currentTarget.reset();
+      // Limpa o formulário após um pequeno delay para garantir que o toast apareça
+      setTimeout(() => {
+        e.currentTarget.reset();
+      }, 100);
 
     } catch (error) {
       console.error('Erro ao enviar formulário:', error);
@@ -114,7 +121,7 @@ const RegistrationForm = () => {
 
           <div className="max-w-2xl mx-auto">
             <div className="bg-card border border-border rounded-2xl p-8 shadow-xl animate-in fade-in slide-in-from-bottom duration-700">
-              <form onSubmit={handleSubmit} className="space-y-6">
+              <form onSubmit={handleSubmit} className="space-y-6" noValidate>
                 <div className="space-y-2">
                   <Label htmlFor="nome" className="text-base font-semibold">
                     Nome Completo *
