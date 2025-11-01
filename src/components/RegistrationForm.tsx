@@ -38,6 +38,7 @@ const RegistrationForm = () => {
       setIsSubmitting(false);
       return;
     }
+
     const formData = new FormData(formRef.current);
     const data = {
       nome: formData.get('nome') as string,
@@ -70,93 +71,43 @@ const RegistrationForm = () => {
         cargo: data.cargo
       });
 
-      // Cria um iframe oculto para enviar o formulário ao Google Forms
-      const iframeId = 'hidden_iframe_' + Date.now();
-      const iframe = document.createElement('iframe');
-      iframe.id = iframeId;
-      iframe.style.display = 'none';
-      iframe.style.width = '0';
-      iframe.style.height = '0';
-      iframe.name = iframeId;
-      iframe.style.position = 'absolute';
-      iframe.style.top = '-9999px';
-      iframe.style.left = '-9999px';
+      // Cria um novo FormData com os nomes corretos dos campos do Google Forms
+      const googleFormData = new FormData();
       
-      document.body.appendChild(iframe);
+      // Mapeia os campos para os nomes do Google Forms
+      googleFormData.append(FIELD_MAPPING.email, data.email);
+      googleFormData.append(FIELD_MAPPING.endereco, data.endereco);
+      googleFormData.append(FIELD_MAPPING.nome, data.nome);
+      googleFormData.append(FIELD_MAPPING.celular, data.celular);
+      googleFormData.append(FIELD_MAPPING.empresa, data.empresa);
+      googleFormData.append(FIELD_MAPPING.cargo, data.cargo);
 
-      // Cria um formulário temporário para enviar os dados
-      const tempForm = document.createElement('form');
-      tempForm.method = 'POST';
-      tempForm.action = GOOGLE_FORM_SUBMIT_URL;
-      tempForm.target = iframeId;
-      tempForm.style.display = 'none';
-      tempForm.enctype = 'application/x-www-form-urlencoded';
-
-      // Adiciona os campos ao formulário na ordem correta do Google Forms
-      // Ordem no Google Forms: E-mail, Endereço, Nome, Celular, Empresa, Cargo
-      const fields = [
-        { name: FIELD_MAPPING.email, value: data.email },
-        { name: FIELD_MAPPING.endereco, value: data.endereco },
-        { name: FIELD_MAPPING.nome, value: data.nome },
-        { name: FIELD_MAPPING.celular, value: data.celular },
-        { name: FIELD_MAPPING.empresa, value: data.empresa },
-        { name: FIELD_MAPPING.cargo, value: data.cargo }
-      ];
-
-      fields.forEach(field => {
-        const input = document.createElement('input');
-        input.type = 'hidden';
-        input.name = field.name;
-        input.value = field.value || '';
-        tempForm.appendChild(input);
-        console.log(`Campo adicionado: ${field.name} = ${field.value}`);
-      });
-
-      // Adiciona campos obrigatórios do Google Forms
-      const requiredFields = {
-        'fvv': '1',
-        'partialResponse': '[null,null,""]',
-        'pageHistory': '0',
-        'fbzx': '-785259899754531839'
-      };
-
-      for (const [key, value] of Object.entries(requiredFields)) {
-        const input = document.createElement('input');
-        input.type = 'hidden';
-        input.name = key;
-        input.value = value;
-        tempForm.appendChild(input);
+      // Log dos dados que serão enviados
+      console.log('FormData preparado para envio:');
+      for (const [key, value] of googleFormData.entries()) {
+        console.log(`${key}: ${value}`);
       }
 
-      document.body.appendChild(tempForm);
-      
-      console.log('Submetendo formulário para:', GOOGLE_FORM_SUBMIT_URL);
-      
-      // Submete o formulário
-      tempForm.submit();
+      // Envia usando fetch com mode: 'no-cors' (como na abordagem sugerida)
+      await fetch(GOOGLE_FORM_SUBMIT_URL, {
+        method: 'POST',
+        body: googleFormData,
+        mode: 'no-cors' // Modo importante para evitar erros de CORS
+      });
 
-      // Remove o formulário e iframe após um delay
-      setTimeout(() => {
-        if (document.body.contains(tempForm)) {
-          document.body.removeChild(tempForm);
-        }
-        if (document.body.contains(iframe)) {
-          document.body.removeChild(iframe);
-        }
-      }, 3000);
+      // Com mode: 'no-cors', não conseguimos ver a resposta, mas assumimos sucesso
+      console.log('Formulário enviado com sucesso!');
 
-      // Mostra mensagem de sucesso (Google Forms não retorna resposta, então assumimos sucesso)
+      // Mostra mensagem de sucesso
       toast({
         title: "Cadastro realizado com sucesso!",
         description: "Seu cadastro foi enviado. Obrigado pelo interesse!",
       });
 
-      // Limpa o formulário após um pequeno delay
-      setTimeout(() => {
-        if (formRef.current) {
-          formRef.current.reset();
-        }
-      }, 100);
+      // Limpa o formulário
+      if (formRef.current) {
+        formRef.current.reset();
+      }
 
     } catch (error) {
       console.error('Erro ao enviar formulário:', error);
