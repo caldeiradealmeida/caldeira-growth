@@ -11,8 +11,18 @@ const RegistrationForm = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
 
-  // URL do Google Apps Script Web App para receber dados
-  const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwF-MkCl3gdf-YSvpnbGwwdryb242pCmcZj5bfPx0R46UqiH-ka9nwhZiKwDFJNPirk/exec";
+  // URL do endpoint do Google Forms para receber dados
+  const GOOGLE_FORM_SUBMIT_URL = "https://docs.google.com/forms/u/0/d/e/1FAIpQLSf5OCGtYR1C9Dd7lOol9iTJnG6aznUlJIUM5ztcndo6W8Sk6A/formResponse";
+
+  // Mapeamento dos campos do formulário para os IDs do Google Forms
+  const FIELD_MAPPING: Record<string, string> = {
+    email: "emailAddress", // Campo especial de e-mail (não usa entry.xxxxx)
+    endereco: "entry.1444556828", // ID do campo Endereço
+    nome: "entry.1437745654", // ID do campo Nome Completo
+    celular: "entry.862728894", // ID do campo Celular
+    empresa: "entry.1220837344", // ID do campo Empresa
+    cargo: "entry.1410942633", // ID do campo Cargo
+  };
 
   const handleSubmit = async (e?: React.FormEvent<HTMLFormElement>) => {
     // Previne o comportamento padrão do formulário (evita redirecionamento)
@@ -51,7 +61,7 @@ const RegistrationForm = () => {
 
     try {
       // Log para debug
-      console.log('Enviando dados para Google Sheets:', {
+      console.log('Enviando dados para Google Forms:', {
         nome: data.nome,
         email: data.email,
         celular: data.celular,
@@ -60,76 +70,93 @@ const RegistrationForm = () => {
         cargo: data.cargo
       });
 
-      // Método alternativo: usar URLSearchParams e criar URL com dados
-      // O Google Apps Script pode aceitar dados via GET quando são enviados via URL
-      // Mas vamos tentar POST com fetch primeiro, e se der erro 403, tentamos uma abordagem diferente
+      // Cria um iframe oculto para enviar o formulário ao Google Forms
+      const iframeId = 'hidden_iframe_' + Date.now();
+      const iframe = document.createElement('iframe');
+      iframe.id = iframeId;
+      iframe.style.display = 'none';
+      iframe.style.width = '0';
+      iframe.style.height = '0';
+      iframe.name = iframeId;
+      iframe.style.position = 'absolute';
+      iframe.style.top = '-9999px';
+      iframe.style.left = '-9999px';
       
-      const params = new URLSearchParams();
-      params.append('nome', data.nome);
-      params.append('email', data.email);
-      params.append('celular', data.celular);
-      params.append('endereco', data.endereco);
-      params.append('empresa', data.empresa);
-      params.append('cargo', data.cargo);
+      document.body.appendChild(iframe);
 
-      console.log('Parâmetros criados:', params.toString());
+      // Cria um formulário temporário para enviar os dados
+      const tempForm = document.createElement('form');
+      tempForm.method = 'POST';
+      tempForm.action = GOOGLE_FORM_SUBMIT_URL;
+      tempForm.target = iframeId;
+      tempForm.style.display = 'none';
+      tempForm.enctype = 'application/x-www-form-urlencoded';
 
-      // Tenta usar fetch com no-cors (pode funcionar melhor)
-      try {
-        const response = await fetch(GOOGLE_SCRIPT_URL, {
-          method: 'POST',
-          mode: 'no-cors',
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-          },
-          body: params.toString(),
-        });
-        
-        console.log('Fetch enviado (resposta pode não ser acessível devido a no-cors)');
-        
-        // Com no-cors, não podemos ver a resposta, mas assumimos sucesso
-        toast({
-          title: "Cadastro realizado com sucesso!",
-          description: "Seu cadastro foi enviado. Obrigado pelo interesse!",
-        });
+      // Adiciona os campos ao formulário na ordem correta do Google Forms
+      // Ordem no Google Forms: E-mail, Endereço, Nome, Celular, Empresa, Cargo
+      const fields = [
+        { name: FIELD_MAPPING.email, value: data.email },
+        { name: FIELD_MAPPING.endereco, value: data.endereco },
+        { name: FIELD_MAPPING.nome, value: data.nome },
+        { name: FIELD_MAPPING.celular, value: data.celular },
+        { name: FIELD_MAPPING.empresa, value: data.empresa },
+        { name: FIELD_MAPPING.cargo, value: data.cargo }
+      ];
 
-        setTimeout(() => {
-          if (formRef.current) {
-            formRef.current.reset();
-          }
-        }, 100);
-        
-      } catch (fetchError) {
-        console.error('Erro no fetch:', fetchError);
-        
-        // Se fetch falhar, tenta usar imagem oculta (trick comum para contornar CORS)
-        const img = document.createElement('img');
-        img.src = GOOGLE_SCRIPT_URL + '?' + params.toString();
-        img.style.display = 'none';
-        img.onload = () => {
-          console.log('Imagem carregada - dados enviados via GET');
-          toast({
-            title: "Cadastro realizado com sucesso!",
-            description: "Seu cadastro foi enviado. Obrigado pelo interesse!",
-          });
-          setTimeout(() => {
-            if (formRef.current) {
-              formRef.current.reset();
-            }
-          }, 100);
-        };
-        img.onerror = () => {
-          console.error('Erro ao carregar imagem');
-        };
-        document.body.appendChild(img);
-        
-        // Remove após delay
-        setTimeout(() => {
-          if (document.body.contains(img)) {
-            document.body.removeChild(img);
-          }
-        }, 2000);
+      fields.forEach(field => {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = field.name;
+        input.value = field.value || '';
+        tempForm.appendChild(input);
+        console.log(`Campo adicionado: ${field.name} = ${field.value}`);
+      });
+
+      // Adiciona campos obrigatórios do Google Forms
+      const requiredFields = {
+        'fvv': '1',
+        'partialResponse': '[null,null,""]',
+        'pageHistory': '0',
+        'fbzx': '-785259899754531839'
+      };
+
+      for (const [key, value] of Object.entries(requiredFields)) {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = key;
+        input.value = value;
+        tempForm.appendChild(input);
       }
+
+      document.body.appendChild(tempForm);
+      
+      console.log('Submetendo formulário para:', GOOGLE_FORM_SUBMIT_URL);
+      
+      // Submete o formulário
+      tempForm.submit();
+
+      // Remove o formulário e iframe após um delay
+      setTimeout(() => {
+        if (document.body.contains(tempForm)) {
+          document.body.removeChild(tempForm);
+        }
+        if (document.body.contains(iframe)) {
+          document.body.removeChild(iframe);
+        }
+      }, 3000);
+
+      // Mostra mensagem de sucesso (Google Forms não retorna resposta, então assumimos sucesso)
+      toast({
+        title: "Cadastro realizado com sucesso!",
+        description: "Seu cadastro foi enviado. Obrigado pelo interesse!",
+      });
+
+      // Limpa o formulário após um pequeno delay
+      setTimeout(() => {
+        if (formRef.current) {
+          formRef.current.reset();
+        }
+      }, 100);
 
     } catch (error) {
       console.error('Erro ao enviar formulário:', error);
