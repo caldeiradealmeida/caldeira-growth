@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,6 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 const RegistrationForm = () => {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const formRef = useRef<HTMLFormElement>(null);
 
   // URL do endpoint do Google Forms para receber dados
   const GOOGLE_FORM_SUBMIT_URL = "https://docs.google.com/forms/u/0/d/e/1FAIpQLSf5OCGtYR1C9Dd7lOol9iTJnG6aznUlJIUM5ztcndo6W8Sk6A/formResponse";
@@ -24,14 +25,21 @@ const RegistrationForm = () => {
     cargo: "entry.1410942633", // ID do campo Cargo
   };
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e?: React.FormEvent<HTMLFormElement>) => {
     // Previne o comportamento padrão do formulário (evita redirecionamento)
-    e.preventDefault();
-    e.stopPropagation();
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
     
     setIsSubmitting(true);
 
-    const formData = new FormData(e.currentTarget);
+    // Pega o formulário pela referência React
+    if (!formRef.current) {
+      setIsSubmitting(false);
+      return;
+    }
+    const formData = new FormData(formRef.current);
     const data = {
       nome: formData.get('nome') as string,
       celular: formData.get('celular') as string,
@@ -91,7 +99,9 @@ const RegistrationForm = () => {
 
       // Limpa o formulário após um pequeno delay para garantir que o toast apareça
       setTimeout(() => {
-        e.currentTarget.reset();
+        if (formRef.current) {
+          formRef.current.reset();
+        }
       }, 100);
 
     } catch (error) {
@@ -121,7 +131,7 @@ const RegistrationForm = () => {
 
           <div className="max-w-2xl mx-auto">
             <div className="bg-card border border-border rounded-2xl p-8 shadow-xl animate-in fade-in slide-in-from-bottom duration-700">
-              <form onSubmit={handleSubmit} className="space-y-6" noValidate>
+              <form ref={formRef} onSubmit={(e) => { e.preventDefault(); e.stopPropagation(); }} className="space-y-6" noValidate>
                 <div className="space-y-2">
                   <Label htmlFor="nome" className="text-base font-semibold">
                     Nome Completo *
@@ -207,9 +217,14 @@ const RegistrationForm = () => {
                 </div>
 
                 <Button
-                  type="submit" 
+                  type="button" 
                   size="lg"
                   disabled={isSubmitting}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleSubmit();
+                  }}
                   className="w-full bg-accent hover:bg-accent/90 text-accent-foreground font-bold text-lg py-6 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105"
                 >
                   {isSubmitting ? "Enviando..." : "Quero receber o livro"}
