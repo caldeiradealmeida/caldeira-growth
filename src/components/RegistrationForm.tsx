@@ -61,11 +61,11 @@ const RegistrationForm = () => {
     }
 
     try {
-      // Cria FormData para enviar ao Google Forms
+      // Cria FormData para enviar ao Google Forms usando URLSearchParams
       const googleFormData = new URLSearchParams();
       
       // Mapeia os dados para os campos do Google Forms
-      // IMPORTANTE: A ordem importa! Verifique a ordem dos campos no seu Google Forms
+      // IMPORTANTE: A ordem importa! A ordem no Google Forms é: E-mail, Endereço, Nome, Celular, Empresa, Cargo
       googleFormData.append(FIELD_MAPPING.email, data.email);
       googleFormData.append(FIELD_MAPPING.endereco, data.endereco);
       googleFormData.append(FIELD_MAPPING.nome, data.nome);
@@ -79,16 +79,51 @@ const RegistrationForm = () => {
       googleFormData.append("pageHistory", "0");
       googleFormData.append("fbzx", "-785259899754531839");
 
-      // Envia os dados para o Google Forms usando fetch com no-cors
-      // Nota: Usamos 'no-cors' porque o Google Forms não permite CORS
-      // Isso significa que não podemos verificar a resposta, mas o envio funciona
-      await fetch(GOOGLE_FORM_SUBMIT_URL, {
-        method: 'POST',
-        mode: 'no-cors', // Google Forms não retorna CORS, então usamos no-cors
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: googleFormData.toString(),
+      // Usa um iframe oculto para enviar o formulário (mais confiável que fetch)
+      const iframe = document.createElement('iframe');
+      iframe.style.display = 'none';
+      iframe.style.width = '0';
+      iframe.style.height = '0';
+      iframe.name = 'hidden_iframe';
+      document.body.appendChild(iframe);
+
+      // Cria um formulário temporário e submete via iframe
+      const tempForm = document.createElement('form');
+      tempForm.method = 'POST';
+      tempForm.action = GOOGLE_FORM_SUBMIT_URL;
+      tempForm.target = 'hidden_iframe';
+      tempForm.style.display = 'none';
+
+      // Adiciona todos os campos ao formulário
+      for (const [key, value] of googleFormData.entries()) {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = key;
+        input.value = value;
+        tempForm.appendChild(input);
+      }
+
+      document.body.appendChild(tempForm);
+      tempForm.submit();
+
+      // Remove o formulário e iframe após um delay
+      setTimeout(() => {
+        if (document.body.contains(tempForm)) {
+          document.body.removeChild(tempForm);
+        }
+        if (document.body.contains(iframe)) {
+          document.body.removeChild(iframe);
+        }
+      }, 2000);
+
+      // Log para debug (pode ser removido em produção)
+      console.log('Dados enviados para Google Forms:', {
+        email: data.email,
+        endereco: data.endereco,
+        nome: data.nome,
+        celular: data.celular,
+        empresa: data.empresa,
+        cargo: data.cargo
       });
 
       // Mostra mensagem de sucesso
