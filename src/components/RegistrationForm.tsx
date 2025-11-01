@@ -61,19 +61,83 @@ const RegistrationForm = () => {
       });
 
       // Cria um iframe oculto para enviar o formulário ao Google Apps Script
+      const iframeId = 'hidden_iframe_' + Date.now();
       const iframe = document.createElement('iframe');
+      iframe.id = iframeId;
       iframe.style.display = 'none';
       iframe.style.width = '0';
       iframe.style.height = '0';
-      iframe.name = 'hidden_iframe_' + Date.now();
+      iframe.name = iframeId;
+      
+      // Adiciona listener para capturar a resposta
+      iframe.onload = () => {
+        console.log('Iframe carregado - requisição enviada');
+        
+        // Tenta ler a resposta do iframe (pode não funcionar devido a CORS)
+        try {
+          const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
+          if (iframeDoc) {
+            const responseText = iframeDoc.body?.innerText || '';
+            console.log('Resposta do Google Apps Script:', responseText);
+            
+            if (responseText.includes('Success')) {
+              toast({
+                title: "Cadastro realizado com sucesso!",
+                description: "Seu cadastro foi enviado. Obrigado pelo interesse!",
+              });
+              
+              setTimeout(() => {
+                if (formRef.current) {
+                  formRef.current.reset();
+                }
+              }, 100);
+            } else {
+              console.error('Erro na resposta:', responseText);
+            }
+          }
+        } catch (e) {
+          // CORS pode bloquear, mas isso é esperado
+          console.log('Não foi possível ler resposta devido a CORS (isso é normal)');
+          // Assume sucesso se não houver erro visível
+          toast({
+            title: "Cadastro realizado com sucesso!",
+            description: "Seu cadastro foi enviado. Obrigado pelo interesse!",
+          });
+          
+          setTimeout(() => {
+            if (formRef.current) {
+              formRef.current.reset();
+            }
+          }, 100);
+        }
+        
+        // Remove o iframe após um delay
+        setTimeout(() => {
+          if (document.body.contains(iframe)) {
+            document.body.removeChild(iframe);
+          }
+        }, 2000);
+      };
+      
+      iframe.onerror = () => {
+        console.error('Erro ao carregar iframe');
+        toast({
+          title: "Erro ao enviar",
+          description: "Ocorreu um erro ao enviar seu cadastro. Por favor, tente novamente.",
+          variant: "destructive",
+        });
+        setIsSubmitting(false);
+      };
+
       document.body.appendChild(iframe);
 
       // Cria um formulário temporário para enviar os dados
       const tempForm = document.createElement('form');
       tempForm.method = 'POST';
       tempForm.action = GOOGLE_SCRIPT_URL;
-      tempForm.target = iframe.name;
+      tempForm.target = iframeId;
       tempForm.style.display = 'none';
+      tempForm.enctype = 'application/x-www-form-urlencoded';
 
       // Adiciona os campos ao formulário
       const fields = [
@@ -91,35 +155,22 @@ const RegistrationForm = () => {
         input.name = field.name;
         input.value = field.value || '';
         tempForm.appendChild(input);
+        console.log(`Campo adicionado: ${field.name} = ${field.value}`);
       });
 
       document.body.appendChild(tempForm);
       
+      console.log('Submetendo formulário para:', GOOGLE_SCRIPT_URL);
+      
       // Submete o formulário
       tempForm.submit();
 
-      // Remove o formulário e iframe após um delay
+      // Remove o formulário após um delay
       setTimeout(() => {
         if (document.body.contains(tempForm)) {
           document.body.removeChild(tempForm);
         }
-        if (document.body.contains(iframe)) {
-          document.body.removeChild(iframe);
-        }
       }, 3000);
-
-      // Mostra mensagem de sucesso
-      toast({
-        title: "Cadastro realizado com sucesso!",
-        description: "Seu cadastro foi enviado. Obrigado pelo interesse!",
-      });
-
-      // Limpa o formulário após um pequeno delay para garantir que o toast apareça
-      setTimeout(() => {
-        if (formRef.current) {
-          formRef.current.reset();
-        }
-      }, 100);
 
     } catch (error) {
       console.error('Erro ao enviar formulário:', error);
