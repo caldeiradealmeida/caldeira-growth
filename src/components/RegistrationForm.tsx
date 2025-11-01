@@ -84,10 +84,12 @@ const RegistrationForm = () => {
       formParams.append(FIELD_MAPPING.cargo, data.cargo);
 
       // Adiciona campos obrigatórios do Google Forms (necessários para processamento)
+      // partialResponse deve conter o valor do fbzx dentro do array
+      const fbzxValue = '-785259899754531839';
       formParams.append('fvv', '1');
-      formParams.append('partialResponse', '[null,null,""]');
+      formParams.append('partialResponse', `[null,null,"${fbzxValue}"]`);
       formParams.append('pageHistory', '0');
-      formParams.append('fbzx', '-785259899754531839');
+      formParams.append('fbzx', fbzxValue);
 
       // Log dos dados que serão enviados
       console.log('Parâmetros preparados para envio:');
