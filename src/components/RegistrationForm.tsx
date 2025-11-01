@@ -11,19 +11,8 @@ const RegistrationForm = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
 
-  // URL do endpoint do Google Forms para receber dados
-  const GOOGLE_FORM_SUBMIT_URL = "https://docs.google.com/forms/u/0/d/e/1FAIpQLSf5OCGtYR1C9Dd7lOol9iTJnG6aznUlJIUM5ztcndo6W8Sk6A/formResponse";
-
-  // Mapeamento dos campos do formulário para os IDs do Google Forms
-  // IDs obtidos do código-fonte do formulário Google Forms
-  const FIELD_MAPPING: Record<string, string> = {
-    email: "emailAddress", // Campo especial de e-mail (não usa entry.xxxxx)
-    endereco: "entry.1444556828", // ID do campo Endereço
-    nome: "entry.1437745654", // ID do campo Nome Completo
-    celular: "entry.862728894", // ID do campo Celular
-    empresa: "entry.1220837344", // ID do campo Empresa
-    cargo: "entry.1410942633", // ID do campo Cargo
-  };
+  // URL do Google Apps Script Web App para receber dados
+  const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwF-MkCl3gdf-YSvpnbGwwdryb242pCmcZj5bfPx0R46UqiH-ka9nwhZiKwDFJNPirk/exec";
 
   const handleSubmit = async (e?: React.FormEvent<HTMLFormElement>) => {
     // Previne o comportamento padrão do formulário (evita redirecionamento)
@@ -61,67 +50,29 @@ const RegistrationForm = () => {
     }
 
     try {
-      // Cria FormData para enviar ao Google Forms usando URLSearchParams
-      const googleFormData = new URLSearchParams();
-      
-      // Mapeia os dados para os campos do Google Forms
-      // IMPORTANTE: A ordem importa! A ordem no Google Forms é: E-mail, Endereço, Nome, Celular, Empresa, Cargo
-      googleFormData.append(FIELD_MAPPING.email, data.email);
-      googleFormData.append(FIELD_MAPPING.endereco, data.endereco);
-      googleFormData.append(FIELD_MAPPING.nome, data.nome);
-      googleFormData.append(FIELD_MAPPING.celular, data.celular);
-      googleFormData.append(FIELD_MAPPING.empresa, data.empresa);
-      googleFormData.append(FIELD_MAPPING.cargo, data.cargo);
-      
-      // Adiciona campos obrigatórios do Google Forms
-      googleFormData.append("fvv", "1");
-      googleFormData.append("partialResponse", "[null,null,\"\"]");
-      googleFormData.append("pageHistory", "0");
-      googleFormData.append("fbzx", "-785259899754531839");
+      // Envia os dados para o Google Apps Script em formato JSON
+      const response = await fetch(GOOGLE_SCRIPT_URL, {
+        method: 'POST',
+        mode: 'no-cors', // Google Apps Script requer no-cors para funcionar corretamente
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          nome: data.nome,
+          email: data.email,
+          celular: data.celular,
+          endereco: data.endereco,
+          empresa: data.empresa,
+          cargo: data.cargo
+        }),
+      });
 
-      // Usa um iframe oculto para enviar o formulário (mais confiável que fetch)
-      const iframe = document.createElement('iframe');
-      iframe.style.display = 'none';
-      iframe.style.width = '0';
-      iframe.style.height = '0';
-      iframe.name = 'hidden_iframe';
-      document.body.appendChild(iframe);
-
-      // Cria um formulário temporário e submete via iframe
-      const tempForm = document.createElement('form');
-      tempForm.method = 'POST';
-      tempForm.action = GOOGLE_FORM_SUBMIT_URL;
-      tempForm.target = 'hidden_iframe';
-      tempForm.style.display = 'none';
-
-      // Adiciona todos os campos ao formulário
-      for (const [key, value] of googleFormData.entries()) {
-        const input = document.createElement('input');
-        input.type = 'hidden';
-        input.name = key;
-        input.value = value;
-        tempForm.appendChild(input);
-      }
-
-      document.body.appendChild(tempForm);
-      tempForm.submit();
-
-      // Remove o formulário e iframe após um delay
-      setTimeout(() => {
-        if (document.body.contains(tempForm)) {
-          document.body.removeChild(tempForm);
-        }
-        if (document.body.contains(iframe)) {
-          document.body.removeChild(iframe);
-        }
-      }, 2000);
-
-      // Log para debug (pode ser removido em produção)
-      console.log('Dados enviados para Google Forms:', {
-        email: data.email,
-        endereco: data.endereco,
+      // Log para debug
+      console.log('Dados enviados para Google Sheets:', {
         nome: data.nome,
+        email: data.email,
         celular: data.celular,
+        endereco: data.endereco,
         empresa: data.empresa,
         cargo: data.cargo
       });
