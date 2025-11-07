@@ -127,9 +127,6 @@ const RegistrationForm = () => {
             <p className="text-xl text-muted-foreground">
               Cadastre-se agora e seja um dos primeiros a receber o livro quando for lançado
             </p>
-            <p className="text-sm text-muted-foreground mt-3 italic">
-              Cortesia da 3DOTS para as 100 primeiras unidades.
-            </p>
           </div>
 
           <div className="max-w-2xl mx-auto">
