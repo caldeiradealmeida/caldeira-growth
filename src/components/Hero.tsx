@@ -54,6 +54,19 @@ const Hero = () => {
                 Quero receber o livro
                 <ArrowDown className="ml-2 h-5 w-5" />
               </Button>
+              <Button 
+                size="lg"
+                asChild
+                className="bg-white hover:bg-white/90 text-primary font-bold text-lg px-8 py-6 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105"
+              >
+                <a 
+                  href="https://a.co/d/11Q3Kio" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                >
+                  Comprar na Amazon
+                </a>
+              </Button>
             </div>
           </div>
 

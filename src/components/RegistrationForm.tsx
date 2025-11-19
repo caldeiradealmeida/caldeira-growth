@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
+import { Instagram, Linkedin, Mail } from "lucide-react";
 
 
 
@@ -34,13 +35,11 @@ const RegistrationForm = () => {
       nome: formData.get('nome') as string,
       celular: formData.get('celular') as string,
       email: formData.get('email') as string,
-      endereco: formData.get('endereco') as string,
-      empresa: formData.get('empresa') as string,
-      cargo: formData.get('cargo') as string
+      empresa: formData.get('empresa') as string
     };
 
     // Validação básica
-    if (!data.nome || !data.email || !data.celular || !data.endereco || !data.empresa || !data.cargo) {
+    if (!data.nome || !data.email || !data.celular || !data.empresa) {
       toast({
         title: "Erro",
         description: "Por favor, preencha todos os campos.",
@@ -56,9 +55,7 @@ const RegistrationForm = () => {
         nome: data.nome,
         email: data.email,
         celular: data.celular,
-        endereco: data.endereco,
-        empresa: data.empresa,
-        cargo: data.cargo
+        empresa: data.empresa
       });
 
       // Cria FormData com os nomes diretos dos campos (sem mapeamento)
@@ -66,9 +63,7 @@ const RegistrationForm = () => {
       formData.append('email', data.email);
       formData.append('nome', data.nome);
       formData.append('celular', data.celular);
-      formData.append('endereco', data.endereco);
       formData.append('empresa', data.empresa);
-      formData.append('cargo', data.cargo);
 
       // Envia usando fetch POST para o Google Apps Script
       // Agora podemos ler a resposta JSON!
@@ -175,20 +170,6 @@ const RegistrationForm = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="endereco" className="text-base font-semibold">
-                    Endereço Completo *
-                  </Label>
-                  <Input
-                    id="endereco"
-                    name="endereco"
-                    type="text"
-                    placeholder="Rua, número, bairro, cidade, estado, CEP"
-                    required
-                    className="h-12 text-base"
-                  />
-                </div>
-
-                <div className="space-y-2">
                   <Label htmlFor="empresa" className="text-base font-semibold">
                     Empresa *
                   </Label>
@@ -197,20 +178,6 @@ const RegistrationForm = () => {
                     name="empresa"
                     type="text"
                     placeholder="Nome da sua empresa"
-                    required
-                    className="h-12 text-base"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="cargo" className="text-base font-semibold">
-                    Cargo *
-                  </Label>
-                  <Input
-                    id="cargo"
-                    name="cargo"
-                    type="text"
-                    placeholder="Seu cargo na empresa"
                     required
                     className="h-12 text-base"
                   />
@@ -234,6 +201,55 @@ const RegistrationForm = () => {
                   * Todos os campos são obrigatórios
                 </p>
               </form>
+            </div>
+          </div>
+
+          {/* Social Media & Contact Section */}
+          <div className="max-w-2xl mx-auto mt-12 animate-in fade-in slide-in-from-bottom duration-700">
+            <div className="bg-card border border-border rounded-2xl p-8 shadow-xl">
+              <div className="text-center space-y-6">
+                <h3 className="text-2xl md:text-3xl font-bold text-foreground">
+                  Conecte-se comigo
+                </h3>
+                <p className="text-muted-foreground">
+                  Acompanhe meu conteúdo e entre em contato
+                </p>
+                
+                <div className="flex flex-col sm:flex-row items-center justify-center gap-6 pt-4">
+                  <a
+                    href="https://www.instagram.com/deniscaldeira.growth"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-3 px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white rounded-lg font-semibold transition-all duration-300 hover:scale-105 shadow-lg hover:shadow-xl"
+                  >
+                    <Instagram className="h-5 w-5" />
+                    Instagram
+                  </a>
+                  
+                  <a
+                    href="https://www.linkedin.com/in/caldeiradenis/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-3 px-6 py-3 bg-[#0077b5] hover:bg-[#006399] text-white rounded-lg font-semibold transition-all duration-300 hover:scale-105 shadow-lg hover:shadow-xl"
+                  >
+                    <Linkedin className="h-5 w-5" />
+                    LinkedIn
+                  </a>
+                </div>
+
+                <div className="pt-6 border-t border-border">
+                  <p className="text-muted-foreground mb-4">
+                    Para palestras, consultoria e mentoria:
+                  </p>
+                  <a
+                    href="mailto:contato@caldeiragrowth.com"
+                    className="inline-flex items-center gap-2 text-accent hover:text-accent/80 font-semibold text-lg transition-colors"
+                  >
+                    <Mail className="h-5 w-5" />
+                    contato@caldeiragrowth.com
+                  </a>
+                </div>
+              </div>
             </div>
           </div>
         </div>
