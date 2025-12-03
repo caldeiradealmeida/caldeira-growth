@@ -57,7 +57,7 @@ const Hero = () => {
               <Button 
                 size="lg"
                 asChild
-                className="bg-yellow-500 hover:bg-yellow-600 text-primary font-bold text-lg px-8 py-6 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105"
+                className="bg-accent hover:bg-accent/90 text-accent-foreground font-bold text-lg px-8 py-6 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105"
               >
                 <a 
                   href="https://a.co/d/11Q3Kio" 
