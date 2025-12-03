@@ -117,10 +117,10 @@ const RegistrationForm = () => {
         <div className="max-w-5xl mx-auto">
           <div className="text-center mb-12 animate-in fade-in slide-in-from-bottom duration-700">
             <h2 className="text-4xl md:text-5xl font-bold text-foreground mb-4">
-              Garanta seu exemplar
+              Saiba sobre pacotes corporativos
             </h2>
             <p className="text-xl text-muted-foreground">
-              Cadastre-se agora e seja um dos primeiros a receber o livro quando for lançado
+              Receba a nossa proposta de pacotes de livros + palestras, webinars, workshops...
             </p>
           </div>
 

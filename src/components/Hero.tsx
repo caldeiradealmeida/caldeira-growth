@@ -49,15 +49,15 @@ const Hero = () => {
               <Button 
                 size="lg"
                 onClick={scrollToForm}
-                className="bg-accent hover:bg-accent/90 text-accent-foreground font-bold text-lg px-8 py-6 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105"
+                className="bg-white hover:bg-white/90 text-primary font-bold text-lg px-8 py-6 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105"
               >
-                Quero receber o livro
+                Quero saber mais
                 <ArrowDown className="ml-2 h-5 w-5" />
               </Button>
               <Button 
                 size="lg"
                 asChild
-                className="bg-white hover:bg-white/90 text-primary font-bold text-lg px-8 py-6 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105"
+                className="bg-yellow-500 hover:bg-yellow-600 text-primary font-bold text-lg px-8 py-6 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105"
               >
                 <a 
                   href="https://a.co/d/11Q3Kio" 
