@@ -13,7 +13,7 @@ const RegistrationForm = () => {
   const formRef = useRef<HTMLFormElement>(null);
 
   // URL do Google Apps Script Web App para salvar dados diretamente no Google Sheets
-  const SCRIPT_URL = "https://script.google.com/macros/s/AKfycby388KV_phCi-6hIWvHd64DCQrAqzDnZuxXqQnZGnsopg9QfoMxmjOq2cTonLpVrGel/exec";
+  const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbylBTqQoi05Ki3RovSrdV3tIQBoID-x6DMVoRsNvVHxIByephA5RnqVCVJ249LlBQk_/exec";
 
   const handleSubmit = async (e?: React.FormEvent<HTMLFormElement>) => {
     // Previne o comportamento padrão do formulário (evita redirecionamento)

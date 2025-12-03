@@ -4,7 +4,7 @@ const AmazonRedirect = () => {
   const AMAZON_URL = "https://a.co/d/11Q3Kio";
   
   // URL do Google Apps Script para tracking
-  const TRACKING_SCRIPT_URL = "https://script.google.com/macros/s/AKfycby388KV_phCi-6hIWvHd64DCQrAqzDnZuxXqQnZGnsopg9QfoMxmjOq2cTonLpVrGel/exec";
+  const TRACKING_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbylBTqQoi05Ki3RovSrdV3tIQBoID-x6DMVoRsNvVHxIByephA5RnqVCVJ249LlBQk_/exec";
 
   useEffect(() => {
     // Registra o acesso de forma assíncrona (não espera resposta)
