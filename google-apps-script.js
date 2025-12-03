@@ -16,9 +16,21 @@ function doPost(e) {
   try {
     const sheet = SpreadsheetApp.getActiveSpreadsheet();
     
+    // Lê os parâmetros (funciona tanto com FormData quanto com query string)
+    const source = e.parameter.source || '';
+    const nome = e.parameter.nome || '';
+    const email = e.parameter.email || '';
+    const celular = e.parameter.celular || '';
+    const empresa = e.parameter.empresa || '';
+    
     // Detecta se é um registro de tracking (QR code) ou formulário normal
-    const isTracking = e.parameter.source === 'qr_code_campaign' || 
-                       (e.parameter.source && !e.parameter.nome);
+    // Tracking: tem source='qr_code_campaign' OU não tem campos do formulário (nome, email, etc)
+    // Formulário: tem pelo menos nome e email
+    const isTracking = source === 'qr_code_campaign' || 
+                       (!nome && !email && !celular && !empresa);
+    
+    // Log para debug (pode remover depois)
+    Logger.log('Detecção - source: ' + source + ', isTracking: ' + isTracking);
     
     if (isTracking) {
       // ===== TRACKING DE QR CODE =====
