@@ -7,83 +7,46 @@ Foi criada uma página de redirecionamento (`/qr` ou `/amazon`) que:
 2. Mostra um countdown de 2 segundos
 3. Redireciona automaticamente para a Amazon
 
-## Como adaptar o Google Apps Script
+## Como configurar o Google Apps Script
 
-Você precisa adaptar seu Google Apps Script para receber e salvar os dados de tracking. Aqui está um exemplo de código:
+### Passo a passo completo:
 
-### 1. Criar uma nova aba no Google Sheets chamada "QR_Tracking"
+1. **Abra seu Google Sheets** (o mesmo que você usa para o formulário)
 
-Com as seguintes colunas na primeira linha:
-- A1: timestamp
-- B1: source
-- C1: user_agent
-- D1: referrer
-- E1: url
+2. **Vá em Extensões > Apps Script**
 
-### 2. Código do Google Apps Script
+3. **Substitua todo o código existente** pelo código do arquivo `google-apps-script.js` que está na raiz do projeto
 
-```javascript
-function doPost(e) {
-  try {
-    const sheet = SpreadsheetApp.getActiveSpreadsheet();
-    
-    // Verifica se é um registro de tracking (QR code) ou formulário normal
-    const source = e.parameter.source || e.parameter.nome ? 'form' : 'qr_tracking';
-    
-    if (source === 'qr_tracking' || e.parameter.source === 'qr_code_campaign') {
-      // Salva na aba QR_Tracking
-      const trackingSheet = sheet.getSheetByName('QR_Tracking') || sheet.insertSheet('QR_Tracking');
-      
-      // Define cabeçalhos se a aba estiver vazia
-      if (trackingSheet.getLastRow() === 0) {
-        trackingSheet.appendRow(['timestamp', 'source', 'user_agent', 'referrer', 'url']);
-      }
-      
-      const timestamp = e.parameter.timestamp || new Date().toISOString();
-      const sourceValue = e.parameter.source || 'qr_code_campaign';
-      const userAgent = e.parameter.user_agent || '';
-      const referrer = e.parameter.referrer || 'direct';
-      const url = e.parameter.url || '';
-      
-      trackingSheet.appendRow([timestamp, sourceValue, userAgent, referrer, url]);
-      
-      return ContentService.createTextOutput(JSON.stringify({
-        status: 'success',
-        message: 'Tracking registrado com sucesso'
-      })).setMimeType(ContentService.MimeType.JSON);
-    } else {
-      // Código existente para o formulário
-      const formSheet = sheet.getSheetByName('Cadastros') || sheet.getActiveSheet();
-      
-      if (formSheet.getLastRow() === 0) {
-        formSheet.appendRow(['timestamp', 'nome', 'email', 'celular', 'empresa']);
-      }
-      
-      const timestamp = new Date().toISOString();
-      const nome = e.parameter.nome || '';
-      const email = e.parameter.email || '';
-      const celular = e.parameter.celular || '';
-      const empresa = e.parameter.empresa || '';
-      
-      formSheet.appendRow([timestamp, nome, email, celular, empresa]);
-      
-      return ContentService.createTextOutput(JSON.stringify({
-        status: 'success',
-        message: 'Cadastro realizado com sucesso'
-      })).setMimeType(ContentService.MimeType.JSON);
-    }
-  } catch (error) {
-    return ContentService.createTextOutput(JSON.stringify({
-      status: 'error',
-      message: error.toString()
-    })).setMimeType(ContentService.MimeType.JSON);
-  }
-}
-```
+4. **Salve o projeto** (Ctrl+S ou Cmd+S)
 
-### 3. Alternativa: Script separado para tracking
+5. **Publique o script:**
+   - Clique em **Publicar > Implantar como aplicativo da web**
+   - **Execute como:** Eu mesmo
+   - **Quem tem acesso:** Qualquer pessoa, mesmo anônimo
+   - Clique em **Implantar**
+   - **Copie a URL gerada** (se for diferente da atual, atualize no código React)
 
-Se preferir manter scripts separados, você pode criar um novo Google Apps Script Web App apenas para tracking e atualizar a URL no arquivo `AmazonRedirect.tsx`.
+6. **O script criará automaticamente:**
+   - Aba "QR_Tracking" para os acessos do QR code
+   - Aba "Cadastros" para os formulários (se não existir)
+
+### O que o script faz:
+
+- **Detecta automaticamente** se é um acesso via QR code ou um formulário
+- **Cria as abas automaticamente** se não existirem
+- **Formata os cabeçalhos** com cores diferentes para fácil identificação
+- **Valida os dados** antes de salvar
+- **Registra erros** para facilitar debug
+
+### Testando o script:
+
+No editor do Apps Script, você pode executar as funções de teste:
+- `testTracking()` - Testa o registro de QR code
+- `testForm()` - Testa o formulário de cadastro
+
+### Nota importante:
+
+O código em `google-apps-script.js` já está completo e pronto para uso. Ele gerencia tanto o tracking do QR code quanto o formulário de cadastro em um único script.
 
 ## URLs disponíveis
 
