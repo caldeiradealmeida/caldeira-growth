@@ -3,12 +3,6 @@ import bookCover3D from "@/assets/3D__.png";
 import { ArrowDown } from "lucide-react";
 
 const Hero = () => {
-  const scrollToForm = () => {
-    const formSection = document.getElementById('cadastro');
-    if (formSection) {
-      formSection.scrollIntoView({ behavior: 'smooth' });
-    }
-  };
 
   return (
     <section className="relative min-h-screen flex items-center justify-center overflow-hidden bg-gradient-to-br from-primary via-primary to-primary/90">
@@ -45,15 +39,7 @@ const Hero = () => {
               </p>
             </div>
 
-            <div className="flex flex-col sm:flex-row gap-4 pt-2">
-              <Button 
-                size="lg"
-                onClick={scrollToForm}
-                className="bg-white hover:bg-white/90 text-primary font-bold text-lg px-8 py-6 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105"
-              >
-                Quero saber mais
-                <ArrowDown className="ml-2 h-5 w-5" />
-              </Button>
+            <div className="flex justify-start pt-2">
               <Button 
                 size="lg"
                 asChild
