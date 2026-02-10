@@ -35,5 +35,83 @@
     
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    <!-- Amazon outbound click: fire Meta event before redirect (works even when button is not a plain <a>) -->
+    <script>
+      (function () {
+        function isModifiedClick(e) {
+          return e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey;
+        }
+
+        function closestLinkOrButton(el) {
+          while (el && el !== document.documentElement) {
+            if (el.tagName === 'A' || el.tagName === 'BUTTON') return el;
+            el = el.parentElement;
+          }
+          return null;
+        }
+
+        function getText(el) {
+          return (el && (el.innerText || el.textContent) || '').trim();
+        }
+
+        function getHrefFromElement(el) {
+          if (!el) return null;
+          if (el.tagName === 'A') return el.getAttribute('href') || null;
+          // If it's a button, try to find a nested link or a data-href attribute
+          var a = el.querySelector && el.querySelector('a[href]');
+          if (a) return a.getAttribute('href') || null;
+          var dh = el.getAttribute && (el.getAttribute('data-href') || el.getAttribute('data-url'));
+          return dh || null;
+        }
+
+        function looksLikeAmazonOutbound(url, text) {
+          var u = (url || '').toLowerCase();
+          var t = (text || '').toLowerCase();
+          return (
+            u.includes('a.co') ||
+            u.includes('amazon.') ||
+            t.includes('amazon')
+          );
+        }
+
+        function fireMetaClickAmazon(callback) {
+          try {
+            if (typeof window.fbq === 'function') {
+              window.fbq('trackCustom', 'click_amazon');
+            }
+          } catch (err) {
+            // ignore
+          }
+          // Give the browser a short window to flush the request
+          setTimeout(function () {
+            if (typeof callback === 'function') callback();
+          }, 350);
+        }
+
+        document.addEventListener(
+          'click',
+          function (e) {
+            if (isModifiedClick(e)) return;
+
+            var target = closestLinkOrButton(e.target);
+            if (!target) return;
+
+            var text = getText(target);
+            var href = getHrefFromElement(target);
+
+            if (!looksLikeAmazonOutbound(href, text)) return;
+            if (!href) return; // nothing to navigate to
+
+            // Prevent immediate navigation so the pixel event can be sent
+            e.preventDefault();
+
+            fireMetaClickAmazon(function () {
+              window.location.assign(href);
+            });
+          },
+          true // capture phase to run before other handlers
+        );
+      })();
+    </script>
   </body>
 </html>
