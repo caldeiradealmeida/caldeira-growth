@@ -11,8 +11,21 @@ const AMAZON_URL = "https://a.co/d/11Q3Kio?utm_source=landing650&utm_campaign=de
 const PROGRESSO_ESTIMADO = 115;
 const META_PUBLICA = 650;
 
+declare global {
+  interface Window {
+    dataLayer?: Record<string, unknown>[];
+  }
+}
+
 const Desafio650 = () => {
   useEffect(() => {
+    // Tracking: acesso à página /650
+    window.dataLayer?.push({
+      event: "page_view_650",
+      page_path: "/650",
+      page_title: "650 leitores em 7 dias",
+    });
+
     const prevTitle = document.title;
     const metaDescription = document.querySelector('meta[name="description"]');
     const prevContent = metaDescription?.getAttribute("content") || "";
@@ -60,6 +73,13 @@ const Desafio650 = () => {
                     href={AMAZON_URL}
                     target="_blank"
                     rel="noopener noreferrer"
+                    onClick={() => {
+                      window.dataLayer?.push({
+                        event: "click_amazon_650",
+                        button_location: "hero",
+                        page_path: "/650",
+                      });
+                    }}
                   >
                     Comprar na Amazon
                   </a>
@@ -147,6 +167,13 @@ const Desafio650 = () => {
                 href={AMAZON_URL}
                 target="_blank"
                 rel="noopener noreferrer"
+                onClick={() => {
+                  window.dataLayer?.push({
+                    event: "click_amazon_650",
+                    button_location: "cta_final",
+                    page_path: "/650",
+                  });
+                }}
               >
                 Comprar agora na Amazon
               </a>
