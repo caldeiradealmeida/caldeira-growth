@@ -75,6 +75,7 @@ const Desafio650 = () => {
                     href={AMAZON_URL}
                     target="_blank"
                     rel="noopener noreferrer"
+                    data-amazon-new-tab="true"
                     onClick={(e) => {
                       e.preventDefault();
 
@@ -178,6 +179,7 @@ const Desafio650 = () => {
                 href={AMAZON_URL}
                 target="_blank"
                 rel="noopener noreferrer"
+                data-amazon-new-tab="true"
                 onClick={(e) => {
                   e.preventDefault();
 

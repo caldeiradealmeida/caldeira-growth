@@ -102,6 +102,12 @@
             if (!looksLikeAmazonOutbound(href, text)) return;
             if (!href) return; // nothing to navigate to
 
+            // Links com data-amazon-new-tab abrem em nova aba e mantêm a página atual
+            if (target.getAttribute && target.getAttribute('data-amazon-new-tab') === 'true') {
+              fireMetaClickAmazon(function () {});
+              return;
+            }
+
             // Prevent immediate navigation so the pixel event can be sent
             e.preventDefault();
 
