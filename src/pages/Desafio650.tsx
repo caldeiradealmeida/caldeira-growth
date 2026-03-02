@@ -75,14 +75,21 @@ const Desafio650 = () => {
                     href={AMAZON_URL}
                     target="_blank"
                     rel="noopener noreferrer"
-                    onClick={() => {
+                    onClick={(e) => {
+                      e.preventDefault();
+
                       window.dataLayer = window.dataLayer || [];
                       window.dataLayer.push({
                         event: "click_amazon_650",
                         button_location: "hero",
                         page_path: "/650",
                       });
+
                       console.log("Tracking 650:", "click_amazon_650", "hero");
+
+                      setTimeout(() => {
+                        window.open(AMAZON_URL, "_blank", "noopener,noreferrer");
+                      }, 300);
                     }}
                   >
                     Comprar na Amazon
@@ -171,14 +178,21 @@ const Desafio650 = () => {
                 href={AMAZON_URL}
                 target="_blank"
                 rel="noopener noreferrer"
-                onClick={() => {
+                onClick={(e) => {
+                  e.preventDefault();
+
                   window.dataLayer = window.dataLayer || [];
                   window.dataLayer.push({
                     event: "click_amazon_650",
                     button_location: "cta_final",
                     page_path: "/650",
                   });
+
                   console.log("Tracking 650:", "click_amazon_650", "cta_final");
+
+                  setTimeout(() => {
+                    window.open(AMAZON_URL, "_blank", "noopener,noreferrer");
+                  }, 300);
                 }}
               >
                 Comprar agora na Amazon
