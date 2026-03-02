@@ -20,11 +20,13 @@ declare global {
 const Desafio650 = () => {
   useEffect(() => {
     // Tracking: acesso à página /650
-    window.dataLayer?.push({
+    window.dataLayer = window.dataLayer || [];
+    window.dataLayer.push({
       event: "page_view_650",
       page_path: "/650",
       page_title: "650 leitores em 7 dias",
     });
+    console.log("Tracking 650:", "page_view_650");
 
     const prevTitle = document.title;
     const metaDescription = document.querySelector('meta[name="description"]');
@@ -74,11 +76,13 @@ const Desafio650 = () => {
                     target="_blank"
                     rel="noopener noreferrer"
                     onClick={() => {
-                      window.dataLayer?.push({
+                      window.dataLayer = window.dataLayer || [];
+                      window.dataLayer.push({
                         event: "click_amazon_650",
                         button_location: "hero",
                         page_path: "/650",
                       });
+                      console.log("Tracking 650:", "click_amazon_650", "hero");
                     }}
                   >
                     Comprar na Amazon
@@ -168,11 +172,13 @@ const Desafio650 = () => {
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={() => {
-                  window.dataLayer?.push({
+                  window.dataLayer = window.dataLayer || [];
+                  window.dataLayer.push({
                     event: "click_amazon_650",
                     button_location: "cta_final",
                     page_path: "/650",
                   });
+                  console.log("Tracking 650:", "click_amazon_650", "cta_final");
                 }}
               >
                 Comprar agora na Amazon
