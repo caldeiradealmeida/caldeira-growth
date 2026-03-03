@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import Footer from "@/components/Footer";
 import bookCover3D from "@/assets/3D__.png";
-import { Instagram, Linkedin, Mail, Globe } from "lucide-react";
+import authorPhoto from "@/assets/author-photo.jpg";
 
 // ========== CENTRAL CAMPAIGN CONFIG ==========
 // Edite aqui para atualizar todos os números da campanha
@@ -24,6 +24,7 @@ const diffTime = deadlineDate.getTime() - today.getTime();
 const daysRemaining = Math.max(Math.ceil(diffTime / (1000 * 60 * 60 * 24)), 0);
 
 const progressPercent = (CAMPAIGN_CONFIG.sold / CAMPAIGN_CONFIG.goal) * 100;
+const progressPercentFormatted = progressPercent.toFixed(1).replace(".", ",");
 
 // Formata deadline para exibição (08/03)
 const deadlineDisplay = (() => {
@@ -107,10 +108,6 @@ const Desafio650 = () => {
     };
   }, []);
 
-  const scrollToComprar = () => {
-    document.getElementById("comprar")?.scrollIntoView({ behavior: "smooth" });
-  };
-
   return (
     <main className="min-h-screen">
       {/* 1. Hero Section - Two columns with book image */}
@@ -127,25 +124,23 @@ const Desafio650 = () => {
                 650 leitores. 7 dias. Mercado como auditor.
               </h1>
               <p className="text-xl md:text-2xl text-primary-foreground/90 font-light leading-relaxed">
-                Já somos {CAMPAIGN_CONFIG.sold}. Faltam {remaining}.
+                {CAMPAIGN_CONFIG.sold} leitores já entraram no movimento.
+                <br />
+                Faltam {remaining}.
                 <br />
                 O experimento está em andamento.
               </p>
               <div className="pt-4">
-                <Button
-                  size="lg"
-                  onClick={scrollToComprar}
-                  className="bg-accent hover:bg-accent/90 text-accent-foreground font-bold text-lg px-8 py-6 shadow-lg hover:shadow-xl transition-all duration-300"
-                >
+                <AmazonCTA buttonLocation="hero" className="text-lg px-8 py-6">
                   👉 Garantir meu exemplar agora
-                </Button>
+                </AmazonCTA>
               </div>
               <p className="text-sm text-primary-foreground/70">
                 Meta pública. Execução estratégica. Crescimento real.
               </p>
             </div>
             <div className="relative flex items-center justify-center">
-              <div className="relative w-full max-w-md mx-auto">
+              <div className="relative w-full max-w-xl mx-auto">
                 <img
                   src={bookCover3D}
                   alt="Capa do livro Cresça ou Desapareça"
@@ -167,25 +162,28 @@ const Desafio650 = () => {
               </p>
               <div className="grid grid-cols-3 gap-4 my-6">
                 <div>
-                  <h2 id="soldLarge" className="text-3xl font-bold text-foreground">
+                  <h2 id="soldLarge" className="text-4xl font-bold text-foreground">
                     {CAMPAIGN_CONFIG.sold}
                   </h2>
                   <p className="text-sm text-muted-foreground">Vendidos</p>
                 </div>
                 <div>
-                  <h2 id="remainingLarge" className="text-3xl font-bold text-foreground">
+                  <h2 id="remainingLarge" className="text-4xl font-bold text-foreground">
                     {remaining}
                   </h2>
                   <p className="text-sm text-muted-foreground">Restantes</p>
                 </div>
                 <div>
-                  <h2 id="daysRemaining" className="text-3xl font-bold text-foreground">
+                  <h2 id="daysRemaining" className="text-4xl font-bold text-foreground">
                     {daysRemaining}
                   </h2>
                   <p className="text-sm text-muted-foreground">Dias restantes</p>
                 </div>
               </div>
-              <div className="relative h-3 w-full overflow-hidden rounded-full bg-secondary mb-6">
+              <p className="text-muted-foreground text-sm mb-2">
+                {progressPercentFormatted}% da meta atingida.
+              </p>
+              <div className="relative h-5 w-full overflow-hidden rounded-full bg-secondary mb-6">
                 <div
                   id="progressBar"
                   className="h-full bg-primary transition-all duration-500"
@@ -257,61 +255,23 @@ const Desafio650 = () => {
         </div>
       </section>
 
-      {/* Redes sociais e contato */}
-      <section className="py-16 md:py-20 bg-background">
+      {/* 6. Minimal Author Authority Block */}
+      <section className="py-12 md:py-16 bg-background">
         <div className="container mx-auto px-4">
-          <div className="max-w-2xl mx-auto">
-            <div className="bg-card border border-border rounded-2xl p-8 shadow-xl">
-              <div className="text-center space-y-6">
-                <h3 className="text-2xl md:text-3xl font-bold text-foreground">
+          <div className="max-w-xl mx-auto">
+            <div className="flex flex-col sm:flex-row items-center gap-6 p-6 bg-card border border-border rounded-xl shadow-sm">
+              <img
+                src={authorPhoto}
+                alt="Denis Caldeira de Almeida"
+                className="w-20 h-20 rounded-full object-cover flex-shrink-0"
+              />
+              <div className="text-center sm:text-left">
+                <h3 className="font-bold text-foreground text-lg">
                   Denis Caldeira de Almeida
                 </h3>
-                <p className="text-muted-foreground">
-                  Estrategista de Negócios e Conselheiro de Empresas
+                <p className="text-muted-foreground text-sm mt-1">
+                  Estrategista de crescimento. Ex-executivo Meta & Google. Conselheiro de empresas. Autor de Cresça ou Desapareça.
                 </p>
-
-                <div className="flex flex-col sm:flex-row items-center justify-center gap-6 pt-4">
-                  <a
-                    href="https://www.instagram.com/deniscaldeira.growth"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-3 px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white rounded-lg font-semibold transition-all duration-300 hover:scale-105 shadow-lg hover:shadow-xl"
-                  >
-                    <Instagram className="h-5 w-5" />
-                    Instagram
-                  </a>
-                  <a
-                    href="https://www.linkedin.com/in/caldeiradenis/"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-3 px-6 py-3 bg-[#0077b5] hover:bg-[#006399] text-white rounded-lg font-semibold transition-all duration-300 hover:scale-105 shadow-lg hover:shadow-xl"
-                  >
-                    <Linkedin className="h-5 w-5" />
-                    LinkedIn
-                  </a>
-                </div>
-
-                <div className="pt-6 border-t border-border space-y-4">
-                  <p className="text-muted-foreground">
-                    Para palestras, consultoria e mentoria:
-                  </p>
-                  <a
-                    href="mailto:contato@caldeiragrowth.com"
-                    className="inline-flex items-center gap-2 text-accent hover:text-accent/80 font-semibold text-lg transition-colors"
-                  >
-                    <Mail className="h-5 w-5" />
-                    contato@caldeiragrowth.com
-                  </a>
-                  <a
-                    href="https://www.caldeiragrowth.com"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 text-accent hover:text-accent/80 font-semibold text-lg transition-colors"
-                  >
-                    <Globe className="h-5 w-5" />
-                    www.caldeiragrowth.com
-                  </a>
-                </div>
               </div>
             </div>
           </div>
