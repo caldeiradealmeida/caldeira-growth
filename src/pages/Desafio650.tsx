@@ -8,7 +8,7 @@ import { Instagram, Linkedin, Mail, Globe } from "lucide-react";
 const AMAZON_URL = "https://a.co/d/11Q3Kio?utm_source=landing650&utm_campaign=desafio650";
 
 // Progresso estimado — edite aqui para atualizar
-const PROGRESSO_ESTIMADO = 115;
+const PROGRESSO_ESTIMADO = 227;
 const META_PUBLICA = 650;
 
 declare global {
