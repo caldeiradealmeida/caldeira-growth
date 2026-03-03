@@ -2,14 +2,15 @@ import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import Footer from "@/components/Footer";
-import bookCover3D from "@/assets/3D__.png";
 import { Instagram, Linkedin, Mail, Globe } from "lucide-react";
 
 const AMAZON_URL = "https://a.co/d/11Q3Kio?utm_source=landing650&utm_campaign=desafio650";
 
-// Progresso estimado — edite aqui para atualizar
-const PROGRESSO_ESTIMADO = 227;
+// Dados do desafio — edite aqui para atualizar
+const VENDIDOS = 327;
 const META_PUBLICA = 650;
+const RESTANTES = META_PUBLICA - VENDIDOS;
+const DIAS_RESTANTES = 6;
 
 declare global {
   interface Window {
@@ -17,16 +18,55 @@ declare global {
   }
 }
 
+const trackAmazonClick = (buttonLocation: string) => {
+  window.dataLayer = window.dataLayer || [];
+  window.dataLayer.push({
+    event: "click_amazon_650",
+    button_location: buttonLocation,
+    page_path: "/650",
+  });
+};
+
+const AmazonCTA = ({
+  children,
+  buttonLocation,
+  className = "",
+}: {
+  children: React.ReactNode;
+  buttonLocation: string;
+  className?: string;
+}) => (
+  <Button
+    size="lg"
+    asChild
+    className={`bg-accent hover:bg-accent/90 text-accent-foreground font-bold shadow-lg hover:shadow-xl transition-all duration-300 ${className}`}
+  >
+    <a
+      href={AMAZON_URL}
+      target="_blank"
+      rel="noopener noreferrer"
+      data-amazon-new-tab="true"
+      onClick={(e) => {
+        e.preventDefault();
+        trackAmazonClick(buttonLocation);
+        setTimeout(() => {
+          window.open(AMAZON_URL, "_blank", "noopener,noreferrer");
+        }, 300);
+      }}
+    >
+      {children}
+    </a>
+  </Button>
+);
+
 const Desafio650 = () => {
   useEffect(() => {
-    // Tracking: acesso à página /650
     window.dataLayer = window.dataLayer || [];
     window.dataLayer.push({
       event: "page_view_650",
       page_path: "/650",
       page_title: "650 leitores em 7 dias",
     });
-    console.log("Tracking 650:", "page_view_650");
 
     const prevTitle = document.title;
     const metaDescription = document.querySelector('meta[name="description"]');
@@ -46,166 +86,129 @@ const Desafio650 = () => {
     };
   }, []);
 
+  const scrollToComprar = () => {
+    document.getElementById("comprar")?.scrollIntoView({ behavior: "smooth" });
+  };
+
   return (
     <main className="min-h-screen">
-      {/* Hero Section */}
-      <section className="relative py-20 md:py-28 overflow-hidden bg-gradient-to-br from-primary via-primary to-primary/90">
+      {/* 1. Hero Section */}
+      <section className="relative py-16 md:py-24 overflow-hidden bg-gradient-to-br from-primary via-primary to-primary/90">
         <div className="absolute inset-0 opacity-10">
           <div className="absolute top-20 left-10 w-64 h-64 bg-accent rounded-full blur-3xl" />
           <div className="absolute bottom-20 right-10 w-96 h-96 bg-accent rounded-full blur-3xl" />
         </div>
 
         <div className="container mx-auto px-4 relative z-10">
-          <div className="grid lg:grid-cols-2 gap-12 items-center">
-            <div className="text-primary-foreground space-y-6">
-              <h1 className="text-4xl md:text-6xl font-extrabold leading-tight">
-                650 leitores em 7 dias.
-              </h1>
-              <p className="text-xl md:text-2xl text-primary-foreground/90 font-light leading-relaxed max-w-xl">
-                Estamos aplicando os princípios de Cresça ou Desapareça ao próprio lançamento. Meta
-                pública. Execução estratégica. Crescimento real.
-              </p>
-              <div className="pt-4">
-                <Button
-                  size="lg"
-                  asChild
-                  className="bg-accent hover:bg-accent/90 text-accent-foreground font-bold text-lg px-8 py-6 shadow-lg hover:shadow-xl transition-all duration-300"
-                >
-                  <a
-                    href={AMAZON_URL}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    data-amazon-new-tab="true"
-                    onClick={(e) => {
-                      e.preventDefault();
-
-                      window.dataLayer = window.dataLayer || [];
-                      window.dataLayer.push({
-                        event: "click_amazon_650",
-                        button_location: "hero",
-                        page_path: "/650",
-                      });
-
-                      console.log("Tracking 650:", "click_amazon_650", "hero");
-
-                      setTimeout(() => {
-                        window.open(AMAZON_URL, "_blank", "noopener,noreferrer");
-                      }, 300);
-                    }}
-                  >
-                    Comprar na Amazon
-                  </a>
-                </Button>
-              </div>
+          <div className="max-w-3xl mx-auto text-center">
+            <h1 className="text-4xl md:text-6xl font-extrabold leading-tight text-primary-foreground">
+              650 leitores. 7 dias. Mercado como auditor.
+            </h1>
+            <p className="text-xl md:text-2xl text-primary-foreground/90 font-light mt-6 leading-relaxed">
+              Já somos {VENDIDOS}. Faltam {RESTANTES}.
+              <br />
+              O experimento está em andamento.
+            </p>
+            <div className="mt-10">
+              <Button
+                size="lg"
+                onClick={scrollToComprar}
+                className="bg-accent hover:bg-accent/90 text-accent-foreground font-bold text-lg px-8 py-6 shadow-lg hover:shadow-xl transition-all duration-300"
+              >
+                👉 Garantir meu exemplar agora
+              </Button>
             </div>
-            <div className="relative flex items-center justify-center">
-              <div className="relative w-full max-w-md mx-auto">
-                <img
-                  src={bookCover3D}
-                  alt="Capa do livro Cresça ou Desapareça"
-                  className="relative w-full h-auto drop-shadow-2xl"
-                />
+            <p className="text-sm text-primary-foreground/70 mt-6">
+              Meta pública. Execução estratégica. Crescimento real.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* 2. Live Progress Block */}
+      <section id="comprar" className="py-16 md:py-20 bg-background scroll-mt-20">
+        <div className="container mx-auto px-4">
+          <div className="max-w-xl mx-auto">
+            <div className="bg-card border border-border rounded-2xl p-8 md:p-10 shadow-xl">
+              <p className="text-muted-foreground mb-1">Meta pública: {META_PUBLICA} livros até 08/03</p>
+              <div className="grid grid-cols-2 gap-4 my-6">
+                <div>
+                  <p className="text-3xl font-bold text-foreground">{VENDIDOS}</p>
+                  <p className="text-sm text-muted-foreground">Vendidos</p>
+                </div>
+                <div>
+                  <p className="text-3xl font-bold text-foreground">{RESTANTES}</p>
+                  <p className="text-sm text-muted-foreground">Restantes</p>
+                </div>
+              </div>
+              <p className="text-muted-foreground text-sm mb-4">Dias restantes: {DIAS_RESTANTES}</p>
+              <Progress value={(VENDIDOS / META_PUBLICA) * 100} className="h-3 mb-6" />
+              <p className="text-muted-foreground text-sm text-center mb-8">
+                O ranking é consequência. O crescimento é método.
+              </p>
+              <div className="flex justify-center">
+                <AmazonCTA buttonLocation="progress">👉 Garantir meu exemplar agora</AmazonCTA>
               </div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Seção Contexto */}
-      <section className="py-20 bg-background">
+      {/* 3. Social Proof Block */}
+      <section className="py-16 md:py-20 bg-muted/50">
         <div className="container mx-auto px-4">
-          <div className="max-w-3xl mx-auto text-center">
+          <div className="max-w-2xl mx-auto">
+            <div className="bg-primary text-primary-foreground rounded-2xl p-8 md:p-10 text-center">
+              <p className="text-2xl md:text-3xl font-bold text-accent mb-4">
+                📈 Ranking atual: #13 na Amazon (Negócios)
+              </p>
+              <p className="text-primary-foreground/90 mb-8">
+                Se entrarmos no Top 10, o algoritmo acelera o movimento.
+              </p>
+              <AmazonCTA buttonLocation="social_proof" className="text-lg px-10 py-6">
+                Garantir meu exemplar
+              </AmazonCTA>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 4. Strategic Message Block */}
+      <section className="py-16 md:py-20 bg-background">
+        <div className="container mx-auto px-4">
+          <div className="max-w-2xl mx-auto text-center">
             <p className="text-xl md:text-2xl text-foreground leading-relaxed">
-              Este não é apenas um lançamento.
+              Isso não é apenas um lançamento.
               <br />
               É um estudo de caso público.
             </p>
             <p className="text-xl md:text-2xl text-foreground leading-relaxed mt-8">
-              Crescimento não acontece por acaso.
-              <br />
-              Acontece quando há clareza estratégica e execução coordenada.
+              Se o livro defende foco absoluto, engenharia reversa e disciplina,
+              então a única forma coerente é aplicar esses princípios sob observação real.
             </p>
           </div>
         </div>
       </section>
 
-      {/* Seção Meta */}
-      <section className="py-20 bg-muted/50">
-        <div className="container mx-auto px-4">
-          <div className="max-w-2xl mx-auto">
-            <div className="bg-card border border-border rounded-2xl p-8 md:p-12 shadow-lg">
-              <p className="text-lg text-muted-foreground mb-2">
-                Meta pública: {META_PUBLICA} livros até 08/03.
-              </p>
-              <p className="text-2xl md:text-3xl font-bold text-foreground mb-6">
-                Progresso estimado: {PROGRESSO_ESTIMADO}
-              </p>
-              <Progress
-                value={(PROGRESSO_ESTIMADO / META_PUBLICA) * 100}
-                className="h-3"
-              />
-              <p className="text-muted-foreground mt-6 text-center">
-                O ranking é consequência. O crescimento é método.
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Seção Por que importa */}
-      <section className="py-20 bg-background">
-        <div className="container mx-auto px-4">
-          <div className="max-w-3xl mx-auto text-center">
-            <p className="text-xl md:text-2xl text-foreground leading-relaxed">
-              Não é sobre vaidade.
-              <br />
-              É sobre demonstrar que conteúdo independente, quando bem posicionado, compete em nível
-              nacional.
-            </p>
-          </div>
-        </div>
-      </section>
-
-      {/* CTA final */}
-      <section className="py-20 bg-primary text-primary-foreground">
+      {/* 5. Final Conversion Section */}
+      <section className="py-16 md:py-24 bg-primary text-primary-foreground">
         <div className="container mx-auto px-4">
           <div className="max-w-2xl mx-auto text-center">
-            <Button
-              size="lg"
-              asChild
-              className="bg-accent hover:bg-accent/90 text-accent-foreground font-bold text-xl px-12 py-6 shadow-lg hover:shadow-xl transition-all duration-300"
-            >
-              <a
-                href={AMAZON_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                data-amazon-new-tab="true"
-                onClick={(e) => {
-                  e.preventDefault();
-
-                  window.dataLayer = window.dataLayer || [];
-                  window.dataLayer.push({
-                    event: "click_amazon_650",
-                    button_location: "cta_final",
-                    page_path: "/650",
-                  });
-
-                  console.log("Tracking 650:", "click_amazon_650", "cta_final");
-
-                  setTimeout(() => {
-                    window.open(AMAZON_URL, "_blank", "noopener,noreferrer");
-                  }, 300);
-                }}
-              >
-                Comprar agora na Amazon
-              </a>
-            </Button>
+            <h2 className="text-4xl md:text-5xl font-extrabold mb-4">
+              Faltam {RESTANTES} livros.
+            </h2>
+            <p className="text-xl text-primary-foreground/90 mb-10">
+              Participe do movimento.
+            </p>
+            <AmazonCTA buttonLocation="cta_final" className="text-xl px-12 py-6">
+              Comprar agora na Amazon
+            </AmazonCTA>
           </div>
         </div>
       </section>
 
       {/* Redes sociais e contato */}
-      <section className="py-20 bg-background">
+      <section className="py-16 md:py-20 bg-background">
         <div className="container mx-auto px-4">
           <div className="max-w-2xl mx-auto">
             <div className="bg-card border border-border rounded-2xl p-8 shadow-xl">
