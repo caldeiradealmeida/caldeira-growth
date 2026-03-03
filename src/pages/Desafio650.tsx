@@ -1,16 +1,37 @@
 import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
 import Footer from "@/components/Footer";
+import bookCover3D from "@/assets/3D__.png";
 import { Instagram, Linkedin, Mail, Globe } from "lucide-react";
 
-const AMAZON_URL = "https://a.co/d/11Q3Kio?utm_source=landing650&utm_campaign=desafio650";
+// ========== CENTRAL CAMPAIGN CONFIG ==========
+// Edite aqui para atualizar todos os números da campanha
+const CAMPAIGN_CONFIG = {
+  goal: 650,
+  sold: 327,
+  deadline: "2026-03-08",
+  ranking: 13,
+  category: "Negócios",
+  amazonUrl: "https://a.co/d/11Q3Kio?utm_source=landing650&utm_campaign=desafio650",
+};
 
-// Dados do desafio — edite aqui para atualizar
-const VENDIDOS = 327;
-const META_PUBLICA = 650;
-const RESTANTES = META_PUBLICA - VENDIDOS;
-const DIAS_RESTANTES = 6;
+// ========== CALCULATED VALUES ==========
+const remaining = CAMPAIGN_CONFIG.goal - CAMPAIGN_CONFIG.sold;
+
+const today = new Date();
+const deadlineDate = new Date(CAMPAIGN_CONFIG.deadline);
+const diffTime = deadlineDate.getTime() - today.getTime();
+const daysRemaining = Math.max(Math.ceil(diffTime / (1000 * 60 * 60 * 24)), 0);
+
+const progressPercent = (CAMPAIGN_CONFIG.sold / CAMPAIGN_CONFIG.goal) * 100;
+
+// Formata deadline para exibição (08/03)
+const deadlineDisplay = (() => {
+  const d = new Date(CAMPAIGN_CONFIG.deadline);
+  const day = String(d.getDate()).padStart(2, "0");
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  return `${day}/${month}`;
+})();
 
 declare global {
   interface Window {
@@ -42,7 +63,7 @@ const AmazonCTA = ({
     className={`bg-accent hover:bg-accent/90 text-accent-foreground font-bold shadow-lg hover:shadow-xl transition-all duration-300 ${className}`}
   >
     <a
-      href={AMAZON_URL}
+      href={CAMPAIGN_CONFIG.amazonUrl}
       target="_blank"
       rel="noopener noreferrer"
       data-amazon-new-tab="true"
@@ -50,7 +71,7 @@ const AmazonCTA = ({
         e.preventDefault();
         trackAmazonClick(buttonLocation);
         setTimeout(() => {
-          window.open(AMAZON_URL, "_blank", "noopener,noreferrer");
+          window.open(CAMPAIGN_CONFIG.amazonUrl, "_blank", "noopener,noreferrer");
         }, 300);
       }}
     >
@@ -92,7 +113,7 @@ const Desafio650 = () => {
 
   return (
     <main className="min-h-screen">
-      {/* 1. Hero Section */}
+      {/* 1. Hero Section - Two columns with book image */}
       <section className="relative py-16 md:py-24 overflow-hidden bg-gradient-to-br from-primary via-primary to-primary/90">
         <div className="absolute inset-0 opacity-10">
           <div className="absolute top-20 left-10 w-64 h-64 bg-accent rounded-full blur-3xl" />
@@ -100,49 +121,77 @@ const Desafio650 = () => {
         </div>
 
         <div className="container mx-auto px-4 relative z-10">
-          <div className="max-w-3xl mx-auto text-center">
-            <h1 className="text-4xl md:text-6xl font-extrabold leading-tight text-primary-foreground">
-              650 leitores. 7 dias. Mercado como auditor.
-            </h1>
-            <p className="text-xl md:text-2xl text-primary-foreground/90 font-light mt-6 leading-relaxed">
-              Já somos {VENDIDOS}. Faltam {RESTANTES}.
-              <br />
-              O experimento está em andamento.
-            </p>
-            <div className="mt-10">
-              <Button
-                size="lg"
-                onClick={scrollToComprar}
-                className="bg-accent hover:bg-accent/90 text-accent-foreground font-bold text-lg px-8 py-6 shadow-lg hover:shadow-xl transition-all duration-300"
-              >
-                👉 Garantir meu exemplar agora
-              </Button>
+          <div className="grid lg:grid-cols-2 gap-12 items-center">
+            <div className="text-primary-foreground space-y-6">
+              <h1 className="text-4xl md:text-6xl font-extrabold leading-tight">
+                650 leitores. 7 dias. Mercado como auditor.
+              </h1>
+              <p className="text-xl md:text-2xl text-primary-foreground/90 font-light leading-relaxed">
+                Já somos {CAMPAIGN_CONFIG.sold}. Faltam {remaining}.
+                <br />
+                O experimento está em andamento.
+              </p>
+              <div className="pt-4">
+                <Button
+                  size="lg"
+                  onClick={scrollToComprar}
+                  className="bg-accent hover:bg-accent/90 text-accent-foreground font-bold text-lg px-8 py-6 shadow-lg hover:shadow-xl transition-all duration-300"
+                >
+                  👉 Garantir meu exemplar agora
+                </Button>
+              </div>
+              <p className="text-sm text-primary-foreground/70">
+                Meta pública. Execução estratégica. Crescimento real.
+              </p>
             </div>
-            <p className="text-sm text-primary-foreground/70 mt-6">
-              Meta pública. Execução estratégica. Crescimento real.
-            </p>
+            <div className="relative flex items-center justify-center">
+              <div className="relative w-full max-w-md mx-auto">
+                <img
+                  src={bookCover3D}
+                  alt="Capa do livro Cresça ou Desapareça"
+                  className="relative w-full h-auto drop-shadow-2xl"
+                />
+              </div>
+            </div>
           </div>
         </div>
       </section>
 
-      {/* 2. Live Progress Block */}
+      {/* 2. Progress Block - Dynamic */}
       <section id="comprar" className="py-16 md:py-20 bg-background scroll-mt-20">
         <div className="container mx-auto px-4">
           <div className="max-w-xl mx-auto">
             <div className="bg-card border border-border rounded-2xl p-8 md:p-10 shadow-xl">
-              <p className="text-muted-foreground mb-1">Meta pública: {META_PUBLICA} livros até 08/03</p>
-              <div className="grid grid-cols-2 gap-4 my-6">
+              <p className="text-muted-foreground mb-1">
+                Meta pública: {CAMPAIGN_CONFIG.goal} livros até {deadlineDisplay}
+              </p>
+              <div className="grid grid-cols-3 gap-4 my-6">
                 <div>
-                  <p className="text-3xl font-bold text-foreground">{VENDIDOS}</p>
+                  <h2 id="soldLarge" className="text-3xl font-bold text-foreground">
+                    {CAMPAIGN_CONFIG.sold}
+                  </h2>
                   <p className="text-sm text-muted-foreground">Vendidos</p>
                 </div>
                 <div>
-                  <p className="text-3xl font-bold text-foreground">{RESTANTES}</p>
+                  <h2 id="remainingLarge" className="text-3xl font-bold text-foreground">
+                    {remaining}
+                  </h2>
                   <p className="text-sm text-muted-foreground">Restantes</p>
                 </div>
+                <div>
+                  <h2 id="daysRemaining" className="text-3xl font-bold text-foreground">
+                    {daysRemaining}
+                  </h2>
+                  <p className="text-sm text-muted-foreground">Dias restantes</p>
+                </div>
               </div>
-              <p className="text-muted-foreground text-sm mb-4">Dias restantes: {DIAS_RESTANTES}</p>
-              <Progress value={(VENDIDOS / META_PUBLICA) * 100} className="h-3 mb-6" />
+              <div className="relative h-3 w-full overflow-hidden rounded-full bg-secondary mb-6">
+                <div
+                  id="progressBar"
+                  className="h-full bg-primary transition-all duration-500"
+                  style={{ width: `${progressPercent}%` }}
+                />
+              </div>
               <p className="text-muted-foreground text-sm text-center mb-8">
                 O ranking é consequência. O crescimento é método.
               </p>
@@ -154,19 +203,20 @@ const Desafio650 = () => {
         </div>
       </section>
 
-      {/* 3. Social Proof Block */}
+      {/* 3. Ranking Block - Dynamic */}
       <section className="py-16 md:py-20 bg-muted/50">
         <div className="container mx-auto px-4">
           <div className="max-w-2xl mx-auto">
             <div className="bg-primary text-primary-foreground rounded-2xl p-8 md:p-10 text-center">
               <p className="text-2xl md:text-3xl font-bold text-accent mb-4">
-                📈 Ranking atual: #13 na Amazon (Negócios)
+                📈 <span id="rankingNumber">#{CAMPAIGN_CONFIG.ranking}</span> na Amazon (
+                <span id="categoryName">{CAMPAIGN_CONFIG.category}</span>)
               </p>
               <p className="text-primary-foreground/90 mb-8">
-                Se entrarmos no Top 10, o algoritmo acelera o movimento.
+                Movimento real nas últimas 24 horas.
               </p>
               <AmazonCTA buttonLocation="social_proof" className="text-lg px-10 py-6">
-                Garantir meu exemplar
+                Comprar agora na Amazon
               </AmazonCTA>
             </div>
           </div>
@@ -195,7 +245,7 @@ const Desafio650 = () => {
         <div className="container mx-auto px-4">
           <div className="max-w-2xl mx-auto text-center">
             <h2 className="text-4xl md:text-5xl font-extrabold mb-4">
-              Faltam {RESTANTES} livros.
+              Faltam {remaining} livros.
             </h2>
             <p className="text-xl text-primary-foreground/90 mb-10">
               Participe do movimento.
