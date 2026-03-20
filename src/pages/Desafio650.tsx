@@ -11,7 +11,6 @@ const CAMPAIGN_CONFIG = {
   result: 530,
   duration: 7,
   amazonUrl: "https://a.co/d/11Q3Kio?utm_source=landing650&utm_campaign=desafio650",
-  corporateEmail: "mailto:contato@caldeiragrowth.com?subject=Interesse em pacotes corporativos - Cresça ou Desapareça",
   reelUrl: "https://www.instagram.com/deniscaldeira.growth/",
 };
 
@@ -155,7 +154,7 @@ const Desafio650 = () => {
                   variant="outline"
                   size="lg"
                   onClick={scrollToTimeline}
-                  className="border-2 border-primary-foreground/50 text-primary-foreground hover:bg-primary-foreground/10 font-semibold text-lg px-8 py-6"
+                  className="border-2 border-accent text-accent hover:bg-accent/20 font-semibold text-lg px-8 py-6"
                 >
                   Ver como o experimento foi construído
                 </Button>
@@ -274,8 +273,8 @@ const Desafio650 = () => {
               O experimento também gerou compras corporativas e conversas com empresas como Nasdaq + 3Dots, Bom Sabor, Roda Conveniência, MR, entre outras. Negociações seguem em andamento.
             </p>
             <a
-              href={CAMPAIGN_CONFIG.corporateEmail}
-              className="inline-flex items-center gap-2 px-8 py-4 bg-primary text-primary-foreground font-semibold rounded-lg hover:bg-primary/90 transition-colors"
+              href="/#cadastro"
+              className="inline-flex items-center gap-2 px-8 py-4 bg-accent hover:bg-accent/90 text-accent-foreground font-semibold rounded-lg transition-colors"
             >
               Levar o livro para a sua empresa
             </a>
