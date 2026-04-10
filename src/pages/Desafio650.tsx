@@ -1,8 +1,8 @@
 import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import Footer from "@/components/Footer";
-import bookCover3D from "@/assets/3D__.png";
-import authorPhoto from "@/assets/author-photo.jpg";
+import bookCover3D from "@/assets/book/3D__.png";
+import authorPhoto from "@/assets/denis/about.jpeg";
 import { Instagram, Linkedin, Play } from "lucide-react";
 
 // ========== CENTRAL CAMPAIGN CONFIG ==========

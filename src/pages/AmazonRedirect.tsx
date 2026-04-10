@@ -1,7 +1,8 @@
 import { useEffect } from "react";
+import { BOOK_AMAZON_URL } from "@/constants/book";
 
 const AmazonRedirect = () => {
-  const AMAZON_URL = "https://a.co/d/11Q3Kio";
+  const AMAZON_URL = BOOK_AMAZON_URL;
   
   // URL do Google Apps Script para tracking
   const TRACKING_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbylBTqQoi05Ki3RovSrdV3tIQBoID-x6DMVoRsNvVHxIByephA5RnqVCVJ249LlBQk_/exec";

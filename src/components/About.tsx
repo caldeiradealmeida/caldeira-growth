@@ -1,4 +1,5 @@
 import { BookOpen, Target, TrendingUp } from "lucide-react";
+import authorPhoto from "@/assets/denis/about.jpeg";
 
 const CALDEIRA_GROWTH_URL = "https://www.caldeiragrowth.com";
 
@@ -68,6 +69,26 @@ const About = () => {
                 </p>
               </div>
             ))}
+          </div>
+
+          <div className="bg-primary text-primary-foreground rounded-2xl p-8 md:p-12 animate-in fade-in slide-in-from-bottom duration-700 delay-500">
+            <h3 className="text-2xl md:text-3xl font-bold mb-6">
+              Sobre o Autor
+            </h3>
+            <div className="flex flex-col md:flex-row gap-6 items-center md:items-start">
+              <img 
+                src={authorPhoto} 
+                alt="Denis Caldeira de Almeida" 
+                className="w-48 h-48 rounded-lg object-cover shadow-lg"
+              />
+              <p className="text-lg leading-relaxed text-primary-foreground/90">
+                <span className="font-bold text-accent">Denis Caldeira de Almeida</span> é especialista em crescimento empresarial. Há quase três décadas, combina prática e estudo para transformar estratégia em resultado. Liderou iniciativas em empresas como Telefônica, Google e Meta — nesta, foi responsável pela operação de Pequenas Empresas na América Latina.
+                <br /><br />
+                Mestre em Engenharia Econômica pela Universidade Pierre Mendès-France (Grenoble II), formado em Engenharia Elétrica pela FEI e com MBA em Economia pela USP, possui formações executivas em Wharton, Kellogg e Columbia.
+                <br /><br />
+                Fundador da Caldeira Growth — estratégia, decisão e crescimento para lideranças em momentos de escala. Cofundador da Prompt8.ai, que desenvolve agentes de IA customizados para setores específicos da economia.
+              </p>
+            </div>
           </div>
         </div>
       </div>
