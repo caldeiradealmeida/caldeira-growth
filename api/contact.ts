@@ -1,37 +1,51 @@
 /**
  * Proxy do formulário → Google Apps Script (Web App).
  *
- * O fetch no navegador segue o 302 do script.google.com e, por compatibilidade HTTP,
- * pode converter POST em GET — o doPost não roda e a resposta vira HTML/erro.
- * Este handler roda no servidor (Edge), onde o POST é encaminhado corretamente.
+ * Runtime Node.js na Vercel (Edge + ESM às vezes não recebe env ou falha no deploy).
  *
- * Env: VITE_CONTACT_FORM_URL (mesma URL /exec do Apps Script).
+ * Variáveis (defina no painel da Vercel → Environment Variables → Production):
+ * - CONTACT_FORM_URL (recomendado no servidor, não exposto ao bundle do Vite)
+ * - ou VITE_CONTACT_FORM_URL (mesma URL /exec; também funciona no runtime Node)
  */
-export const config = { runtime: "edge" };
+import type { VercelRequest, VercelResponse } from "@vercel/node";
 
-export default async function handler(request: Request): Promise<Response> {
-  if (request.method !== "POST") {
-    return new Response(
-      JSON.stringify({ ok: false, error: "method_not_allowed" }),
-      {
-        status: 405,
-        headers: { "Content-Type": "application/json; charset=utf-8" },
-      }
-    );
+function getAppsScriptUrl(): string {
+  return (
+    process.env.CONTACT_FORM_URL?.trim() ||
+    process.env.VITE_CONTACT_FORM_URL?.trim() ||
+    ""
+  );
+}
+
+export default async function handler(
+  req: VercelRequest,
+  res: VercelResponse
+): Promise<void> {
+  if (req.method === "GET") {
+    const configured = getAppsScriptUrl().length > 0;
+    res.status(200).json({ ok: true, configured });
+    return;
   }
 
-  const url = process.env.VITE_CONTACT_FORM_URL?.trim();
+  if (req.method !== "POST") {
+    res.status(405).json({ ok: false, error: "method_not_allowed" });
+    return;
+  }
+
+  const url = getAppsScriptUrl();
   if (!url) {
-    return new Response(
-      JSON.stringify({ ok: false, error: "not_configured" }),
-      {
-        status: 503,
-        headers: { "Content-Type": "application/json; charset=utf-8" },
-      }
-    );
+    res.status(503).json({
+      ok: false,
+      error: "not_configured",
+      hint: "Defina CONTACT_FORM_URL ou VITE_CONTACT_FORM_URL na Vercel e faça redeploy.",
+    });
+    return;
   }
 
-  const body = await request.text();
+  const body =
+    typeof req.body === "string"
+      ? req.body
+      : JSON.stringify(req.body ?? {});
 
   const upstream = await fetch(url, {
     method: "POST",
@@ -41,10 +55,7 @@ export default async function handler(request: Request): Promise<Response> {
 
   const text = await upstream.text();
   const ct =
-    upstream.headers.get("Content-Type") ?? "application/json; charset=utf-8";
-
-  return new Response(text, {
-    status: upstream.status,
-    headers: { "Content-Type": ct },
-  });
+    upstream.headers.get("content-type") ?? "application/json; charset=utf-8";
+  res.status(upstream.status).setHeader("Content-Type", ct);
+  res.send(text);
 }

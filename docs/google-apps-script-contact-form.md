@@ -96,7 +96,7 @@ O formulário **não** chama o `…/exec` direto no navegador. O fluxo é:
 
 - **POST** para **`/api/contact`** (mesmo domínio do site).
 - Em **dev**, o Vite **proxy** encaminha para `VITE_CONTACT_FORM_URL`.
-- Em **produção (Vercel)**, a função **`api/contact.ts`** (Edge) faz o `fetch` para o Apps Script no servidor.
+- Em **produção (Vercel)**, a função **`api/contact.ts`** (Node.js) faz o `fetch` para o Apps Script no servidor.
 
 Isso evita o problema do **redirect HTTP 302** de `script.google.com`: no navegador, ao seguir o redirect, o `fetch` pode tratar o POST de forma incompatível com o `doPost`, e a resposta deixa de ser JSON — o envio “falha” com erro genérico. No servidor (Node/Edge), o POST é encaminhado corretamente e o script responde `{"ok":true}`.
 
@@ -108,9 +108,15 @@ Isso evita o problema do **redirect HTTP 302** de `script.google.com`: no navega
 
 2. Reinicie o servidor de desenvolvimento (`npm run dev`).
 
-3. **Produção (Vercel):** em **Project → Settings → Environment Variables**, adicione `VITE_CONTACT_FORM_URL` com a mesma URL e faça um novo deploy (a rota `/api/contact` precisa dessa variável no ambiente do servidor).
+3. **Produção (Vercel):** em **Project → Settings → Environment Variables** (ambiente **Production**), defina **pelo menos uma** destas variáveis com a URL `/exec` do Apps Script:
+   - **`CONTACT_FORM_URL`** (recomendada para o servidor; não entra no bundle do Vite), ou
+   - **`VITE_CONTACT_FORM_URL`** (a função `/api/contact` também lê esta chave no runtime Node).
 
-4. **`vite preview`** não inclui o proxy de dev: use **`npm run dev`** localmente ou o site já deployado para testar o envio.
+   Depois faça **Redeploy** (Deployments → … → Redeploy). Sem isso, `/api/contact` responde `503` com `not_configured` e o formulário falha.
+
+4. **Sanidade em produção:** abra no navegador `https://SEU_DOMINIO/api/contact` (GET). Deve aparecer JSON `{"ok":true,"configured":true}`. Se `configured` for `false`, a variável não está disponível no deploy.
+
+5. **`vite preview`** não inclui o proxy de dev: use **`npm run dev`** localmente ou o site já deployado para testar o envio.
 
 ---
 
