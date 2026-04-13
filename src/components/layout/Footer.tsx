@@ -97,10 +97,16 @@ export default function Footer() {
               )}
             </nav>
           </div>
-          <div className="mt-12 pt-8 border-t border-primary-foreground/20">
+          <div className="mt-12 pt-8 border-t border-primary-foreground/20 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <p className="text-sm text-primary-foreground/60">
               © {year} {c.footer.rights}
             </p>
+            <Link
+              to="/politica-de-privacidade"
+              className="text-sm text-primary-foreground/75 hover:text-primary-foreground transition-colors shrink-0"
+            >
+              {c.footer.privacyPolicy}
+            </Link>
           </div>
         </div>
       </div>

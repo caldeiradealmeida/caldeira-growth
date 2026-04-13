@@ -1,6 +1,7 @@
 import { useLanguage } from "@/contexts/LanguageContext";
 import { content } from "@/data/content";
 import { cn } from "@/lib/utils";
+import { sectionLayout } from "@/lib/sectionLayout";
 
 export default function GrowthApproachSection() {
   const { lang } = useLanguage();
@@ -8,15 +9,17 @@ export default function GrowthApproachSection() {
   const points = [c.point1, c.point2, c.point3];
 
   return (
-    <section className="py-20 md:py-28 bg-background">
-      <div className="container mx-auto px-4">
-        <div className="max-w-3xl mx-auto">
-          <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-8">
-            {c.title}
-          </h2>
-          <p className="text-xl text-muted-foreground leading-relaxed mb-12 whitespace-pre-line">
-            {c.intro}
-          </p>
+    <section className={`${sectionLayout.sectionY} bg-background`}>
+      <div className={sectionLayout.container}>
+        <div className={sectionLayout.prose}>
+          <div className={sectionLayout.headerToContent}>
+            <h2 className={sectionLayout.title}>{c.title}</h2>
+            <p
+              className={`${sectionLayout.subtitle} whitespace-pre-line`}
+            >
+              {c.intro}
+            </p>
+          </div>
           <ul className="space-y-8">
             {points.map((point, i) => (
               <li key={i} className="flex gap-4">
@@ -28,7 +31,7 @@ export default function GrowthApproachSection() {
                 >
                   {i + 1}
                 </span>
-                <p className="text-lg text-foreground leading-relaxed pt-0.5">
+                <p className="text-base md:text-lg text-foreground leading-relaxed pt-0.5">
                   {point}
                 </p>
               </li>

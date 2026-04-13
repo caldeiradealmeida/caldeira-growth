@@ -1,17 +1,19 @@
 import { useLanguage } from "@/contexts/LanguageContext";
 import { content } from "@/data/content";
+import { sectionLayout } from "@/lib/sectionLayout";
+import SectionHeader from "@/components/layout/SectionHeader";
 
 export default function BoardSection() {
   const { lang } = useLanguage();
   const b = content[lang].consultingPage.board;
 
   return (
-    <section className="py-24 md:py-32 bg-muted/[0.35] border-y border-border/50">
-      <div className="container mx-auto px-4">
-        <div className="max-w-2xl mx-auto">
-          <h2 className="text-3xl md:text-4xl font-bold text-foreground tracking-tight mb-10 md:mb-12">
-            {b.title}
-          </h2>
+    <section
+      className={`${sectionLayout.sectionY} bg-muted/[0.35] border-y border-border/50`}
+    >
+      <div className={sectionLayout.container}>
+        <div className={sectionLayout.prose}>
+          <SectionHeader title={b.title} className="mb-10 md:mb-12" />
           <div className="space-y-6 mb-12 md:mb-14">
             {b.paragraphs.map((para, idx) => (
               <p

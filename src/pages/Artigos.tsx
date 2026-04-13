@@ -4,6 +4,7 @@ import Footer from "@/components/layout/Footer";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { articles } from "@/data/articles";
 import { ArrowRight } from "lucide-react";
+import { sectionLayout } from "@/lib/sectionLayout";
 
 export default function Artigos() {
   const { lang } = useLanguage();
@@ -11,20 +12,20 @@ export default function Artigos() {
   return (
     <main className="min-h-screen">
       <Header />
-      <section className="pt-28 pb-20 md:pb-28 px-4">
-        <div className="container mx-auto max-w-6xl">
-          <div className="max-w-2xl mb-14 md:mb-16">
-            <h1 className="text-3xl md:text-4xl font-bold text-foreground tracking-tight">
+      <section className={`pt-28 ${sectionLayout.sectionY}`}>
+        <div className={sectionLayout.container}>
+          <div className={sectionLayout.headerToContent}>
+            <h1 className={sectionLayout.title}>
               {lang === "pt" ? "Artigos" : "Articles"}
             </h1>
-            <p className="mt-4 text-lg text-muted-foreground leading-relaxed">
+            <p className={sectionLayout.subtitle}>
               {lang === "pt"
                 ? "Estratégia, execução, crescimento e decisão — texto aplicado para quem lidera negócios e carreiras."
                 : "Strategy, execution, growth, and decision—applied writing for people leading businesses and careers."}
             </p>
           </div>
 
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
             {articles.map((article) => (
               <Link
                 key={article.id}

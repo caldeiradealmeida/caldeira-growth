@@ -3,6 +3,8 @@ import { Link } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { content } from "@/data/content";
 import { articles } from "@/data/articles";
+import { sectionLayout } from "@/lib/sectionLayout";
+import SectionHeader from "@/components/layout/SectionHeader";
 
 const FEATURED_COUNT = 6;
 
@@ -12,22 +14,19 @@ export default function FeaturedArticles() {
   const featured = articles.slice(0, FEATURED_COUNT);
 
   return (
-    <section className="py-24 md:py-32 bg-muted/30 border-y border-border">
-      <div className="container mx-auto px-4">
-        <div className="max-w-4xl mb-14 md:mb-16">
-          <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4 tracking-tight">
-            {c.title}
-          </h2>
-          <p className="text-lg text-muted-foreground leading-relaxed max-w-2xl">
-            {c.subtitle}
-          </p>
+    <section
+      className={`${sectionLayout.sectionY} bg-muted/30 border-y border-border`}
+    >
+      <div className={sectionLayout.container}>
+        <div className={sectionLayout.headerToContent}>
+          <SectionHeader title={c.title} subtitle={c.subtitle} />
         </div>
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-8 md:gap-10 max-w-6xl">
+        <div className={`grid sm:grid-cols-2 lg:grid-cols-3 ${sectionLayout.cardsGap}`}>
           {featured.map((article) => (
             <Link
               key={article.id}
               to={`/artigos/${article.slug}`}
-              className="group flex flex-col bg-card border border-border rounded-xl overflow-hidden shadow-sm hover:shadow-md hover:border-primary/20 transition-all duration-300"
+              className="group flex flex-col bg-card border border-border rounded-xl overflow-hidden shadow-sm hover:shadow-md hover:border-primary/20 transition-all duration-300 h-full"
             >
               <div className="aspect-[16/10] overflow-hidden bg-muted/40">
                 <img
@@ -52,7 +51,7 @@ export default function FeaturedArticles() {
             </Link>
           ))}
         </div>
-        <div className="mt-12 text-center">
+        <div className="mt-12 md:mt-14 text-center">
           <Link
             to="/artigos"
             className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:underline"

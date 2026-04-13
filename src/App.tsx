@@ -13,6 +13,7 @@ import Artigos from "./pages/Artigos";
 import ArticlePage from "./pages/ArticlePage";
 import Midia from "./pages/Midia";
 import Contato from "./pages/Contato";
+import PrivacyPolicy from "./pages/PrivacyPolicy";
 import Campaign from "./pages/Campaign";
 import AmazonRedirect from "./pages/AmazonRedirect";
 import Desafio650 from "./pages/Desafio650";
@@ -37,6 +38,10 @@ const App = () => (
             <Route path="/artigos/:slug" element={<ArticlePage />} />
             <Route path="/midia" element={<Midia />} />
             <Route path="/contato" element={<Contato />} />
+            <Route
+              path="/politica-de-privacidade"
+              element={<PrivacyPolicy />}
+            />
             <Route path="/campanha" element={<Campaign />} />
             <Route path="/qr" element={<AmazonRedirect />} />
             <Route path="/amazon" element={<AmazonRedirect />} />

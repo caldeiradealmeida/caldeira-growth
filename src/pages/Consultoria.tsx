@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { content } from "@/data/content";
 import { cn } from "@/lib/utils";
+import { sectionLayout } from "@/lib/sectionLayout";
 
 function Section({
   children,
@@ -20,7 +21,8 @@ function Section({
     <section
       id={id}
       className={cn(
-        "border-t border-border/60 py-20 md:py-28 px-4",
+        sectionLayout.sectionY,
+        "border-t border-border/60",
         className
       )}
     >
@@ -37,105 +39,105 @@ export default function Consultoria() {
     <main className="min-h-screen bg-background">
       <Header />
 
-      {/* Hero */}
-      <section className="pt-28 md:pt-36 pb-24 md:pb-32 px-4">
-        <div className="container mx-auto max-w-3xl">
-          <p className="text-[11px] font-medium uppercase tracking-[0.28em] text-muted-foreground mb-8 md:mb-10">
-            {lang === "pt" ? "Consultoria" : "Consulting"}
-          </p>
-          <h1 className="text-4xl md:text-5xl lg:text-[3.25rem] font-bold tracking-tight text-foreground leading-[1.12] mb-8 md:mb-10">
-            {p.hero.title}
-          </h1>
-          <p className="text-lg md:text-xl text-foreground/80 font-light leading-relaxed max-w-2xl mb-12 md:mb-14">
-            {p.hero.subtitle}
-          </p>
-          <Button
-            size="lg"
-            asChild
-            variant="outline"
-            className="rounded-sm border-foreground/20 bg-transparent px-8 py-6 text-base font-medium tracking-wide hover:bg-foreground hover:text-background transition-colors"
-          >
-            <Link to="/contato">{p.hero.cta}</Link>
-          </Button>
+      <section className="pt-28 md:pt-36 pb-24 md:pb-32">
+        <div className={sectionLayout.container}>
+          <div className={sectionLayout.prose}>
+            <p className="text-[11px] font-medium uppercase tracking-[0.28em] text-muted-foreground mb-8 md:mb-10">
+              {lang === "pt" ? "Consultoria" : "Consulting"}
+            </p>
+            <h1 className="text-4xl md:text-5xl font-semibold tracking-tight text-foreground leading-[1.12] mb-8 md:mb-10">
+              {p.hero.title}
+            </h1>
+            <p className={`${sectionLayout.subtitle} text-foreground/85 mb-12 md:mb-14`}>
+              {p.hero.subtitle}
+            </p>
+            <Button
+              size="lg"
+              asChild
+              variant="outline"
+              className="rounded-sm border-foreground/20 bg-transparent px-8 py-6 text-base font-medium tracking-wide hover:bg-foreground hover:text-background transition-colors"
+            >
+              <Link to="/contato">{p.hero.cta}</Link>
+            </Button>
+          </div>
         </div>
       </section>
 
-      {/* Para quem é */}
       <Section>
-        <div className="container mx-auto max-w-2xl">
-          <h2 className="text-2xl md:text-3xl font-semibold tracking-tight text-foreground mb-6 md:mb-8">
-            {p.forWhom.title}
-          </h2>
-          <p className="text-base md:text-[17px] leading-[1.75] text-foreground/85 mb-10 md:mb-12">
-            {p.forWhom.intro}
-          </p>
-          <ul className="space-y-5">
-            {p.forWhom.bullets.map((item) => (
-              <li
-                key={item}
-                className="flex gap-4 text-base md:text-[17px] leading-relaxed text-foreground/90"
-              >
-                <span
-                  className="mt-2.5 h-px w-6 shrink-0 bg-foreground/25"
-                  aria-hidden
-                />
-                <span>{item}</span>
-              </li>
-            ))}
-          </ul>
+        <div className={sectionLayout.container}>
+          <div className={sectionLayout.prose}>
+            <div className={sectionLayout.headerToContent}>
+              <h2 className={sectionLayout.title}>{p.forWhom.title}</h2>
+              <p className="text-base md:text-[17px] leading-[1.75] text-foreground/85">
+                {p.forWhom.intro}
+              </p>
+            </div>
+            <ul className="space-y-5">
+              {p.forWhom.bullets.map((item) => (
+                <li
+                  key={item}
+                  className="flex gap-4 text-base md:text-[17px] leading-relaxed text-foreground/90"
+                >
+                  <span
+                    className="mt-2.5 h-px w-6 shrink-0 bg-foreground/25"
+                    aria-hidden
+                  />
+                  <span>{item}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
         </div>
       </Section>
 
-      {/* Como atuo */}
       <Section className="bg-muted/[0.35]">
-        <div className="container mx-auto max-w-2xl">
-          <h2 className="text-2xl md:text-3xl font-semibold tracking-tight text-foreground mb-6 md:mb-8">
-            {p.howIWork.title}
-          </h2>
-          <p className="text-base md:text-[17px] leading-[1.75] text-foreground/85 mb-8">
-            {p.howIWork.lead}
-          </p>
-          <p className="text-base md:text-[17px] leading-[1.75] text-foreground/85 mb-6">
-            {p.howIWork.clarityLead}
-          </p>
-          <ul className="space-y-3 mb-10 pl-1 border-l border-border/80 pl-6 md:pl-8">
-            {p.howIWork.clarityPoints.map((point) => (
-              <li
-                key={point}
-                className="text-base md:text-[17px] text-foreground/90 leading-relaxed"
-              >
-                {point}
-              </li>
-            ))}
-          </ul>
-          <p className="text-base md:text-[17px] leading-[1.75] text-foreground/85 mb-12">
-            {p.howIWork.bridge}
-          </p>
-          <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-muted-foreground mb-4">
-            {lang === "pt" ? "Formatos" : "Formats"}
-          </p>
-          <ul className="space-y-4">
-            {p.howIWork.formats.map((f) => (
-              <li
-                key={f}
-                className="text-sm md:text-base text-foreground/80 leading-relaxed border-b border-border/40 pb-4 last:border-0 last:pb-0"
-              >
-                {f}
-              </li>
-            ))}
-          </ul>
+        <div className={sectionLayout.container}>
+          <div className={sectionLayout.prose}>
+            <div className={sectionLayout.headerToContent}>
+              <h2 className={sectionLayout.title}>{p.howIWork.title}</h2>
+            </div>
+            <p className="text-base md:text-[17px] leading-[1.75] text-foreground/85 mb-8">
+              {p.howIWork.lead}
+            </p>
+            <p className="text-base md:text-[17px] leading-[1.75] text-foreground/85 mb-6">
+              {p.howIWork.clarityLead}
+            </p>
+            <ul className="space-y-3 mb-10 pl-1 border-l border-border/80 pl-6 md:pl-8">
+              {p.howIWork.clarityPoints.map((point) => (
+                <li
+                  key={point}
+                  className="text-base md:text-[17px] text-foreground/90 leading-relaxed"
+                >
+                  {point}
+                </li>
+              ))}
+            </ul>
+            <p className="text-base md:text-[17px] leading-[1.75] text-foreground/85 mb-12">
+              {p.howIWork.bridge}
+            </p>
+            <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-muted-foreground mb-4">
+              {lang === "pt" ? "Formatos" : "Formats"}
+            </p>
+            <ul className="space-y-4">
+              {p.howIWork.formats.map((f) => (
+                <li
+                  key={f}
+                  className="text-sm md:text-base text-foreground/80 leading-relaxed border-b border-border/40 pb-4 last:border-0 last:pb-0"
+                >
+                  {f}
+                </li>
+              ))}
+            </ul>
+          </div>
         </div>
       </Section>
 
-      {/* Situações reais */}
       <Section>
-        <div className="container mx-auto max-w-3xl">
-          <h2 className="text-2xl md:text-3xl font-semibold tracking-tight text-foreground mb-4 md:mb-6 max-w-2xl">
-            {p.situations.title}
-          </h2>
-          <p className="text-base text-muted-foreground mb-14 md:mb-16 max-w-2xl leading-relaxed">
-            {p.situations.subtitle}
-          </p>
+        <div className={sectionLayout.container}>
+          <div className={sectionLayout.headerToContent}>
+            <h2 className={sectionLayout.title}>{p.situations.title}</h2>
+            <p className={sectionLayout.subtitle}>{p.situations.subtitle}</p>
+          </div>
           <div className="space-y-20 md:space-y-24">
             {p.situations.cases.map((c, i) => (
               <div
@@ -182,68 +184,71 @@ export default function Consultoria() {
         </div>
       </Section>
 
-      {/* Conselheiro */}
       <Section className="bg-muted/[0.35]">
-        <div className="container mx-auto max-w-2xl">
-          <h2 className="text-2xl md:text-3xl font-semibold tracking-tight text-foreground mb-8 md:mb-10">
-            {p.board.title}
-          </h2>
-          <div className="space-y-6 mb-10 md:mb-12">
-            {p.board.paragraphs.map((para, idx) => (
+        <div className={sectionLayout.container}>
+          <div className={sectionLayout.prose}>
+            <div className={sectionLayout.headerToContent}>
+              <h2 className={sectionLayout.title}>{p.board.title}</h2>
+            </div>
+            <div className="space-y-6 mb-10 md:mb-12">
+              {p.board.paragraphs.map((para, idx) => (
+                <p
+                  key={idx}
+                  className="text-base md:text-[17px] leading-[1.75] text-foreground/88"
+                >
+                  {para}
+                </p>
+              ))}
+            </div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground mb-4">
+              {p.board.formatsTitle}
+            </p>
+            <ul className="space-y-4">
+              {p.board.formats.map((line) => (
+                <li
+                  key={line}
+                  className="text-sm md:text-base text-foreground/85 leading-relaxed border-b border-border/40 pb-4 last:border-0 last:pb-0"
+                >
+                  {line}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      </Section>
+
+      <Section>
+        <div className={sectionLayout.container}>
+          <div className={sectionLayout.prose}>
+            <div className={sectionLayout.headerToContent}>
+              <h2 className={sectionLayout.title}>{p.experience.title}</h2>
+            </div>
+            {p.experience.body.split("\n\n").map((para, idx) => (
               <p
                 key={idx}
-                className="text-base md:text-[17px] leading-[1.75] text-foreground/88"
+                className="text-base md:text-[17px] leading-[1.75] text-foreground/85 mb-6 last:mb-0"
               >
                 {para}
               </p>
             ))}
           </div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground mb-4">
-            {p.board.formatsTitle}
-          </p>
-          <ul className="space-y-4">
-            {p.board.formats.map((line) => (
-              <li
-                key={line}
-                className="text-sm md:text-base text-foreground/85 leading-relaxed border-b border-border/40 pb-4 last:border-0 last:pb-0"
-              >
-                {line}
-              </li>
-            ))}
-          </ul>
         </div>
       </Section>
 
-      {/* Experiência */}
-      <Section>
-        <div className="container mx-auto max-w-2xl">
-          <h2 className="text-2xl md:text-3xl font-semibold tracking-tight text-foreground mb-8 md:mb-10">
-            {p.experience.title}
-          </h2>
-          {p.experience.body.split("\n\n").map((para, idx) => (
-            <p
-              key={idx}
-              className="text-base md:text-[17px] leading-[1.75] text-foreground/85 mb-6 last:mb-0"
-            >
-              {para}
+      <section className={`${sectionLayout.sectionY} border-t border-border/60`}>
+        <div className={sectionLayout.container}>
+          <div className={`${sectionLayout.prose} text-center`}>
+            <p className="text-xl md:text-2xl font-semibold tracking-tight text-foreground leading-snug mb-10 md:mb-12">
+              {p.finalCta.title}
             </p>
-          ))}
-        </div>
-      </Section>
-
-      {/* CTA final */}
-      <section className="py-24 md:py-32 px-4 border-t border-border/60">
-        <div className="container mx-auto max-w-2xl text-center">
-          <p className="text-xl md:text-2xl font-semibold tracking-tight text-foreground leading-snug mb-10 md:mb-12">
-            {p.finalCta.title}
-          </p>
-          <Button
-            size="lg"
-            asChild
-            className="rounded-sm bg-foreground text-background hover:bg-foreground/90 px-10 py-6 text-base font-medium tracking-wide"
-          >
-            <Link to="/contato">{p.finalCta.cta}</Link>
-          </Button>
+            <Button
+              size="lg"
+              asChild
+              className="rounded-sm bg-foreground text-background hover:bg-foreground/90 px-10 py-6 text-base font-medium tracking-wide"
+            >
+              <Link to="/contato">{p.finalCta.cta}</Link>
+            </Button>
+          </div>
         </div>
       </section>
 

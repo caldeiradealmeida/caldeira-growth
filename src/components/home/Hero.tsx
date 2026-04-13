@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { content } from "@/data/content";
+import { sectionLayout } from "@/lib/sectionLayout";
 
 import denisSpeaking from "@/assets/denis/speaking-denis.png";
 import { bookSiteLinkProps } from "@/constants/book";
@@ -33,32 +34,32 @@ export default function Hero() {
         />
       </div>
 
-      <div className="container mx-auto px-4 py-10 md:py-14 relative z-10">
-        <div className="max-w-6xl">
-          <div className="max-w-xl">
-            <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold leading-[1.08] tracking-tight text-white mb-5">
-              {c.headline}
-            </h1>
-            <p className="text-lg md:text-xl text-white font-light leading-relaxed mb-6">
-              {c.subhead}
-            </p>
-            <div className="flex flex-col sm:flex-row gap-3">
-              <Button
-                size="lg"
-                asChild
-                className="bg-accent hover:bg-accent/85 text-accent-foreground font-semibold text-base px-7 py-5 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-[1.02]"
-              >
-                <Link to="/contato">{c.ctaContact}</Link>
-              </Button>
-              <Button
-                size="lg"
-                variant="outline"
-                asChild
-                className="border border-white/60 bg-transparent text-white hover:bg-white/10 font-medium text-base px-7 py-5 transition-colors duration-300 w-fit"
-              >
-                <a {...bookSiteLinkProps}>{c.ctaBook}</a>
-              </Button>
-            </div>
+      <div
+        className={`${sectionLayout.container} py-10 md:py-14 relative z-10`}
+      >
+        <div className="max-w-xl">
+          <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold leading-[1.08] tracking-tight text-white mb-5">
+            {c.headline}
+          </h1>
+          <p className="text-lg md:text-xl text-white font-light leading-relaxed mb-6">
+            {c.subhead}
+          </p>
+          <div className="flex flex-col sm:flex-row gap-3">
+            <Button
+              size="lg"
+              asChild
+              className="bg-accent hover:bg-accent/85 text-accent-foreground font-semibold text-base px-7 py-5 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-[1.02]"
+            >
+              <Link to="/contato">{c.ctaContact}</Link>
+            </Button>
+            <Button
+              size="lg"
+              variant="outline"
+              asChild
+              className="border border-white/60 bg-transparent text-white hover:bg-white/10 font-medium text-base px-7 py-5 transition-colors duration-300 w-fit"
+            >
+              <a {...bookSiteLinkProps}>{c.ctaBook}</a>
+            </Button>
           </div>
         </div>
       </div>

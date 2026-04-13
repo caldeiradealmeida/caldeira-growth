@@ -2,6 +2,10 @@ import type { Language } from "@/contexts/LanguageContext";
 
 export type ContentByLang = Record<Language, Content>;
 
+export type PrivacySection =
+  | { kind: "text"; title: string; body: string }
+  | { kind: "bullets"; title: string; intro: string; items: string[] };
+
 export type Content = {
   nav: {
     consulting: string;
@@ -49,9 +53,6 @@ export type Content = {
     title: string;
     subtitle: string;
   };
-  testimonials: {
-    title: string;
-  };
   media: {
     title: string;
     subtitle: string;
@@ -78,6 +79,12 @@ export type Content = {
       topicPlaceholder: string;
       message: string;
       submit: string;
+      sending: string;
+      successTitle: string;
+      successDescription: string;
+      errorTitle: string;
+      errorDescription: string;
+      notConfigured: string;
     };
     topicOptions: { value: string; label: string }[];
   };
@@ -123,6 +130,16 @@ export type Content = {
     contact: string;
     rights: string;
     connectLabel: string;
+    privacyPolicy: string;
+  };
+  privacyPage: {
+    metaTitle: string;
+    metaDescription: string;
+    title: string;
+    updated: string;
+    intro: string;
+    sections: PrivacySection[];
+    legalLines: string[];
   };
 };
 
@@ -196,9 +213,6 @@ export const content: ContentByLang = {
       subtitle:
         "Não são cases nem promessas — são contextos reais onde clareza estratégica foi determinante.",
     },
-    testimonials: {
-      title: "O que dizem líderes",
-    },
     media: {
       title: "Na mídia",
       subtitle:
@@ -226,6 +240,15 @@ export const content: ContentByLang = {
         topicPlaceholder: "Selecione um tema",
         message: "Mensagem",
         submit: "Enviar mensagem",
+        sending: "Enviando…",
+        successTitle: "Mensagem enviada",
+        successDescription:
+          "Recebemos seu contato. Retornaremos o mais breve possível.",
+        errorTitle: "Não foi possível enviar",
+        errorDescription:
+          "Tente novamente em instantes ou escreva para contato@caldeiragrowth.com.",
+        notConfigured:
+          "O envio pelo site não está disponível no momento. Escreva para contato@caldeiragrowth.com.",
       },
       topicOptions: [
         { value: "growth", label: "Crescimento e estratégia" },
@@ -352,6 +375,73 @@ export const content: ContentByLang = {
       contact: "contato@caldeiragrowth.com",
       rights: "Todos os direitos reservados.",
       connectLabel: "Conecte-se",
+      privacyPolicy: "Política de Privacidade",
+    },
+    privacyPage: {
+      metaTitle: "Política de Privacidade | Caldeira Growth",
+      metaDescription:
+        "Política de privacidade da Caldeira Growth. Saiba como tratamos seus dados.",
+      title: "Política de Privacidade",
+      updated: "Atualizado em: 29 de Abril de 2025",
+      intro:
+        "Sua privacidade é importante para nós. É política da Fortes & Caldeira Consultoria Empresarial respeitar a sua privacidade em relação a qualquer informação que possamos coletar em nosso site www.caldeiragrowth.com e outros sites que possuímos e operamos.",
+      sections: [
+        {
+          kind: "text",
+          title: "1. Coleta de Informações",
+          body:
+            "Coletamos informações pessoais como nome, e-mail e telefone apenas quando você nos fornece voluntariamente por meio de formulários de contato, inscrição ou outros canais similares. Também coletamos dados de navegação por meio de cookies e ferramentas de análise, como Google Analytics e Hotjar.",
+        },
+        {
+          kind: "bullets",
+          title: "2. Uso das Informações",
+          intro: "Utilizamos seus dados para:",
+          items: [
+            "Responder a contatos e solicitações;",
+            "Enviar informações relevantes sobre nossos serviços;",
+            "Melhorar a experiência do usuário no site;",
+            "Cumprir obrigações legais.",
+          ],
+        },
+        {
+          kind: "text",
+          title: "3. Compartilhamento de Dados",
+          body:
+            "Não compartilhamos informações pessoais publicamente ou com terceiros, exceto quando exigido por lei ou com seu consentimento.",
+        },
+        {
+          kind: "text",
+          title: "4. Segurança dos Dados",
+          body:
+            "Adotamos práticas seguras para proteger suas informações pessoais, incluindo criptografia e controle de acesso.",
+        },
+        {
+          kind: "text",
+          title: "5. Cookies",
+          body:
+            "Utilizamos cookies para armazenar informações de navegação e melhorar a experiência de uso. Você pode configurar seu navegador para recusar cookies, mas isso pode limitar algumas funcionalidades do site.",
+        },
+        {
+          kind: "text",
+          title: "6. Seus Direitos",
+          body:
+            "Você tem o direito de acessar, corrigir ou excluir seus dados pessoais armazenados por nós. Para isso, entre em contato pelo e-mail: contato@caldeiragrowth.com",
+        },
+        {
+          kind: "text",
+          title: "7. Alterações nesta Política",
+          body:
+            "Reservamo-nos o direito de modificar esta política de privacidade a qualquer momento. As alterações serão publicadas nesta página.",
+        },
+      ],
+      legalLines: [
+        "Responsável pelo tratamento de dados: Denis Caldeira de Almeida",
+        "Fortes & Caldeira Consultoria Empresarial",
+        "CNPJ: 06.254.268/0001-36",
+        "Contato: contato@caldeiragrowth.com",
+        "",
+        "Caldeira Growth Consultoria",
+      ],
     },
   },
   en: {
@@ -423,9 +513,6 @@ export const content: ContentByLang = {
       subtitle:
         "Not case studies or promises — real contexts where strategic clarity was decisive.",
     },
-    testimonials: {
-      title: "What leaders say",
-    },
     media: {
       title: "In the Media",
       subtitle:
@@ -453,6 +540,15 @@ export const content: ContentByLang = {
         topicPlaceholder: "Select a topic",
         message: "Message",
         submit: "Send message",
+        sending: "Sending…",
+        successTitle: "Message sent",
+        successDescription:
+          "We received your message and will get back to you as soon as we can.",
+        errorTitle: "Could not send",
+        errorDescription:
+          "Please try again shortly or email contato@caldeiragrowth.com.",
+        notConfigured:
+          "Online submission is temporarily unavailable. Email contato@caldeiragrowth.com.",
       },
       topicOptions: [
         { value: "growth", label: "Growth and strategy" },
@@ -579,6 +675,73 @@ export const content: ContentByLang = {
       contact: "contato@caldeiragrowth.com",
       rights: "All rights reserved.",
       connectLabel: "Connect",
+      privacyPolicy: "Privacy Policy",
+    },
+    privacyPage: {
+      metaTitle: "Privacy Policy | Caldeira Growth",
+      metaDescription:
+        "Caldeira Growth privacy policy. Learn how we handle your data.",
+      title: "Privacy Policy",
+      updated: "Updated: April 29, 2025",
+      intro:
+        "Your privacy matters to us. Fortes & Caldeira Consultoria Empresarial is committed to respecting your privacy regarding any information we may collect on our website www.caldeiragrowth.com and other sites we own and operate.",
+      sections: [
+        {
+          kind: "text",
+          title: "1. Information we collect",
+          body:
+            "We collect personal information such as name, email, and phone number only when you voluntarily provide it through contact forms, sign-ups, or similar channels. We also collect browsing data through cookies and analytics tools such as Google Analytics and Hotjar.",
+        },
+        {
+          kind: "bullets",
+          title: "2. How we use information",
+          intro: "We use your data to:",
+          items: [
+            "Respond to inquiries and requests;",
+            "Send relevant information about our services;",
+            "Improve the user experience on the site;",
+            "Comply with legal obligations.",
+          ],
+        },
+        {
+          kind: "text",
+          title: "3. Sharing data",
+          body:
+            "We do not share personal information publicly or with third parties except when required by law or with your consent.",
+        },
+        {
+          kind: "text",
+          title: "4. Data security",
+          body:
+            "We adopt secure practices to protect your personal information, including encryption and access controls.",
+        },
+        {
+          kind: "text",
+          title: "5. Cookies",
+          body:
+            "We use cookies to store browsing information and improve your experience. You can configure your browser to refuse cookies, but some site features may be limited.",
+        },
+        {
+          kind: "text",
+          title: "6. Your rights",
+          body:
+            "You have the right to access, correct, or delete your personal data stored by us. To do so, contact us at: contato@caldeiragrowth.com",
+        },
+        {
+          kind: "text",
+          title: "7. Changes to this policy",
+          body:
+            "We may update this privacy policy at any time. Changes will be published on this page.",
+        },
+      ],
+      legalLines: [
+        "Data controller: Denis Caldeira de Almeida",
+        "Fortes & Caldeira Consultoria Empresarial",
+        "Tax ID (CNPJ): 06.254.268/0001-36",
+        "Contact: contato@caldeiragrowth.com",
+        "",
+        "Caldeira Growth Consultoria",
+      ],
     },
   },
 };

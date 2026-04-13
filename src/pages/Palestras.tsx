@@ -3,6 +3,7 @@ import Footer from "@/components/layout/Footer";
 import denisSpeaking from "@/assets/denis/speaking-denis.png";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { content } from "@/data/content";
+import { sectionLayout } from "@/lib/sectionLayout";
 
 export default function Palestras() {
   const { lang } = useLanguage();
@@ -11,24 +12,24 @@ export default function Palestras() {
   return (
     <main className="min-h-screen">
       <Header />
-      <section className="pt-28 pb-24 md:pb-32 px-4">
-        <div className="container mx-auto max-w-6xl">
-          <div className="mb-16 md:mb-24">
-            <div className="aspect-[16/9] md:aspect-[21/9] max-w-4xl mx-auto overflow-hidden">
+      <section className="pt-28 pb-24 md:pb-32">
+        <div className={sectionLayout.container}>
+          <div className="mb-14 md:mb-16">
+            <div className="aspect-[16/9] md:aspect-[21/9] max-w-4xl overflow-hidden">
               <img
                 src={denisSpeaking}
-                alt={lang === "pt" ? "Denis Caldeira palestrando" : "Denis Caldeira speaking"}
+                alt={
+                  lang === "pt"
+                    ? "Denis Caldeira palestrando"
+                    : "Denis Caldeira speaking"
+                }
                 className="w-full h-full object-cover object-center"
               />
             </div>
           </div>
-          <div className="max-w-2xl mx-auto">
-            <h1 className="text-4xl md:text-5xl font-bold text-foreground tracking-tight">
-              {p.headline}
-            </h1>
-            <p className="mt-6 text-lg text-muted-foreground leading-relaxed">
-              {p.subtitle}
-            </p>
+          <div className={sectionLayout.prose}>
+            <h1 className={sectionLayout.title}>{p.headline}</h1>
+            <p className={sectionLayout.subtitle}>{p.subtitle}</p>
             <div className="mt-14 pt-10 border-t border-border/60">
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground mb-6">
                 {p.themesTitle}

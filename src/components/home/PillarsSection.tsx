@@ -10,6 +10,8 @@ import { content } from "@/data/content";
 import { Link } from "react-router-dom";
 import { bookSiteLinkProps } from "@/constants/book";
 import { cn } from "@/lib/utils";
+import { sectionLayout } from "@/lib/sectionLayout";
+import SectionHeader from "@/components/layout/SectionHeader";
 
 type PillarItem =
   | { key: "consulting" | "speaking" | "pathToGrow"; href: string; icon: LucideIcon }
@@ -36,41 +38,20 @@ export default function PillarsSection({
   return (
     <section
       className={cn(
-        "py-20 md:py-28 border-y border-border",
+        sectionLayout.sectionY,
+        "border-y border-border",
         subtle ? "bg-muted/15 border-border/60" : "bg-muted/30"
       )}
     >
-      <div className="container mx-auto px-4">
-        <div
-          className={cn(
-            "max-w-3xl mx-auto text-center",
-            subtle ? "mb-12 md:mb-14" : "mb-16 md:mb-20"
-          )}
-        >
-          <h2
-            className={cn(
-              "text-foreground mb-3 tracking-tight",
-              subtle
-                ? "text-2xl md:text-3xl font-semibold"
-                : "text-3xl md:text-4xl font-bold"
-            )}
-          >
-            {c.title}
-          </h2>
-          <p
-            className={cn(
-              "text-muted-foreground leading-relaxed",
-              subtle ? "text-sm md:text-base" : "text-lg"
-            )}
-          >
-            {c.subtitle}
-          </p>
+      <div className={sectionLayout.container}>
+        <div className={sectionLayout.headerToContent}>
+          <SectionHeader title={c.title} subtitle={c.subtitle} />
         </div>
 
         <div
           className={cn(
-            "grid sm:grid-cols-2 xl:grid-cols-4 max-w-6xl mx-auto",
-            subtle ? "gap-5 md:gap-6" : "gap-6 md:gap-8"
+            "grid sm:grid-cols-2 xl:grid-cols-4",
+            sectionLayout.cardsGap
           )}
         >
           {pillarsConfig.map((item) => {
@@ -81,39 +62,34 @@ export default function PillarsSection({
                 ? pillar.shortDescription
                 : pillar.description;
             const cardClass = cn(
-              "group flex flex-col rounded-2xl transition-colors duration-300",
+              "group flex flex-col h-full rounded-2xl transition-colors duration-300",
               subtle
-                ? "bg-background/60 border border-border/50 p-6 md:p-7 min-h-[240px] shadow-none hover:border-border"
-                : "bg-card border border-border p-7 md:p-8 shadow-sm hover:shadow-md hover:border-primary/15 transition-all duration-300 hover:-translate-y-0.5 min-h-[280px]"
+                ? "bg-background/60 border border-border/50 p-6 md:p-7 min-h-[268px] shadow-none hover:border-border"
+                : "bg-card border border-border p-7 md:p-8 min-h-[280px] shadow-sm hover:shadow-md hover:border-primary/15 transition-all duration-300 hover:-translate-y-0.5"
             );
             const inner = (
               <>
                 <div
                   className={cn(
-                    "rounded-lg bg-primary/10 text-primary flex items-center justify-center group-hover:bg-primary/15 transition-colors shrink-0",
-                    subtle ? "mb-4 w-9 h-9" : "mb-5 w-11 h-11"
+                    "rounded-lg bg-primary/10 text-primary flex items-center justify-center group-hover:bg-primary/15 transition-colors shrink-0 mb-4",
+                    subtle ? "h-9 w-9" : "h-11 w-11"
                   )}
                 >
                   <Icon className={subtle ? "h-4 w-4" : "h-5 w-5"} />
                 </div>
-                <h3
-                  className={cn(
-                    "font-semibold text-foreground mb-2 leading-snug",
-                    subtle ? "text-base" : "text-lg mb-3"
-                  )}
-                >
+                <h3 className="font-semibold text-foreground mb-3 leading-snug text-base md:text-[17px]">
                   {pillar.title}
                 </h3>
                 <p
                   className={cn(
-                    "text-muted-foreground leading-relaxed flex-1",
-                    subtle ? "text-[13px]" : "text-sm"
+                    "text-muted-foreground leading-relaxed flex-1 text-sm",
+                    subtle && "text-[13px]"
                   )}
                 >
                   {desc}
                 </p>
                 {key === "pathToGrow" && (
-                  <p className="text-xs text-muted-foreground/90 mt-4 pt-4 border-t border-border font-medium tracking-wide">
+                  <p className="text-xs text-muted-foreground/90 mt-auto pt-4 border-t border-border font-medium tracking-wide">
                     {pillar.micro}
                   </p>
                 )}

@@ -2,27 +2,20 @@ import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { content } from "@/data/content";
-import { cn } from "@/lib/utils";
+import { sectionLayout } from "@/lib/sectionLayout";
+import SectionHeader from "@/components/layout/SectionHeader";
 
 export default function ContactCTA() {
   const { lang } = useLanguage();
   const c = content[lang].contactCTA;
 
   return (
-    <section className="py-20 md:py-28 bg-background">
-      <div className="container mx-auto px-4">
-        <div className="max-w-2xl mx-auto text-center">
-          <h2
-            className={cn(
-              "text-3xl md:text-4xl font-bold text-foreground",
-              c.subtitle ? "mb-4" : "mb-8"
-            )}
-          >
-            {c.title}
-          </h2>
-          {c.subtitle ? (
-            <p className="text-lg text-muted-foreground mb-8">{c.subtitle}</p>
-          ) : null}
+    <section className={`${sectionLayout.sectionY} bg-background`}>
+      <div className={sectionLayout.container}>
+        <div className={sectionLayout.prose}>
+          <div className={sectionLayout.headerToContent}>
+            <SectionHeader title={c.title} subtitle={c.subtitle} />
+          </div>
           <Button
             size="lg"
             asChild
