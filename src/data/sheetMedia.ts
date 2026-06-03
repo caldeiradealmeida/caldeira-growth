@@ -2,7 +2,8 @@ import type { Language } from "@/contexts/LanguageContext";
 import { mediaItems as localMediaItems, type MediaItem } from "@/data/media";
 import { rowsFromCsv, type CsvRow } from "@/lib/csv";
 
-const MEDIA_SHEET_CSV_URL = import.meta.env.VITE_MEDIA_SHEET_CSV_URL;
+const MEDIA_SHEET_CSV_URL =
+  import.meta.env.VITE_MEDIA_SHEET_CSV_URL || "/api/content?type=media";
 
 function getLocalized(row: CsvRow, key: string, lang: Language) {
   return row[`${key}_${lang}`] || row[key] || "";

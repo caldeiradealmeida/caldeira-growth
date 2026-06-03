@@ -39,6 +39,31 @@ const MEDIA_HEADERS = [
   'featured',
 ];
 
+function doGet(e) {
+  try {
+    const action = (e && e.parameter && e.parameter.action) || '';
+    const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+
+    if (action === 'articles_csv') {
+      return csvResponse(getSheetCsv(spreadsheet, ARTICLES_SHEET_NAME, ARTICLES_HEADERS));
+    }
+
+    if (action === 'media_csv') {
+      return csvResponse(getSheetCsv(spreadsheet, MEDIA_SHEET_NAME, MEDIA_HEADERS));
+    }
+
+    return ContentService.createTextOutput(JSON.stringify({
+      status: 'ok',
+      service: 'caldeira-growth-content'
+    })).setMimeType(ContentService.MimeType.JSON);
+  } catch (error) {
+    return ContentService.createTextOutput(JSON.stringify({
+      status: 'error',
+      message: error.toString()
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
 function doPost(e) {
   try {
     const sheet = SpreadsheetApp.getActiveSpreadsheet();
@@ -314,6 +339,33 @@ function buildMediaRow(payload) {
     if (header === 'featured') return String(payload.featured || '');
     return String(payload[header] || '');
   });
+}
+
+function getSheetCsv(spreadsheet, sheetName, headers) {
+  let sheet = spreadsheet.getSheetByName(sheetName);
+
+  if (!sheet) {
+    sheet = spreadsheet.insertSheet(sheetName);
+  }
+
+  ensureHeaders(sheet, headers);
+
+  const values = sheet.getDataRange().getDisplayValues();
+  return values.map((row) => row.map(csvEscape).join(',')).join('\n');
+}
+
+function csvEscape(value) {
+  const text = String(value == null ? '' : value);
+  if (/[",\n\r]/.test(text)) {
+    return '"' + text.replace(/"/g, '""') + '"';
+  }
+  return text;
+}
+
+function csvResponse(csv) {
+  return ContentService
+    .createTextOutput(csv)
+    .setMimeType(ContentService.MimeType.CSV);
 }
 
 function slugify(value) {
