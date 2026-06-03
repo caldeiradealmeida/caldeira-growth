@@ -69,19 +69,6 @@ export default function ArticlePage() {
               </p>
             ))}
           </div>
-
-          {article.sourceUrl ? (
-            <a
-              href={article.sourceUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-10 inline-flex text-sm font-medium text-primary hover:underline"
-            >
-              {lang === "pt"
-                ? `Publicado originalmente${article.sourceName ? ` em ${article.sourceName}` : ""}`
-                : `Originally published${article.sourceName ? ` at ${article.sourceName}` : ""}`}
-            </a>
-          ) : null}
         </div>
       </article>
       <Footer />
