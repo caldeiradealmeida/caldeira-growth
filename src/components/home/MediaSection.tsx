@@ -1,7 +1,7 @@
 import { ExternalLink } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { content } from "@/data/content";
-import { mediaItems } from "@/data/media";
+import { useMediaItems } from "@/hooks/useMediaItems";
 import { cn } from "@/lib/utils";
 import { sectionLayout } from "@/lib/sectionLayout";
 import SectionHeader from "@/components/layout/SectionHeader";
@@ -13,6 +13,7 @@ type MediaSectionProps = {
 export default function MediaSection({ variant = "home" }: MediaSectionProps) {
   const { lang } = useLanguage();
   const c = content[lang].media;
+  const { data: mediaItems } = useMediaItems();
 
   return (
     <section

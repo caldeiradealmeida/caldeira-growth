@@ -2,12 +2,13 @@ import { Link } from "react-router-dom";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { articles } from "@/data/articles";
+import { useArticles } from "@/hooks/useArticles";
 import { ArrowRight } from "lucide-react";
 import { sectionLayout } from "@/lib/sectionLayout";
 
 export default function Artigos() {
   const { lang } = useLanguage();
+  const { data: articles } = useArticles();
 
   return (
     <main className="min-h-screen">

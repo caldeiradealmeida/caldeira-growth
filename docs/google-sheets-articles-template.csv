@@ -1,0 +1,6 @@
+status,date,slug,title_pt,title_en,excerpt_pt,excerpt_en,content_pt,content_en,cover_url,source_name,source_url
+published,2026-06-03,exemplo-artigo-google-docs,Título do artigo,Article title,"Resumo curto do artigo para o card.","Short article summary for the card.","Primeiro parágrafo do artigo.
+
+Segundo parágrafo do artigo.","First article paragraph.
+
+Second article paragraph.",https://example.com/capa.jpg,Google Docs,https://docs.google.com/document/d/...

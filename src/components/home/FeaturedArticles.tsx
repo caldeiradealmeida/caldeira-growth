@@ -2,7 +2,7 @@ import { ArrowRight } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { content } from "@/data/content";
-import { articles } from "@/data/articles";
+import { useArticles } from "@/hooks/useArticles";
 import { sectionLayout } from "@/lib/sectionLayout";
 import SectionHeader from "@/components/layout/SectionHeader";
 
@@ -11,6 +11,7 @@ const FEATURED_COUNT = 6;
 export default function FeaturedArticles() {
   const { lang } = useLanguage();
   const c = content[lang].articles;
+  const { data: articles } = useArticles();
   const featured = articles.slice(0, FEATURED_COUNT);
 
   return (

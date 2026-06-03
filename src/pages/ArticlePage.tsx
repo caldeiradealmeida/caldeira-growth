@@ -2,17 +2,35 @@ import { Link, useParams } from "react-router-dom";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { getArticleBySlug } from "@/data/articles";
+import { useArticles } from "@/hooks/useArticles";
+import { getArticleFromList } from "@/data/sheetArticles";
 import { ArrowLeft } from "lucide-react";
 import NotFound from "./NotFound";
 
 export default function ArticlePage() {
   const { slug } = useParams<{ slug: string }>();
   const { lang } = useLanguage();
-  const article = slug ? getArticleBySlug(slug) : undefined;
+  const { data: articles, isFetching } = useArticles();
+  const article = slug ? getArticleFromList(slug, articles) : undefined;
+
+  if (!article && !isFetching) {
+    return <NotFound />;
+  }
 
   if (!article) {
-    return <NotFound />;
+    return (
+      <main className="min-h-screen">
+        <Header />
+        <div className="pt-28 pb-20">
+          <div className="container mx-auto px-4 max-w-3xl">
+            <p className="text-sm text-muted-foreground">
+              {lang === "pt" ? "Carregando artigo..." : "Loading article..."}
+            </p>
+          </div>
+        </div>
+        <Footer />
+      </main>
+    );
   }
 
   const text = article.content[lang];
@@ -51,6 +69,19 @@ export default function ArticlePage() {
               </p>
             ))}
           </div>
+
+          {article.sourceUrl ? (
+            <a
+              href={article.sourceUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-10 inline-flex text-sm font-medium text-primary hover:underline"
+            >
+              {lang === "pt"
+                ? `Publicado originalmente${article.sourceName ? ` em ${article.sourceName}` : ""}`
+                : `Originally published${article.sourceName ? ` at ${article.sourceName}` : ""}`}
+            </a>
+          ) : null}
         </div>
       </article>
       <Footer />

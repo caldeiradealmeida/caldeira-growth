@@ -1,6 +1,5 @@
 import type { Language } from "@/contexts/LanguageContext";
 import { articleBodies } from "./articleBodies";
-import type { ArticleSlug } from "./articleBodies";
 
 import cover530 from "@/assets/articles/530-livros-em-7-dias.png";
 import coverExperimento650 from "@/assets/articles/experimento-650.png";
@@ -17,17 +16,19 @@ import coverSenior from "@/assets/articles/senior-tarefas-simples.png";
 
 export type Article = {
   id: string;
-  slug: ArticleSlug;
+  slug: string;
   title: Record<Language, string>;
   excerpt: Record<Language, string>;
   content: Record<Language, string>;
   cover: string;
   date: string;
+  sourceName?: string;
+  sourceUrl?: string;
 };
 
 type ArticleMeta = {
   id: string;
-  slug: ArticleSlug;
+  slug: keyof typeof articleBodies;
   date: string;
   cover: string;
   title: Record<Language, string>;
