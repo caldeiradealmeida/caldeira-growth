@@ -1,6 +1,6 @@
 # Publicação via Google Sheets
 
-O site pode complementar os artigos e a seção de mídia com novas abas em uma Google Sheet dedicada ao conteúdo. Se as variáveis de CSV não estiverem configuradas, os conteúdos atuais continuam funcionando normalmente.
+O site pode complementar os artigos e a seção de mídia com novas abas na mesma Google Sheet usada para leads. Se as variáveis de CSV não estiverem configuradas, os conteúdos atuais continuam funcionando normalmente.
 
 Estrutura recomendada da planilha:
 
@@ -50,7 +50,7 @@ Campos:
 
 ## Publicar as abas como CSV
 
-1. Abra a Google Sheet de conteúdo.
+1. Abra a mesma Google Sheet usada para leads.
 2. Vá em `Arquivo > Compartilhar > Publicar na Web`.
 3. Selecione a aba `Artigos`.
 4. Escolha o formato `CSV`.
@@ -81,7 +81,7 @@ Para matérias externas:
 
 Depois de extrair título e veículo, ele deve inserir uma linha na aba `Midia` com `status=published`.
 
-Para a publicação do conteúdo, use um Apps Script próprio da planilha de conteúdo. Ele pode receber `POST` quando o CoS publicar um artigo ou mídia. Exemplo de payload para artigo:
+Para a publicação do conteúdo, use o mesmo Apps Script da planilha, agora com suporte às abas `Artigos` e `Midia`. Ele pode receber `POST` quando o CoS publicar um artigo ou mídia. Exemplo de payload para artigo:
 
 ```json
 {
@@ -110,4 +110,4 @@ Configure a propriedade do script:
 CONTENT_POST_TOKEN=um_token_longo_e_secreto
 ```
 
-Se quiser, você pode manter `CONTENT_POST_TOKEN` como token de escrita do script de conteúdo. A planilha de leads não deve ser usada para isso.
+`CONTENT_POST_TOKEN` protege a escrita nessas abas. O fluxo de leads permanece intacto na aba atual.
