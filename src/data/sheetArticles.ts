@@ -3,8 +3,7 @@ import { articles as localArticles } from "@/data/articles";
 import type { Article } from "@/data/articles";
 import { rowsFromCsv, type CsvRow } from "@/lib/csv";
 
-const ARTICLES_SHEET_CSV_URL =
-  import.meta.env.VITE_ARTICLES_SHEET_CSV_URL || "/api/content?type=articles";
+const ARTICLES_SHEET_CSV_URL = import.meta.env.VITE_ARTICLES_SHEET_CSV_URL;
 const FALLBACK_COVER = "/placeholder.svg";
 
 function getLocalized(row: CsvRow, key: string, lang: Language) {

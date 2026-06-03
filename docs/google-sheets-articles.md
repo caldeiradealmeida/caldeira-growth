@@ -1,6 +1,6 @@
 # Publicação via Google Sheets
 
-O site pode complementar os artigos e a seção de mídia com novas abas na mesma Google Sheet usada para leads. A leitura padrão passa por `/api/content`, uma função Vercel que chama o Apps Script no servidor. Se a função ou o Apps Script não estiverem configurados, os conteúdos atuais continuam funcionando normalmente como fallback.
+O site pode complementar os artigos e a seção de mídia com novas abas em uma Google Sheet dedicada ao conteúdo. Se as variáveis de CSV não estiverem configuradas, os conteúdos atuais continuam funcionando normalmente.
 
 Estrutura recomendada da planilha:
 
@@ -48,30 +48,9 @@ Campos:
 - `cover_url`: reservado para uso futuro. A interface atual de mídia não exibe imagem.
 - `featured`: reservado para destaque futuro. A interface atual não muda por esse campo.
 
-## Leitura pelo site
+## Publicar as abas como CSV
 
-Fluxo recomendado:
-
-```text
-site → /api/content?type=articles|media → Apps Script → Google Sheet
-```
-
-Na Vercel, configure:
-
-```bash
-CONTENT_READ_URL=https://script.google.com/macros/s/.../exec
-```
-
-O Apps Script precisa estar atualizado com o `google-apps-script.js` deste repositório. Ele responde:
-
-```text
-GET ?action=articles_csv
-GET ?action=media_csv
-```
-
-As variáveis abaixo são opcionais e servem apenas se você preferir ler CSVs publicados diretamente no front:
-
-1. Abra a mesma Google Sheet usada para leads.
+1. Abra a Google Sheet de conteúdo.
 2. Vá em `Arquivo > Compartilhar > Publicar na Web`.
 3. Selecione a aba `Artigos`.
 4. Escolha o formato `CSV`.
@@ -102,7 +81,7 @@ Para matérias externas:
 
 Depois de extrair título e veículo, ele deve inserir uma linha na aba `Midia` com `status=published`.
 
-Como vamos usar a mesma planilha de leads, o caminho recomendado é atualizar o Apps Script existente com o arquivo `google-apps-script.js`. Ele mantém o formulário de contato e QR code funcionando, e adiciona uma rota para artigos quando o payload vier com:
+Para a publicação do conteúdo, use um Apps Script próprio da planilha de conteúdo. Ele pode receber `POST` quando o CoS publicar um artigo ou mídia. Exemplo de payload para artigo:
 
 ```json
 {
@@ -131,4 +110,4 @@ Configure a propriedade do script:
 CONTENT_POST_TOKEN=um_token_longo_e_secreto
 ```
 
-`ARTICLES_POST_TOKEN` ainda é aceito como compatibilidade, mas `CONTENT_POST_TOKEN` é o nome recomendado porque cobre artigos e mídia.
+Se quiser, você pode manter `CONTENT_POST_TOKEN` como token de escrita do script de conteúdo. A planilha de leads não deve ser usada para isso.
