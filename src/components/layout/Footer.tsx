@@ -10,10 +10,12 @@ import { SOCIAL_LINKS } from "@/constants/social";
 type NavKey = keyof typeof content.pt.nav;
 
 type FooterNavItem =
+  | { key: "cgi"; href: string; label: string }
   | { key: Exclude<NavKey, "book">; href: string }
   | { key: "book" };
 
 const footerNav: FooterNavItem[] = [
+  { key: "cgi", href: "/cgi", label: "CGI" },
   { key: "consulting", href: "/consultoria" },
   { key: "speaking", href: "/palestras" },
   { key: "book" },
@@ -77,7 +79,15 @@ export default function Footer() {
             </div>
             <nav className="flex flex-wrap gap-6">
               {footerNav.map((item) =>
-                item.key === "book" ? (
+                item.key === "cgi" ? (
+                  <Link
+                    key={item.key}
+                    to={item.href}
+                    className="text-sm text-primary-foreground/80 hover:text-primary-foreground transition-colors"
+                  >
+                    {item.label}
+                  </Link>
+                ) : item.key === "book" ? (
                   <a
                     key="book"
                     {...bookSiteLinkProps}

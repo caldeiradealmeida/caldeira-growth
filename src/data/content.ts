@@ -252,6 +252,10 @@ export const content: ContentByLang = {
       },
       topicOptions: [
         { value: "growth", label: "Crescimento e estratégia" },
+        {
+          value: "path-to-grow",
+          label: "Programa de Desenvolvimento de Executivos - Path to Grow",
+        },
         { value: "critical", label: "Decisões críticas" },
         { value: "org", label: "Organização / estrutura" },
         { value: "speaking", label: "Palestras" },
@@ -552,6 +556,10 @@ export const content: ContentByLang = {
       },
       topicOptions: [
         { value: "growth", label: "Growth and strategy" },
+        {
+          value: "path-to-grow",
+          label: "Executive Development Program - Path to Grow",
+        },
         { value: "critical", label: "Critical decisions" },
         { value: "org", label: "Organization / structure" },
         { value: "speaking", label: "Speaking" },

@@ -12,10 +12,12 @@ import { bookSiteLinkProps } from "@/constants/book";
 type NavKey = keyof typeof content.pt.nav;
 
 type NavItem =
+  | { key: "cgi"; href: string; label: string }
   | { key: Exclude<NavKey, "book">; href: string }
   | { key: "book" };
 
 const navLinks: NavItem[] = [
+  { key: "cgi", href: "/cgi", label: "CGI" },
   { key: "consulting", href: "/consultoria" },
   { key: "speaking", href: "/palestras" },
   { key: "book" },
@@ -41,7 +43,15 @@ export default function Header() {
           {/* Desktop nav */}
           <nav className="hidden md:flex items-center gap-1">
             {navLinks.map((item) =>
-              item.key === "book" ? (
+              item.key === "cgi" ? (
+                <Link
+                  key={item.key}
+                  to={item.href}
+                  className="px-3 py-2 text-sm font-medium text-foreground/90 hover:text-foreground hover:bg-muted/50 rounded-md transition-colors"
+                >
+                  {item.label}
+                </Link>
+              ) : item.key === "book" ? (
                 <a
                   key="book"
                   {...bookSiteLinkProps}
@@ -105,7 +115,16 @@ export default function Header() {
           <nav className="md:hidden py-4 border-t border-border animate-in fade-in slide-in-from-top duration-200">
             <div className="flex flex-col gap-1">
               {navLinks.map((item) =>
-                item.key === "book" ? (
+                item.key === "cgi" ? (
+                  <Link
+                    key={item.key}
+                    to={item.href}
+                    onClick={() => setOpen(false)}
+                    className="px-4 py-3 text-base font-medium text-foreground hover:bg-muted/50 rounded-md transition-colors"
+                  >
+                    {item.label}
+                  </Link>
+                ) : item.key === "book" ? (
                   <a
                     key="book"
                     {...bookSiteLinkProps}

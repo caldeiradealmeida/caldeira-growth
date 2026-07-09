@@ -17,6 +17,12 @@ export default defineConfig(({ mode }) => {
             secure: true,
             rewrite: () => new URL(contactUrl).pathname + new URL(contactUrl).search,
           },
+          "/api/cgi-assessment": {
+            target: new URL(contactUrl).origin,
+            changeOrigin: true,
+            secure: true,
+            rewrite: () => new URL(contactUrl).pathname + new URL(contactUrl).search,
+          },
           "/api/content": {
             target: new URL(contactUrl).origin,
             changeOrigin: true,

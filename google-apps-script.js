@@ -5,8 +5,38 @@
 var SPREADSHEET_ID = '1NivGOjutCgJTGDjXxt8ydFiCeWrKvbbIdqmkVmwSC9M';
 var ARTICLES_SHEET_NAME = 'Artigos';
 var MEDIA_SHEET_NAME = 'Midia';
+var CGI_SHEET_NAME = 'CGI';
 var ARTICLES_HEADERS = ['status', 'date', 'slug', 'title_pt', 'title_en', 'excerpt_pt', 'excerpt_en', 'content_pt', 'content_en', 'cover_url', 'source_name', 'source_url'];
 var MEDIA_HEADERS = ['status', 'date', 'title_pt', 'title_en', 'outlet', 'url', 'cover_url', 'featured'];
+var CGI_HEADERS = [
+  'timestamp',
+  'nome',
+  'email',
+  'telefone',
+  'empresa',
+  'cargo',
+  'setor',
+  'funcionarios',
+  'faturamento_anual',
+  'desafio_atual',
+  'meta_crescimento_12m',
+  'intencao_investimento',
+  'cgi_final',
+  'nivel',
+  'estrategia',
+  'mercado_cliente',
+  'maquina_crescimento',
+  'execucao_gestao',
+  'lideranca_cultura',
+  'pontos_atencao',
+  'diagnostico_deterministico',
+  'ai_status',
+  'ai_report',
+  'ai_report_text',
+  'respostas_json',
+  'user_agent',
+  'referrer'
+];
 
 function doGet(e) {
   try {
@@ -25,6 +55,13 @@ function doGet(e) {
 
 function doPost(e) {
   try {
+    if (
+      (!e || !e.postData || !e.postData.contents) &&
+      (!e || !e.parameter || Object.keys(e.parameter).length === 0)
+    ) {
+      return jsonResponse_({ ok: false, error: 'empty_body' });
+    }
+
     var payload = parsePayload_(e);
     var action = String(payload.action || payload.type || '').trim().toLowerCase();
 
@@ -33,6 +70,9 @@ function doPost(e) {
     }
     if (action === 'media') {
       return handleMediaPost_(payload);
+    }
+    if (action === 'cgi_assessment') {
+      return handleCgiAssessmentPost_(payload);
     }
 
     var nome = String(payload.nome || '').trim();
@@ -58,7 +98,11 @@ function doPost(e) {
 
 function parsePayload_(e) {
   if (e && e.postData && e.postData.contents) {
-    return JSON.parse(e.postData.contents);
+    try {
+      return JSON.parse(e.postData.contents);
+    } catch (err) {
+      return (e && e.parameter) || {};
+    }
   }
   return (e && e.parameter) || {};
 }
@@ -127,6 +171,157 @@ function handleMediaPost_(payload) {
 
   sheet.appendRow(row);
   return jsonResponse_({ ok: true, type: 'media', url: url });
+}
+
+function handleCgiAssessmentPost_(payload) {
+  var lead = payload.lead || {};
+  var score = payload.score || {};
+  var answers = payload.answers || {};
+  var sheet = getOrCreateSheet_(CGI_SHEET_NAME, CGI_HEADERS);
+  var timestamp = new Date();
+
+  var nome = String(lead.name || '').trim();
+  var email = String(lead.email || '').trim();
+  if (!nome || !email) {
+    return jsonResponse_({ ok: false, error: 'validation' });
+  }
+
+  var dimensionMap = {};
+  var dimensionScores = score.dimensionScores || [];
+  for (var i = 0; i < dimensionScores.length; i++) {
+    dimensionMap[String(dimensionScores[i].dimensionId)] = dimensionScores[i].score;
+  }
+
+  var attentionPoints = (score.attentionPoints || [])
+    .map(function (item) {
+      return String(item.title || item.dimensionId || '') + ': ' + String(item.score || '');
+    })
+    .join(' | ');
+
+  var row = [
+    timestamp,
+    nome,
+    email,
+    String(lead.phone || '').trim(),
+    String(lead.company || '').trim(),
+    String(lead.role || '').trim(),
+    String(lead.sector || '').trim(),
+    String(lead.employeeCount || '').trim(),
+    String(lead.annualRevenue || '').trim(),
+    String(lead.currentChallenge || '').trim(),
+    String(lead.growthGoal || '').trim(),
+    String(lead.investmentIntent || '').trim(),
+    score.finalScore || '',
+    score.level ? String(score.level.title || '').trim() : '',
+    dimensionMap.strategy || '',
+    dimensionMap.market || '',
+    dimensionMap.growthMachine || '',
+    dimensionMap.execution || '',
+    dimensionMap.leadership || '',
+    attentionPoints,
+    String(score.diagnostic || '').trim(),
+    String(payload.aiStatus || '').trim(),
+    String(payload.aiReport || '').trim(),
+    String(payload.aiReportText || '').trim(),
+    JSON.stringify(answers),
+    String(payload.userAgent || '').trim(),
+    String(payload.referrer || '').trim()
+  ];
+
+  sheet.appendRow(row);
+  sendCgiNotification_(lead, score, attentionPoints, payload);
+  sendCgiLeadReport_(lead, score, attentionPoints, payload);
+
+  return jsonResponse_({ ok: true, type: 'cgi_assessment' });
+}
+
+function sendCgiNotification_(lead, score, attentionPoints, payload) {
+  try {
+    var configuredEmail = String(PropertiesService.getScriptProperties().getProperty('CGI_NOTIFICATION_EMAIL') || '').trim();
+    var recipient = configuredEmail || 'contato@caldeiragrowth.com';
+    var subject = '[CGI] Novo assessment - ' + String(lead.company || lead.name || '');
+    var dimensionLines = (score.dimensionScores || [])
+      .map(function (item) {
+        return '- ' + String(item.title || item.dimensionId || '') + ': ' + String(item.score || '');
+      })
+      .join('\n');
+    var body = [
+      'Novo CGI - Caldeira Growth Index',
+      '',
+      'Lead:',
+      'Nome: ' + String(lead.name || ''),
+      'Email: ' + String(lead.email || ''),
+      'Telefone: ' + String(lead.phone || ''),
+      'Empresa: ' + String(lead.company || ''),
+      'Cargo: ' + String(lead.role || ''),
+      'Setor: ' + String(lead.sector || ''),
+      'Funcionarios: ' + String(lead.employeeCount || ''),
+      'Faturamento: ' + String(lead.annualRevenue || ''),
+      'Desafio: ' + String(lead.currentChallenge || ''),
+      'Meta 12m: ' + String(lead.growthGoal || ''),
+      'Intencao de investimento: ' + String(lead.investmentIntent || ''),
+      '',
+      'Resultado:',
+      'CGI final: ' + String(score.finalScore || ''),
+      'Nivel: ' + String(score.level && score.level.title ? score.level.title : ''),
+      '',
+      'Scores por dimensão:',
+      dimensionLines,
+      '',
+      'Pontos de atenção:',
+      attentionPoints,
+      '',
+      'Diagnostico:',
+      String(score.diagnostic || ''),
+      '',
+      'AI status: ' + String(payload.aiStatus || ''),
+      payload.aiReportText ? '\nRelatório com IA:\n' + String(payload.aiReportText || '') : ''
+    ].join('\n');
+
+    MailApp.sendEmail(recipient, subject, body);
+  } catch (err) {
+    console.error('Erro ao enviar notificacao CGI: ' + String(err));
+  }
+}
+
+function sendCgiLeadReport_(lead, score, attentionPoints, payload) {
+  try {
+    var email = String(lead.email || '').trim();
+    if (!email) return;
+
+    var dimensionLines = (score.dimensionScores || [])
+      .map(function (item) {
+        return '- ' + String(item.title || item.dimensionId || '') + ': ' + String(item.score || '') + '/100';
+      })
+      .join('\n');
+
+    var aiReport = String(payload.aiReportText || payload.aiReport || '').trim();
+    var body = [
+      'Olá, ' + String(lead.name || '').trim() + '.',
+      '',
+      'Segue o seu resultado do CGI - Caldeira Growth Index.',
+      '',
+      'CGI final: ' + String(score.finalScore || ''),
+      'Nível: ' + String(score.level && score.level.title ? score.level.title : ''),
+      '',
+      'Diagnóstico:',
+      aiReport || String(score.diagnostic || ''),
+      '',
+      'Score por dimensão:',
+      dimensionLines,
+      '',
+      '3 principais pontos de atenção:',
+      attentionPoints,
+      '',
+      'Para aprofundar o diagnóstico, o próximo passo recomendado é agendar uma conversa estratégica com a Caldeira Growth.',
+      '',
+      'Caldeira Growth'
+    ].join('\n');
+
+    MailApp.sendEmail(email, 'Seu CGI - Caldeira Growth Index', body);
+  } catch (err) {
+    console.error('Erro ao enviar relatório CGI ao lead: ' + String(err));
+  }
 }
 
 function getOrCreateSheet_(name, headers) {
