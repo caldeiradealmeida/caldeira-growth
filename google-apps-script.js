@@ -36,7 +36,15 @@ var CGI_HEADERS = [
   'ai_report_text',
   'respostas_json',
   'user_agent',
-  'referrer'
+  'referrer',
+  'site_empresa',
+  'enrichment_status',
+  'enrichment_url_final',
+  'enrichment_title',
+  'enrichment_description',
+  'enrichment_headings',
+  'enrichment_text',
+  'enrichment_error'
 ];
 
 function doGet(e) {
@@ -178,6 +186,8 @@ function handleCgiAssessmentPost_(payload) {
   var lead = payload.lead || {};
   var score = payload.score || {};
   var answers = payload.answers || {};
+  var enrichment = payload.websiteEnrichment || {};
+  var enrichmentHeadings = Array.isArray(enrichment.headings) ? enrichment.headings : [];
   var sheet = getOrCreateSheet_(CGI_SHEET_NAME, CGI_HEADERS);
   var timestamp = new Date();
 
@@ -226,7 +236,15 @@ function handleCgiAssessmentPost_(payload) {
     String(payload.aiReportText || '').trim(),
     JSON.stringify(answers),
     String(payload.userAgent || '').trim(),
-    String(payload.referrer || '').trim()
+    String(payload.referrer || '').trim(),
+    String(lead.companyWebsite || '').trim(),
+    String(enrichment.status || '').trim(),
+    String(enrichment.finalUrl || '').trim(),
+    String(enrichment.title || '').trim(),
+    String(enrichment.description || '').trim(),
+    enrichmentHeadings.join(' | '),
+    String(enrichment.observedText || '').trim(),
+    String(enrichment.error || '').trim()
   ];
 
   sheet.appendRow(row);
@@ -254,6 +272,7 @@ function sendCgiNotification_(lead, score, attentionPoints, payload) {
       'Email: ' + String(lead.email || ''),
       'Telefone: ' + String(lead.phone || ''),
       'Empresa: ' + String(lead.company || ''),
+      'Site da empresa: ' + String(lead.companyWebsite || ''),
       'Cargo: ' + String(lead.role || ''),
       'Setor: ' + String(lead.sector || ''),
       'Funcionarios: ' + String(lead.employeeCount || ''),
@@ -276,6 +295,8 @@ function sendCgiNotification_(lead, score, attentionPoints, payload) {
       String(score.diagnostic || ''),
       '',
       'AI status: ' + String(payload.aiStatus || ''),
+      'Enriquecimento site: ' + String((payload.websiteEnrichment && payload.websiteEnrichment.status) || ''),
+      'URL final enriquecida: ' + String((payload.websiteEnrichment && payload.websiteEnrichment.finalUrl) || ''),
       payload.aiReportText ? '\nRelatório com IA:\n' + String(payload.aiReportText || '') : ''
     ].join('\n');
 
@@ -341,7 +362,28 @@ function getOrCreateSheet_(name, headers) {
     sheet.setFrozenRows(1);
   }
 
+  ensureHeaders_(sheet, headers);
+
   return sheet;
+}
+
+function ensureHeaders_(sheet, headers) {
+  var lastColumn = sheet.getLastColumn();
+  if (lastColumn === 0) return;
+
+  var currentHeaders = sheet.getRange(1, 1, 1, lastColumn).getValues()[0].map(function (value) {
+    return String(value || '').trim();
+  });
+  var missing = headers.filter(function (header) {
+    return currentHeaders.indexOf(header) === -1;
+  });
+  if (missing.length === 0) return;
+
+  sheet.getRange(1, lastColumn + 1, 1, missing.length).setValues([missing]);
+  var headerRange = sheet.getRange(1, 1, 1, lastColumn + missing.length);
+  headerRange.setFontWeight('bold');
+  headerRange.setBackground('#111827');
+  headerRange.setFontColor('#ffffff');
 }
 
 function getSheetCsv_(name, headers) {

@@ -67,6 +67,7 @@ type LeadForm = {
   email: string;
   phone: string;
   company: string;
+  companyWebsite: string;
   role: string;
   sector: string;
   employeeCount: string;
@@ -81,6 +82,7 @@ const initialLead: LeadForm = {
   email: "",
   phone: "",
   company: "",
+  companyWebsite: "",
   role: "",
   sector: "",
   employeeCount: "",
@@ -683,6 +685,20 @@ export default function CGI() {
                             updateLead("company", event.target.value)
                           }
                           required
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="companyWebsite">Site da empresa</Label>
+                        <Input
+                          id="companyWebsite"
+                          type="url"
+                          inputMode="url"
+                          autoComplete="url"
+                          placeholder="https://www.empresa.com.br"
+                          value={lead.companyWebsite}
+                          onChange={(event) =>
+                            updateLead("companyWebsite", event.target.value)
+                          }
                         />
                       </div>
                       <div className="space-y-2">
