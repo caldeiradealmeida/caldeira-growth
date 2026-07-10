@@ -44,7 +44,7 @@ import {
   BarChart3,
   CalendarDays,
   CheckCircle2,
-  Download,
+  FileText,
   Info,
   Loader2,
   Mail,
@@ -241,7 +241,8 @@ function buildReportText({
     .join("\n");
 
   return [
-    "CGI - Caldeira Growth Index",
+    `Relatório CGI - ${lead.company || "Caldeira Growth"}`,
+    "Caldeira Growth Index",
     "",
     `Empresa: ${lead.company}`,
     `Respondente: ${lead.name}`,
@@ -264,47 +265,134 @@ function buildReportText({
   ].join("\n");
 }
 
-function buildReportHtml(reportText: string) {
-  const escaped = reportText
+function escapeHtml(value: string) {
+  return value
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
+}
+
+function formatReportBodyHtml(reportText: string) {
+  const sectionTitles = new Set([
+    "Diagnóstico",
+    "Score por dimensão",
+    "3 principais pontos de atenção",
+    "Sumário Executivo",
+    "Contexto e diagnóstico",
+    "Leitura por dimensão",
+    "Gargalos críticos",
+    "Apostas estratégicas recomendadas",
+    "Renúncias estratégicas",
+    "Sistema mínimo de governança",
+    "Recomendações finais",
+    "CTA",
+  ]);
+
+  return reportText
+    .split(/\n{2,}/)
+    .map((block) => block.trim())
+    .filter(Boolean)
+    .map((block) => {
+      const lines = block.split("\n").map((line) => line.trim()).filter(Boolean);
+      if (lines.length === 1 && sectionTitles.has(lines[0])) {
+        return `<h2>${escapeHtml(lines[0])}</h2>`;
+      }
+      if (lines.every((line) => line.startsWith("- "))) {
+        return `<ul>${lines
+          .map((line) => `<li>${escapeHtml(line.replace(/^- /, ""))}</li>`)
+          .join("")}</ul>`;
+      }
+      return `<p>${escapeHtml(block).replace(/\n/g, "<br />")}</p>`;
+    })
+    .join("\n");
+}
+
+function buildScoreBarsHtml(result: CgiScoreResult) {
+  return `
+    <section class="score-bars">
+      <h2>Score por dimensão</h2>
+      ${result.dimensionScores
+        .map(
+          (item) => `
+            <div class="score-row">
+              <div class="score-label">
+                <span>${escapeHtml(item.title)}</span>
+                <strong>${item.score}/100</strong>
+              </div>
+              <div class="score-track">
+                <div class="score-fill" style="width: ${Math.max(
+                  0,
+                  Math.min(100, item.score)
+                )}%"></div>
+              </div>
+            </div>
+          `
+        )
+        .join("")}
+    </section>
+  `;
+}
+
+function buildReportHtml(
+  reportText: string,
+  companyName: string,
+  result: CgiScoreResult
+) {
+  const bodyHtml = formatReportBodyHtml(reportText);
+  const scoreBarsHtml = buildScoreBarsHtml(result);
+  const escapedCompany = (companyName || "Caldeira Growth")
+    ? escapeHtml(companyName || "Caldeira Growth")
+    : "Caldeira Growth";
+  const escapedTitle = `Relatório CGI - ${escapedCompany}`;
 
   return `<!doctype html>
 <html lang="pt-BR">
   <head>
     <meta charset="utf-8" />
-    <title>CGI - Caldeira Growth Index</title>
+    <title>${escapedTitle}</title>
     <style>
       @page { size: A4; margin: 24mm 22mm; }
       body { font-family: Arial, sans-serif; color: #252b35; line-height: 1.58; margin: 0; background: #f7f4ef; }
       .cover { min-height: 100vh; box-sizing: border-box; padding: 72px 64px; background: #334257; color: #f5f7f8; display: flex; flex-direction: column; justify-content: space-between; }
       .brand { font-size: 20px; font-weight: 800; letter-spacing: .01em; }
-      .cover h1 { font-family: Georgia, serif; font-size: 64px; line-height: .95; font-weight: 400; margin: 120px 0 20px; max-width: 620px; }
+      .cover h1 { font-family: Georgia, serif; font-size: 58px; line-height: 1; font-weight: 700; margin: 120px 0 20px; max-width: 760px; }
       .cover .meta { font-family: Georgia, serif; font-size: 30px; }
-      .page { background: #f7f4ef; padding: 60px 70px; }
-      h2 { font-family: Georgia, serif; font-size: 40px; font-weight: 400; margin: 0 0 14px; color: #2e3340; }
+      .page { background: #f7f4ef; padding: 60px 70px 88px; }
+      h2 { font-family: Georgia, serif; font-size: 30px; font-weight: 700; margin: 34px 0 14px; color: #2e3340; }
+      h2:first-child { margin-top: 0; }
       .rule { height: 2px; background: #344763; margin: 0 0 28px; }
-      pre { white-space: pre-wrap; font-family: Arial, sans-serif; font-size: 14px; margin: 0; }
-      footer { margin-top: 44px; display: flex; justify-content: center; color: #1e2530; font-weight: 700; }
-      @media print { .cover { page-break-after: always; } body { background: #f7f4ef; } }
+      p { font-size: 14px; margin: 0 0 16px; text-align: justify; }
+      ul { margin: 0 0 18px 20px; padding: 0; }
+      li { font-size: 14px; margin: 0 0 8px; text-align: justify; }
+      .score-bars { margin: 26px 0 34px; }
+      .score-row { margin: 0 0 14px; }
+      .score-label { display: flex; justify-content: space-between; gap: 20px; font-size: 14px; font-weight: 700; margin-bottom: 6px; }
+      .score-track { height: 11px; border-radius: 999px; background: #d4dbe2; overflow: hidden; }
+      .score-fill { height: 100%; border-radius: 999px; background: #344763; }
+      footer { border-top: 1px solid #c8cdd4; color: #1e2530; font-size: 12px; font-weight: 700; padding-top: 10px; text-align: center; }
+      @media screen { footer { margin: 44px 70px 0; } }
+      @media print {
+        .cover { page-break-after: always; }
+        body { background: #f7f4ef; }
+        footer { position: fixed; bottom: 10mm; left: 22mm; right: 22mm; }
+      }
     </style>
   </head>
   <body>
     <section class="cover">
       <div class="brand">Caldeira</div>
       <div>
-        <h1>Relatório CGI</h1>
+        <h1>${escapedTitle}</h1>
         <div class="meta">Caldeira Growth Index</div>
       </div>
       <div>Diagnóstico executivo de maturidade de crescimento</div>
     </section>
     <section class="page">
-      <h2>Sumário Executivo</h2>
       <div class="rule"></div>
-      <pre>${escaped}</pre>
-      <footer>Caldeira Growth</footer>
+      ${scoreBarsHtml}
+      ${bodyHtml}
     </section>
+    <footer>Caldeira Growth</footer>
   </body>
 </html>`;
 }
@@ -337,6 +425,7 @@ export default function CGI() {
   const reportText = result
     ? buildReportText({ lead, result, aiReport })
     : "";
+  const reportReady = aiStatus === "generated" && Boolean(serverAiReport) && Boolean(aiReport);
 
   useEffect(() => {
     const prevTitle = document.title;
@@ -424,38 +513,31 @@ export default function CGI() {
     scrollToAssessment();
   };
 
-  const downloadReport = () => {
-    if (!reportText) return;
-    const html = buildReportHtml(reportText);
-    const blob = new Blob([html], { type: "text/html;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    const filenameBase = `cgi-${lead.company || "caldeira-growth"}`
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "");
-    a.download = `${filenameBase}.html`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
+  const openReport = () => {
+    if (!reportReady || !reportText) return;
+    const reportWindow = window.open("", "_blank");
+    if (!reportWindow) return;
+    reportWindow.document.write(buildReportHtml(reportText, lead.company, result));
+    reportWindow.document.close();
+    reportWindow.focus();
   };
 
   const printReport = () => {
-    if (!reportText) return;
+    if (!reportReady || !reportText) return;
     const reportWindow = window.open("", "_blank");
     if (!reportWindow) return;
-    reportWindow.document.write(buildReportHtml(reportText));
+    reportWindow.document.write(buildReportHtml(reportText, lead.company, result));
     reportWindow.document.close();
     reportWindow.focus();
     reportWindow.print();
   };
 
   const openEmailDraft = () => {
-    if (!result) return;
-    const subject = encodeURIComponent("CGI - Caldeira Growth Index");
-    const body = encodeURIComponent(reportText || result.diagnostic);
+    if (!reportReady || !result) return;
+    const subject = encodeURIComponent(
+      `CGI - Caldeira Growth Index - ${lead.company || "Caldeira Growth"}`
+    );
+    const body = encodeURIComponent(reportText);
     window.location.href = `mailto:${lead.email}?subject=${subject}&body=${body}`;
   };
 
@@ -941,19 +1023,36 @@ export default function CGI() {
                       <Button
                         size="lg"
                         variant="outline"
-                        onClick={downloadReport}
+                        onClick={openReport}
+                        disabled={!reportReady}
                       >
-                        <Download className="mr-2 h-4 w-4" />
-                        Baixar relatório
+                        <FileText className="mr-2 h-4 w-4" />
+                        Abrir relatório
                       </Button>
-                      <Button size="lg" variant="outline" onClick={printReport}>
+                      <Button
+                        size="lg"
+                        variant="outline"
+                        onClick={printReport}
+                        disabled={!reportReady}
+                      >
                         <Printer className="mr-2 h-4 w-4" />
                         Salvar em PDF
                       </Button>
-                      <Button size="lg" variant="outline" onClick={openEmailDraft}>
+                      <Button
+                        size="lg"
+                        variant="outline"
+                        onClick={openEmailDraft}
+                        disabled={!reportReady}
+                      >
                         <Mail className="mr-2 h-4 w-4" />
                         Abrir e-mail com relatório
                       </Button>
+                      {!reportReady && (
+                        <p className="text-sm text-muted-foreground">
+                          O relatório completo será liberado quando o diagnóstico
+                          com IA terminar.
+                        </p>
+                      )}
                     </div>
                   </CardContent>
                 </Card>
@@ -970,10 +1069,10 @@ export default function CGI() {
                   {isSubmitting && (
                     <Alert>
                       <Loader2 className="h-4 w-4 animate-spin" />
-                      <AlertTitle>Registrando resultado</AlertTitle>
+                      <AlertTitle>Gerando relatório</AlertTitle>
                       <AlertDescription>
-                        Salvando respostas, scores e diagnóstico na base da
-                        Caldeira Growth.
+                        Salvando respostas, analisando o site informado e gerando
+                        o diagnóstico executivo com IA.
                       </AlertDescription>
                     </Alert>
                   )}
