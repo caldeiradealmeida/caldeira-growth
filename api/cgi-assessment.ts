@@ -351,7 +351,7 @@ async function generateAiDiagnostic({
   const apiKey = process.env.OPENAI_API_KEY?.trim();
   if (!apiKey) return { status: "not_configured", text: "", plainText: "" };
 
-  const model = process.env.OPENAI_MODEL?.trim() || "gpt-5.6-terra";
+  const model = process.env.OPENAI_MODEL?.trim() || "gpt-5.5";
   const compactAnswers = CGI_QUESTIONS.map((question) => ({
     id: question.id,
     dimension: question.dimensionId,
