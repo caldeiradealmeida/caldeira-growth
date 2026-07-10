@@ -149,6 +149,10 @@ function getSubmitErrorMessage(data: unknown): string {
     return "Seu resultado foi calculado, mas a URL do Google Apps Script não está configurada no servidor.";
   }
 
+  if (error === "invalid_email_domain") {
+    return "Não foi possível validar o domínio do e-mail informado. Verifique se o e-mail está correto e use um domínio que receba mensagens.";
+  }
+
   if (error === "upstream_request_failed") {
     return "Seu resultado foi calculado, mas o servidor não conseguiu se comunicar com o Google Apps Script.";
   }

@@ -44,7 +44,12 @@ var CGI_HEADERS = [
   'enrichment_description',
   'enrichment_headings',
   'enrichment_text',
-  'enrichment_error'
+  'enrichment_error',
+  'email_domain',
+  'email_domain_status',
+  'email_domain_has_mx',
+  'email_domain_has_address_fallback',
+  'email_domain_error'
 ];
 
 function doGet(e) {
@@ -188,6 +193,7 @@ function handleCgiAssessmentPost_(payload) {
   var answers = payload.answers || {};
   var enrichment = payload.websiteEnrichment || {};
   var enrichmentHeadings = Array.isArray(enrichment.headings) ? enrichment.headings : [];
+  var emailValidation = payload.emailValidation || {};
   var sheet = getOrCreateSheet_(CGI_SHEET_NAME, CGI_HEADERS);
   var timestamp = new Date();
 
@@ -244,7 +250,12 @@ function handleCgiAssessmentPost_(payload) {
     String(enrichment.description || '').trim(),
     enrichmentHeadings.join(' | '),
     String(enrichment.observedText || '').trim(),
-    String(enrichment.error || '').trim()
+    String(enrichment.error || '').trim(),
+    String(emailValidation.domain || '').trim(),
+    String(emailValidation.status || '').trim(),
+    String(emailValidation.hasMx || '').trim(),
+    String(emailValidation.hasAddressFallback || '').trim(),
+    String(emailValidation.error || '').trim()
   ];
 
   sheet.appendRow(row);

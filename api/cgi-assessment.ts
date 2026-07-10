@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
+import { resolve4, resolve6, resolveMx } from "node:dns/promises";
 import {
   CGI_DIMENSIONS,
   CGI_QUESTIONS,
@@ -52,6 +53,14 @@ type WebsiteEnrichment = {
   error?: string;
 };
 
+type EmailValidation = {
+  status: "ok" | "error";
+  domain: string;
+  hasMx: boolean;
+  hasAddressFallback: boolean;
+  error?: string;
+};
+
 function snippet(value: string, maxLength = 700): string {
   return value.replace(/\s+/g, " ").trim().slice(0, maxLength);
 }
@@ -71,8 +80,65 @@ function readPayload(req: VercelRequest): CgiPayload {
   return (req.body ?? {}) as CgiPayload;
 }
 
-function validateLead(lead: CgiLead | undefined): string | null {
-  if (!lead) return "lead_required";
+function getEmailDomain(email: string): string {
+  return email.trim().toLowerCase().split("@")[1] || "";
+}
+
+async function validateEmailDomain(email: string): Promise<EmailValidation> {
+  const domain = getEmailDomain(email);
+  if (!domain || !domain.includes(".")) {
+    return {
+      status: "error",
+      domain,
+      hasMx: false,
+      hasAddressFallback: false,
+      error: "invalid_domain",
+    };
+  }
+
+  try {
+    const mxRecords = await resolveMx(domain);
+    if (mxRecords.length > 0) {
+      return {
+        status: "ok",
+        domain,
+        hasMx: true,
+        hasAddressFallback: false,
+      };
+    }
+  } catch {
+    // Some valid domains do not expose MX but can still receive through A/AAAA fallback.
+  }
+
+  try {
+    const [ipv4, ipv6] = await Promise.allSettled([resolve4(domain), resolve6(domain)]);
+    const hasAddressFallback =
+      (ipv4.status === "fulfilled" && ipv4.value.length > 0) ||
+      (ipv6.status === "fulfilled" && ipv6.value.length > 0);
+
+    return {
+      status: hasAddressFallback ? "ok" : "error",
+      domain,
+      hasMx: false,
+      hasAddressFallback,
+      ...(hasAddressFallback ? {} : { error: "domain_not_resolvable" }),
+    };
+  } catch (error) {
+    return {
+      status: "error",
+      domain,
+      hasMx: false,
+      hasAddressFallback: false,
+      error: error instanceof Error ? error.message : "domain_validation_failed",
+    };
+  }
+}
+
+async function validateLead(lead: CgiLead | undefined): Promise<{
+  error: string | null;
+  emailValidation?: EmailValidation;
+}> {
+  if (!lead) return { error: "lead_required" };
   const required: Array<keyof CgiLead> = [
     "name",
     "email",
@@ -87,11 +153,15 @@ function validateLead(lead: CgiLead | undefined): string | null {
     "investmentIntent",
   ];
   const missing = required.find((key) => !String(lead[key] ?? "").trim());
-  if (missing) return `missing_${String(missing)}`;
+  if (missing) return { error: `missing_${String(missing)}` };
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(lead.email))) {
-    return "invalid_email";
+    return { error: "invalid_email" };
   }
-  return null;
+  const emailValidation = await validateEmailDomain(String(lead.email));
+  if (emailValidation.status !== "ok") {
+    return { error: "invalid_email_domain", emailValidation };
+  }
+  return { error: null, emailValidation };
 }
 
 function validateSpam(payload: CgiPayload): string | null {
@@ -457,9 +527,13 @@ export default async function handler(
     return;
   }
 
-  const leadError = validateLead(payload.lead);
-  if (leadError) {
-    res.status(400).json({ ok: false, error: leadError });
+  const leadValidation = await validateLead(payload.lead);
+  if (leadValidation.error) {
+    res.status(400).json({
+      ok: false,
+      error: leadValidation.error,
+      emailValidation: leadValidation.emailValidation,
+    });
     return;
   }
 
@@ -491,6 +565,7 @@ export default async function handler(
     lead: payload.lead,
     answers,
     score,
+    emailValidation: leadValidation.emailValidation,
     websiteEnrichment,
     aiReport: ai.text,
     aiReportText: ai.plainText,
