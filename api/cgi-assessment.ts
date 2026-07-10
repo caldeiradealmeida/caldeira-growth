@@ -1,12 +1,13 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { CGI_DIMENSIONS, CGI_QUESTIONS } from "../src/data/cgiConfig";
-import { buildCgiReportPromptContext } from "./cgi-report-guide";
 import {
+  CGI_DIMENSIONS,
+  CGI_QUESTIONS,
   areCgiAnswersComplete,
   calculateCgiScore,
   normalizeCgiAnswers,
   type CgiScoreResult,
-} from "../src/lib/cgiScore";
+} from "./cgi-core.js";
+import { buildCgiReportPromptContext } from "./cgi-report-guide.js";
 
 type CgiLead = {
   name?: string;
@@ -38,6 +39,10 @@ type AiResult = {
   text: string;
   plainText: string;
 };
+
+function snippet(value: string, maxLength = 700): string {
+  return value.replace(/\s+/g, " ").trim().slice(0, maxLength);
+}
 
 function getAppsScriptUrl(): string {
   return (
@@ -171,7 +176,7 @@ async function generateAiDiagnostic({
   const apiKey = process.env.OPENAI_API_KEY?.trim();
   if (!apiKey) return { status: "not_configured", text: "", plainText: "" };
 
-  const model = process.env.OPENAI_MODEL?.trim() || "gpt-5.5";
+  const model = process.env.OPENAI_MODEL?.trim() || "gpt-5.6-terra";
   const compactAnswers = CGI_QUESTIONS.map((question) => ({
     id: question.id,
     dimension: question.dimensionId,
@@ -196,7 +201,7 @@ async function generateAiDiagnostic({
               {
                 type: "input_text",
                 text:
-                  "Você é um consultor sênior da Caldeira Growth. Gere um relatório executivo no formato de parecer estratégico, usando o guia de estilo e conteúdo fornecido. Não invente dados. Trate o assessment como evidência inicial, não como verdade absoluta. Retorne apenas JSON válido com as chaves: report_title, report_subtitle, email_subject, executive_summary, strategic_diagnosis, dimension_reading, critical_bottlenecks, strategic_bets, renunciations, governance_system, final_recommendations. dimension_reading deve ser array de objetos com dimension, score, analysis, implication. critical_bottlenecks, strategic_bets, renunciations, governance_system e final_recommendations devem ser arrays com 3 a 5 itens.",
+                  "Você é um consultor sênior da Caldeira Growth. Gere um relatório executivo no formato de parecer estratégico, usando o guia de estilo e conteúdo fornecido. O relatório deve ser discursivo, analítico e denso, com alvo de 2.600 a 3.200 palavras no total. Não escreva um comentário curto sobre o índice. Use o CGI como evidência inicial para construir hipóteses executivas sobre qualidade do crescimento, foco, disciplina de gestão, mercado, máquina comercial, execução, liderança e cultura. Não invente dados financeiros, nomes, fatos ou números fora do assessment. Quando faltar informação, explicite como hipótese qualificada. Retorne apenas JSON válido com as chaves: report_title, report_subtitle, email_subject, executive_summary, strategic_diagnosis, dimension_reading, critical_bottlenecks, strategic_bets, renunciations, governance_system, final_recommendations. executive_summary deve ter 3 a 5 parágrafos. strategic_diagnosis deve ter 8 a 12 parágrafos discursivos. dimension_reading deve ser array de objetos com dimension, score, analysis, implication; cada analysis deve ter 2 a 3 parágrafos e cada implication deve explicar a consequência estratégica. critical_bottlenecks, strategic_bets, renunciations, governance_system e final_recommendations devem ser arrays com 4 a 6 itens; cada item deve ser um texto completo de 120 a 220 palavras, não uma frase curta. Escreva em português do Brasil, com linguagem de parecer estratégico, sem markdown decorativo.",
               },
             ],
           },
@@ -221,6 +226,7 @@ async function generateAiDiagnostic({
             type: "json_object",
           },
         },
+        max_output_tokens: 12000,
       }),
     });
 
@@ -312,22 +318,48 @@ export default async function handler(
     referrer: req.headers.referer ?? req.headers.referrer ?? "",
   };
 
-  const upstream = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "text/plain;charset=utf-8" },
-    body: JSON.stringify(upstreamPayload),
-  });
-
-  const text = await upstream.text();
+  let upstream: Response;
+  let text = "";
   let data: unknown = {};
   try {
-    data = text ? JSON.parse(text) : {};
-  } catch {
-    data = { raw: text };
+    upstream = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify(upstreamPayload),
+    });
+    text = await upstream.text();
+    try {
+      data = text ? JSON.parse(text) : {};
+    } catch {
+      data = { raw: snippet(text), contentType: upstream.headers.get("content-type") };
+    }
+  } catch (error) {
+    res.status(502).json({
+      ok: false,
+      error: "upstream_request_failed",
+      detail: error instanceof Error ? error.message : String(error),
+      score,
+      ai,
+    });
+    return;
   }
 
   if (!upstream.ok || (data as { ok?: boolean }).ok !== true) {
-    res.status(502).json({ ok: false, error: "upstream_failed", upstream: data, score, ai });
+    const upstreamError = String((data as { error?: unknown }).error || "");
+    const error =
+      upstreamError === "validation"
+        ? "apps_script_outdated_or_wrong_deployment"
+        : "upstream_failed";
+
+    res.status(502).json({
+      ok: false,
+      error,
+      upstreamStatus: upstream.status,
+      upstreamUrl: upstream.url,
+      upstream: data,
+      score,
+      ai,
+    });
     return;
   }
 

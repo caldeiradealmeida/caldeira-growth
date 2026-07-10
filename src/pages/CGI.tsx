@@ -131,6 +131,37 @@ function parseAiReport(value: string): {
   }
 }
 
+function getSubmitErrorMessage(data: unknown): string {
+  if (!data || typeof data !== "object") {
+    return "Seu resultado foi calculado, mas houve uma falha ao salvar os dados. Tente enviar novamente ou entre em contato pela página de contato.";
+  }
+
+  const error = String((data as { error?: unknown }).error || "");
+  const upstream = (data as { upstream?: { error?: unknown; raw?: unknown } }).upstream;
+
+  if (error === "apps_script_outdated_or_wrong_deployment") {
+    return "Seu resultado foi calculado, mas o Google Apps Script publicado ainda parece estar na versão antiga ou a URL configurada aponta para outra implantação. Atualize a implantação do Web App no Apps Script e confirme que ela está publicada para 'Qualquer pessoa'.";
+  }
+
+  if (error === "not_configured") {
+    return "Seu resultado foi calculado, mas a URL do Google Apps Script não está configurada no servidor.";
+  }
+
+  if (error === "upstream_request_failed") {
+    return "Seu resultado foi calculado, mas o servidor não conseguiu se comunicar com o Google Apps Script.";
+  }
+
+  if (String(upstream?.error || "") === "validation") {
+    return "Seu resultado foi calculado, mas o Google Apps Script recusou o payload. Isso costuma indicar que a implantação publicada ainda é a versão antiga do script.";
+  }
+
+  if (typeof upstream?.raw === "string" && upstream.raw.includes("Função de script não encontrada")) {
+    return "Seu resultado foi calculado, mas a implantação publicada do Google Apps Script não contém as funções novas. Publique uma nova versão do Web App com o script atualizado.";
+  }
+
+  return "Seu resultado foi calculado, mas houve uma falha ao salvar os dados. Tente enviar novamente ou entre em contato pela página de contato.";
+}
+
 function scrollToAssessment() {
   window.setTimeout(() => {
     document
@@ -472,7 +503,7 @@ export default function CGI() {
       const data = await response.json();
 
       if (!response.ok || data.ok !== true) {
-        throw new Error(data.error || "request_failed");
+        throw new Error(getSubmitErrorMessage(data));
       }
 
       setResult(data.score ?? localScore);
@@ -480,7 +511,9 @@ export default function CGI() {
       setAiStatus(data.ai?.status ?? "");
     } catch (error) {
       setSubmitError(
-        "Seu resultado foi calculado, mas houve uma falha ao salvar os dados. Tente enviar novamente ou entre em contato pela pagina de contato."
+        error instanceof Error
+          ? error.message
+          : "Seu resultado foi calculado, mas houve uma falha ao salvar os dados. Tente enviar novamente ou entre em contato pela página de contato."
       );
       if (import.meta.env.DEV) {
         console.error("[CGI] submit error", error);

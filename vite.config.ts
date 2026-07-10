@@ -15,18 +15,21 @@ export default defineConfig(({ mode }) => {
             target: new URL(contactUrl).origin,
             changeOrigin: true,
             secure: true,
+            followRedirects: true,
             rewrite: () => new URL(contactUrl).pathname + new URL(contactUrl).search,
           },
           "/api/cgi-assessment": {
             target: new URL(contactUrl).origin,
             changeOrigin: true,
             secure: true,
+            followRedirects: true,
             rewrite: () => new URL(contactUrl).pathname + new URL(contactUrl).search,
           },
           "/api/content": {
             target: new URL(contactUrl).origin,
             changeOrigin: true,
             secure: true,
+            followRedirects: true,
             rewrite: (pathName: string) => {
               const requestUrl = new URL(pathName, "http://local");
               const upstreamUrl = new URL(contactUrl);

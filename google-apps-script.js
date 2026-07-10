@@ -3,6 +3,7 @@
  * Colunas: timestamp, nome, email, empresa, cargo, tema, mensagem
  */
 var SPREADSHEET_ID = '1NivGOjutCgJTGDjXxt8ydFiCeWrKvbbIdqmkVmwSC9M';
+var SCRIPT_VERSION = '2026-07-10-cgi-v2';
 var ARTICLES_SHEET_NAME = 'Artigos';
 var MEDIA_SHEET_NAME = 'Midia';
 var CGI_SHEET_NAME = 'CGI';
@@ -47,7 +48,7 @@ function doGet(e) {
     if (action === 'media_csv') {
       return csvResponse_(getSheetCsv_(MEDIA_SHEET_NAME, MEDIA_HEADERS));
     }
-    return jsonResponse_({ ok: true });
+    return jsonResponse_({ ok: true, version: SCRIPT_VERSION });
   } catch (err) {
     return jsonResponse_({ ok: false, error: String(err) });
   }
@@ -232,7 +233,7 @@ function handleCgiAssessmentPost_(payload) {
   sendCgiNotification_(lead, score, attentionPoints, payload);
   sendCgiLeadReport_(lead, score, attentionPoints, payload);
 
-  return jsonResponse_({ ok: true, type: 'cgi_assessment' });
+  return jsonResponse_({ ok: true, type: 'cgi_assessment', version: SCRIPT_VERSION });
 }
 
 function sendCgiNotification_(lead, score, attentionPoints, payload) {
