@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
+import SEO from "@/components/SEO";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { content } from "@/data/content";
 import type { PrivacySection } from "@/data/content";
@@ -80,6 +81,11 @@ export default function PrivacyPolicy() {
   return (
     <main className="min-h-screen bg-background">
       <Header />
+      <SEO
+        routeKey="privacy"
+        title={p.metaTitle}
+        description={p.metaDescription}
+      />
       <article className="pt-28 md:pt-32 pb-20 md:pb-28 px-4">
         <div className="container mx-auto max-w-3xl">
           <header className="mb-12 md:mb-14">

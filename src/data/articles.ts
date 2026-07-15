@@ -17,9 +17,9 @@ import coverSenior from "@/assets/articles/senior-tarefas-simples.png";
 export type Article = {
   id: string;
   slug: string;
-  title: Record<Language, string>;
-  excerpt: Record<Language, string>;
-  content: Record<Language, string>;
+  title: Record<"pt" | "en", string> & Partial<Record<Language, string>>;
+  excerpt: Record<"pt" | "en", string> & Partial<Record<Language, string>>;
+  content: Record<"pt" | "en", string> & Partial<Record<Language, string>>;
   cover: string;
   date: string;
   sourceName?: string;
@@ -31,8 +31,8 @@ type ArticleMeta = {
   slug: keyof typeof articleBodies;
   date: string;
   cover: string;
-  title: Record<Language, string>;
-  excerpt: Record<Language, string>;
+  title: Record<"pt" | "en", string> & Partial<Record<Language, string>>;
+  excerpt: Record<"pt" | "en", string> & Partial<Record<Language, string>>;
 };
 
 const articleMeta: ArticleMeta[] = [
@@ -221,4 +221,8 @@ export const articles: Article[] = articleMeta.map((m) => {
 
 export function getArticleBySlug(slug: string): Article | undefined {
   return articles.find((a) => a.slug === slug);
+}
+
+export function articleLang(lang: Language): "pt" | "en" {
+  return lang === "pt" ? "pt" : "en";
 }

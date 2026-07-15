@@ -2,10 +2,14 @@ import type { Language } from "@/contexts/LanguageContext";
 
 export type MediaItem = {
   id: string;
-  title: Record<Language, string>;
+  title: Record<"pt" | "en", string> & Partial<Record<Language, string>>;
   outlet: string;
   url: string;
 };
+
+export function mediaLang(lang: Language): "pt" | "en" {
+  return lang === "pt" ? "pt" : "en";
+}
 
 export const mediaItems: MediaItem[] = [
   {

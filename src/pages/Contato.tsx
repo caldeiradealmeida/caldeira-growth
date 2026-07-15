@@ -8,6 +8,7 @@
 import { useState } from "react";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
+import SEO from "@/components/SEO";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -65,11 +66,18 @@ export default function Contato() {
 
     if (!nome || !email || !topic) {
       toast({
-        title: lang === "pt" ? "Campos obrigatórios" : "Required fields",
+        title:
+          lang === "pt"
+            ? "Campos obrigatórios"
+            : lang === "en"
+              ? "Required fields"
+              : "Campos obligatorios",
         description:
           lang === "pt"
             ? "Preencha nome, e-mail e o tema."
-            : "Please fill in name, email, and topic.",
+            : lang === "en"
+              ? "Please fill in name, email, and topic."
+              : "Complete nombre, email y tema.",
         variant: "destructive",
       });
       return;
@@ -135,6 +143,17 @@ export default function Contato() {
   return (
     <main className="min-h-screen">
       <Header />
+      <SEO
+        routeKey="contact"
+        title={
+          lang === "pt"
+            ? "Contato | Caldeira Growth"
+            : lang === "en"
+              ? "Contact | Caldeira Growth"
+              : "Contacto | Caldeira Growth"
+        }
+        description={c.subtitle}
+      />
       <section className="pt-28 pb-24 md:pb-32">
         <div className={sectionLayout.container}>
           <div className={`${sectionLayout.prose} max-w-xl`}>
@@ -145,7 +164,11 @@ export default function Contato() {
               <Alert className="mt-8 border-amber-500/30 bg-amber-500/5">
                 <AlertCircle className="h-4 w-4" />
                 <AlertTitle className="text-sm">
-                  {lang === "pt" ? "Configuração" : "Configuration"}
+                  {lang === "pt"
+                    ? "Configuração"
+                    : lang === "en"
+                      ? "Configuration"
+                      : "Configuración"}
                 </AlertTitle>
                 <AlertDescription>{f.notConfigured}</AlertDescription>
               </Alert>

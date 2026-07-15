@@ -1,6 +1,7 @@
 import { ExternalLink } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { content } from "@/data/content";
+import { mediaLang } from "@/data/media";
 import { useMediaItems } from "@/hooks/useMediaItems";
 import { cn } from "@/lib/utils";
 import { sectionLayout } from "@/lib/sectionLayout";
@@ -12,6 +13,7 @@ type MediaSectionProps = {
 
 export default function MediaSection({ variant = "home" }: MediaSectionProps) {
   const { lang } = useLanguage();
+  const textLang = mediaLang(lang);
   const c = content[lang].media;
   const { data: mediaItems } = useMediaItems();
 
@@ -26,42 +28,60 @@ export default function MediaSection({ variant = "home" }: MediaSectionProps) {
     >
       <div className={sectionLayout.container}>
         <div className={sectionLayout.headerToContent}>
-          <SectionHeader title={c.title} subtitle={c.subtitle} />
+          {variant === "page" ? (
+            <header>
+              <h1 className={sectionLayout.title}>{c.title}</h1>
+              {c.subtitle ? (
+                <p className={sectionLayout.subtitle}>{c.subtitle}</p>
+              ) : null}
+            </header>
+          ) : (
+            <SectionHeader title={c.title} subtitle={c.subtitle} />
+          )}
         </div>
-        <div className={`grid md:grid-cols-3 ${sectionLayout.cardsGap}`}>
-          {mediaItems.map((item) => (
-            <a
-              key={item.id}
-              href={item.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={(e) => {
-                if (
-                  item.url.startsWith("http") &&
-                  !e.ctrlKey &&
-                  !e.metaKey &&
-                  !e.shiftKey
-                ) {
-                  e.preventDefault();
-                  window.open(item.url, "_blank", "noopener,noreferrer");
-                }
-              }}
-              className="group flex flex-col bg-card border border-border rounded-xl overflow-hidden shadow-sm hover:shadow-md hover:border-primary/15 transition-all duration-300 hover:-translate-y-0.5"
-            >
-              <div className="px-6 pt-6 pb-2 border-b border-border/60">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                  {item.outlet}
-                </p>
-              </div>
-              <div className="px-6 py-5 flex-1 flex flex-col">
-                <h3 className="font-semibold text-foreground group-hover:text-primary transition-colors text-[15px] leading-snug flex-1 flex gap-2">
-                  <span className="flex-1">{item.title[lang]}</span>
-                  <ExternalLink className="h-4 w-4 shrink-0 mt-0.5 opacity-40 group-hover:opacity-70" />
-                </h3>
-              </div>
-            </a>
-          ))}
-        </div>
+        {lang === "es" ? (
+          <div className="border-t border-border/60 pt-8 max-w-2xl">
+            <p className="text-base leading-relaxed text-foreground/85">
+              La versión en español de esta sección está preparada, pero las
+              publicaciones individuales aún están en revisión editorial.
+            </p>
+          </div>
+        ) : (
+          <div className={`grid md:grid-cols-3 ${sectionLayout.cardsGap}`}>
+            {mediaItems.map((item) => (
+              <a
+                key={item.id}
+                href={item.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => {
+                  if (
+                    item.url.startsWith("http") &&
+                    !e.ctrlKey &&
+                    !e.metaKey &&
+                    !e.shiftKey
+                  ) {
+                    e.preventDefault();
+                    window.open(item.url, "_blank", "noopener,noreferrer");
+                  }
+                }}
+                className="group flex flex-col bg-card border border-border rounded-xl overflow-hidden shadow-sm hover:shadow-md hover:border-primary/15 transition-all duration-300 hover:-translate-y-0.5"
+              >
+                <div className="px-6 pt-6 pb-2 border-b border-border/60">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                    {item.outlet}
+                  </p>
+                </div>
+                <div className="px-6 py-5 flex-1 flex flex-col">
+                  <h3 className="font-semibold text-foreground group-hover:text-primary transition-colors text-[15px] leading-snug flex-1 flex gap-2">
+                    <span className="flex-1">{item.title[textLang]}</span>
+                    <ExternalLink className="h-4 w-4 shrink-0 mt-0.5 opacity-40 group-hover:opacity-70" />
+                  </h3>
+                </div>
+              </a>
+            ))}
+          </div>
+        )}
       </div>
     </section>
   );

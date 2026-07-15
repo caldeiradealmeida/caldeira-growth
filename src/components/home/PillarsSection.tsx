@@ -59,7 +59,7 @@ export default function PillarsSection({
             const pillar = c[key];
             const desc =
               key === "pathToGrow"
-                ? pillar.shortDescription
+                ? c.pathToGrow.shortDescription
                 : pillar.description;
             const cardClass = cn(
               "group flex flex-col h-full rounded-2xl transition-colors duration-300",
@@ -90,7 +90,7 @@ export default function PillarsSection({
                 </p>
                 {key === "pathToGrow" && (
                   <p className="text-xs text-muted-foreground/90 mt-auto pt-4 border-t border-border font-medium tracking-wide">
-                    {pillar.micro}
+                    {c.pathToGrow.micro}
                   </p>
                 )}
               </>

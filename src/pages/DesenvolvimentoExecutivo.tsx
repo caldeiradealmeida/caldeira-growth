@@ -3,20 +3,21 @@ import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import SEO from "@/components/SEO";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { consultingContent, testimonials } from "@/data/strategicContent";
+import { executiveContent } from "@/data/strategicContent";
 import { localizedPath } from "@/lib/routing";
 import { sectionLayout } from "@/lib/sectionLayout";
 
-export default function Consultoria() {
+export default function DesenvolvimentoExecutivo() {
   const { lang } = useLanguage();
-  const p = consultingContent[lang];
+  const p = executiveContent[lang];
 
   return (
     <main className="min-h-screen bg-background">
       <Header />
       <SEO
-        routeKey="consulting"
+        routeKey="executiveDevelopment"
         title={p.metaTitle}
         description={p.metaDescription}
       />
@@ -37,7 +38,7 @@ export default function Consultoria() {
               size="lg"
               asChild
               variant="outline"
-              className="rounded-sm border-foreground/20 bg-transparent px-8 py-6 text-base font-medium tracking-wide hover:bg-foreground hover:text-background transition-colors"
+              className="w-full sm:w-auto h-auto min-h-11 rounded-sm border-foreground/20 bg-transparent px-8 py-4 text-center text-base font-medium tracking-wide whitespace-normal hover:bg-foreground hover:text-background transition-colors"
             >
               <Link to={localizedPath("contact", lang)}>{p.cta}</Link>
             </Button>
@@ -74,67 +75,77 @@ export default function Consultoria() {
 
       <section className={`${sectionLayout.sectionY} bg-background`}>
         <div className={sectionLayout.container}>
-          <div className={sectionLayout.headerToContent}>
-            <h2 className={sectionLayout.title}>{p.frontsTitle}</h2>
-          </div>
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
-            {p.fronts.map((front) => (
-              <div key={front.title} className="border-t border-border pt-5">
-                <h3 className="font-semibold text-foreground mb-3 leading-snug">
-                  {front.title}
-                </h3>
-                <p className="text-sm text-muted-foreground leading-relaxed">
-                  {front.body}
-                </p>
+          <div className="grid lg:grid-cols-12 gap-12 lg:gap-16">
+            <div className="lg:col-span-5">
+              <h2 className={sectionLayout.title}>{p.pdeTitle}</h2>
+            </div>
+            <div className="lg:col-span-7">
+              <div className="space-y-6 mb-10">
+                {p.pdeParagraphs.map((paragraph) => (
+                  <p key={paragraph} className="text-base md:text-[17px] leading-[1.75] text-foreground/88">
+                    {paragraph}
+                  </p>
+                ))}
               </div>
-            ))}
+              <div className="flex flex-wrap gap-2">
+                {p.topics.map((topic) => (
+                  <Badge key={topic} variant="secondary" className="rounded-sm font-normal">
+                    {topic}
+                  </Badge>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       </section>
 
       <section className={`${sectionLayout.sectionY} bg-muted/[0.28] border-y border-border/60`}>
         <div className={sectionLayout.container}>
-          <div className={sectionLayout.headerToContent}>
-            <h2 className={sectionLayout.title}>{p.formatsTitle}</h2>
-          </div>
-          <div className="space-y-8 max-w-4xl">
-            {p.formats.map((format) => (
-              <div key={format.title} className="grid md:grid-cols-12 gap-5 md:gap-8 border-t border-border/60 pt-7">
-                <h3 className="md:col-span-4 font-semibold text-foreground leading-snug">
-                  {format.title}
-                </h3>
-                <p className="md:col-span-8 text-base leading-relaxed text-foreground/85">
-                  {format.body}
+          <div className={sectionLayout.prose}>
+            <div className={sectionLayout.headerToContent}>
+              <h2 className={sectionLayout.title}>{p.caseTitle}</h2>
+            </div>
+            <div className="space-y-6">
+              {p.caseText.map((paragraph) => (
+                <p key={paragraph} className="text-base md:text-[17px] leading-[1.75] text-foreground/88">
+                  {paragraph}
                 </p>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </div>
       </section>
 
       <section className={`${sectionLayout.sectionY} bg-background`}>
         <div className={sectionLayout.container}>
-          <div className={sectionLayout.headerToContent}>
-            <h2 className={sectionLayout.title}>
-              {lang === "pt" ? "Recomendações relacionadas" : "Related recommendations"}
-            </h2>
-          </div>
-          <div className="grid md:grid-cols-2 gap-8">
-            {testimonials.map((item) => (
-              <figure key={item.attribution} className="border-l border-primary/20 pl-6 md:pl-8">
-                <blockquote className="text-lg text-foreground/90 leading-relaxed italic">
-                  {item.quote}
-                </blockquote>
-                <figcaption className="mt-5 text-sm text-muted-foreground">
-                  {item.attribution}
-                </figcaption>
-              </figure>
-            ))}
+          <div className="grid md:grid-cols-2 gap-12 md:gap-16">
+            <div>
+              <h2 className={sectionLayout.title}>{p.workshopsTitle}</h2>
+              <p className={`${sectionLayout.subtitle} mb-8`}>{p.workshopsText}</p>
+              <ul className="space-y-3">
+                {p.workshops.map((item) => (
+                  <li key={item} className="border-b border-border/45 pb-3 text-sm text-foreground/85">
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div>
+              <h2 className={sectionLayout.title}>{p.mentoringTitle}</h2>
+              <p className={`${sectionLayout.subtitle} mb-8`}>{p.mentoringText}</p>
+              <ul className="space-y-3">
+                {p.mentoring.map((item) => (
+                  <li key={item} className="border-b border-border/45 pb-3 text-sm text-foreground/85">
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
           </div>
         </div>
       </section>
 
-      <section className={`${sectionLayout.sectionY} border-t border-border/60`}>
+      <section className={`${sectionLayout.sectionY} bg-muted/[0.28] border-t border-border/60`}>
         <div className={sectionLayout.container}>
           <div className={`${sectionLayout.prose} text-center mx-auto`}>
             <h2 className="text-2xl md:text-3xl font-semibold tracking-tight text-foreground leading-snug">
@@ -146,7 +157,7 @@ export default function Consultoria() {
             <Button
               size="lg"
               asChild
-              className="mt-10 rounded-sm bg-foreground text-background hover:bg-foreground/90 px-10 py-6 text-base font-medium tracking-wide"
+              className="mt-10 w-full sm:w-auto h-auto min-h-11 bg-accent hover:bg-accent/90 text-accent-foreground font-semibold px-8 py-4 text-center whitespace-normal"
             >
               <Link to={localizedPath("contact", lang)}>{p.cta}</Link>
             </Button>

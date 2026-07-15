@@ -1,9 +1,143 @@
 {
+  "redirects": [
+    {
+      "source": "/path-to-grow",
+      "destination": "/desenvolvimento-executivo",
+      "permanent": true
+    }
+  ],
   "rewrites": [
+    {
+      "source": "/consultoria",
+      "destination": "/consultoria/index.html"
+    },
+    {
+      "source": "/desenvolvimento-executivo",
+      "destination": "/desenvolvimento-executivo/index.html"
+    },
+    {
+      "source": "/palestras",
+      "destination": "/palestras/index.html"
+    },
+    {
+      "source": "/conteudo",
+      "destination": "/conteudo/index.html"
+    },
+    {
+      "source": "/sobre",
+      "destination": "/sobre/index.html"
+    },
+    {
+      "source": "/contato",
+      "destination": "/contato/index.html"
+    },
+    {
+      "source": "/artigos",
+      "destination": "/artigos/index.html"
+    },
+    {
+      "source": "/artigos/:slug",
+      "destination": "/artigos/:slug/index.html"
+    },
+    {
+      "source": "/midia",
+      "destination": "/midia/index.html"
+    },
+    {
+      "source": "/politica-de-privacidade",
+      "destination": "/politica-de-privacidade/index.html"
+    },
+    {
+      "source": "/en",
+      "destination": "/en/index.html"
+    },
+    {
+      "source": "/en/consulting",
+      "destination": "/en/consulting/index.html"
+    },
+    {
+      "source": "/en/executive-development",
+      "destination": "/en/executive-development/index.html"
+    },
+    {
+      "source": "/en/speaking",
+      "destination": "/en/speaking/index.html"
+    },
+    {
+      "source": "/en/content",
+      "destination": "/en/content/index.html"
+    },
+    {
+      "source": "/en/about",
+      "destination": "/en/about/index.html"
+    },
+    {
+      "source": "/en/contact",
+      "destination": "/en/contact/index.html"
+    },
+    {
+      "source": "/en/articles",
+      "destination": "/en/articles/index.html"
+    },
+    {
+      "source": "/en/articles/:slug",
+      "destination": "/en/articles/:slug/index.html"
+    },
+    {
+      "source": "/en/media",
+      "destination": "/en/media/index.html"
+    },
+    {
+      "source": "/en/privacy-policy",
+      "destination": "/en/privacy-policy/index.html"
+    },
+    {
+      "source": "/es",
+      "destination": "/es/index.html"
+    },
+    {
+      "source": "/es/consultoria",
+      "destination": "/es/consultoria/index.html"
+    },
+    {
+      "source": "/es/desarrollo-ejecutivo",
+      "destination": "/es/desarrollo-ejecutivo/index.html"
+    },
+    {
+      "source": "/es/conferencias",
+      "destination": "/es/conferencias/index.html"
+    },
+    {
+      "source": "/es/contenidos",
+      "destination": "/es/contenidos/index.html"
+    },
+    {
+      "source": "/es/sobre-nosotros",
+      "destination": "/es/sobre-nosotros/index.html"
+    },
+    {
+      "source": "/es/contacto",
+      "destination": "/es/contacto/index.html"
+    },
+    {
+      "source": "/es/articulos",
+      "destination": "/es/articulos/index.html"
+    },
+    {
+      "source": "/es/articulos/:slug",
+      "destination": "/es/articulos/:slug/index.html"
+    },
+    {
+      "source": "/es/media",
+      "destination": "/es/media/index.html"
+    },
+    {
+      "source": "/es/politica-de-privacidad",
+      "destination": "/es/politica-de-privacidad/index.html"
+    },
     {
       "source": "/(.*)",
       "destination": "/index.html"
     }
   ]
 }
-

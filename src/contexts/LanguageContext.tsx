@@ -6,8 +6,15 @@ import {
   useCallback,
   type ReactNode,
 } from "react";
+import { useLocation } from "react-router-dom";
+import {
+  getLanguageFromPath,
+  isLanguagePublic,
+  STORAGE_KEY,
+  type Language,
+} from "@/lib/routing";
 
-export type Language = "pt" | "en";
+export type { Language } from "@/lib/routing";
 
 type LanguageContextValue = {
   lang: Language;
@@ -15,21 +22,23 @@ type LanguageContextValue = {
   t: (key: string) => string;
 };
 
-const STORAGE_KEY = "caldeira-growth-lang";
-
 const LanguageContext = createContext<LanguageContextValue | null>(null);
 
 export function LanguageProvider({ children }: { children: ReactNode }) {
+  const location = useLocation();
   const [lang, setLangState] = useState<Language>("pt");
 
   useEffect(() => {
+    const routeLang = getLanguageFromPath(location.pathname);
+    setLangState(routeLang);
     try {
-      const stored = localStorage.getItem(STORAGE_KEY) as Language | null;
-      if (stored === "pt" || stored === "en") setLangState(stored);
+      if (isLanguagePublic(routeLang)) {
+        localStorage.setItem(STORAGE_KEY, routeLang);
+      }
     } catch {
       // ignore
     }
-  }, []);
+  }, [location.pathname]);
 
   const setLang = useCallback((value: Language) => {
     setLangState(value);
@@ -46,7 +55,7 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
       // This is a fallback for dynamic keys if needed
       return key;
     },
-    [lang]
+    []
   );
 
   const value: LanguageContextValue = {

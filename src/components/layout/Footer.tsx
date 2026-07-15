@@ -2,32 +2,38 @@ import { Link } from "react-router-dom";
 import { Instagram, Linkedin } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { content } from "@/data/content";
+import { navigation } from "@/data/strategicContent";
+import { localizedPath, type RouteKey } from "@/lib/routing";
 
 import logo from "@/assets/brand/Color logo - no background.svg";
 import { bookSiteLinkProps } from "@/constants/book";
 import { SOCIAL_LINKS } from "@/constants/social";
 
-type NavKey = keyof typeof content.pt.nav;
-
 type FooterNavItem =
-  | { key: "cgi"; href: string; label: string }
-  | { key: Exclude<NavKey, "book">; href: string }
+  | { key: keyof typeof navigation.pt; route: RouteKey }
   | { key: "book" };
 
 const footerNav: FooterNavItem[] = [
-  { key: "cgi", href: "/cgi", label: "CGI" },
-  { key: "consulting", href: "/consultoria" },
-  { key: "speaking", href: "/palestras" },
+  { key: "home", route: "home" },
+  { key: "consulting", route: "consulting" },
+  { key: "executiveDevelopment", route: "executiveDevelopment" },
+  { key: "speaking", route: "speaking" },
+  { key: "content", route: "content" },
+  { key: "about", route: "about" },
   { key: "book" },
-  { key: "articles", href: "/artigos" },
-  { key: "media", href: "/midia" },
-  { key: "contact", href: "/contato" },
+  { key: "contact", route: "contact" },
 ];
 
 export default function Footer() {
   const { lang } = useLanguage();
   const c = content[lang];
+  const nav = navigation[lang];
   const year = new Date().getFullYear();
+  const visibleFooterNav = footerNav.filter((item) => {
+    if (lang !== "es") return true;
+    if (item.key === "book") return false;
+    return item.route !== "content";
+  });
 
   return (
     <footer className="bg-primary text-primary-foreground py-16">
@@ -35,7 +41,7 @@ export default function Footer() {
         <div className="max-w-5xl mx-auto">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-10">
             <div className="space-y-4">
-              <Link to="/" className="inline-block">
+              <Link to={localizedPath("home", lang)} className="inline-block">
                 <img
                   src={logo}
                   alt="Caldeira Growth"
@@ -78,30 +84,22 @@ export default function Footer() {
               </div>
             </div>
             <nav className="flex flex-wrap gap-6">
-              {footerNav.map((item) =>
-                item.key === "cgi" ? (
-                  <Link
-                    key={item.key}
-                    to={item.href}
-                    className="text-sm text-primary-foreground/80 hover:text-primary-foreground transition-colors"
-                  >
-                    {item.label}
-                  </Link>
-                ) : item.key === "book" ? (
+              {visibleFooterNav.map((item) =>
+                item.key === "book" ? (
                   <a
                     key="book"
                     {...bookSiteLinkProps}
                     className="text-sm text-primary-foreground/80 hover:text-primary-foreground transition-colors"
                   >
-                    {c.nav.book}
+                    {nav.book}
                   </a>
                 ) : (
                   <Link
                     key={item.key}
-                    to={item.href}
+                    to={localizedPath(item.route, lang)}
                     className="text-sm text-primary-foreground/80 hover:text-primary-foreground transition-colors"
                   >
-                    {c.nav[item.key]}
+                    {nav[item.key]}
                   </Link>
                 )
               )}
@@ -112,7 +110,7 @@ export default function Footer() {
               © {year} {c.footer.rights}
             </p>
             <Link
-              to="/politica-de-privacidade"
+              to={localizedPath("privacy", lang)}
               className="text-sm text-primary-foreground/75 hover:text-primary-foreground transition-colors shrink-0"
             >
               {c.footer.privacyPolicy}

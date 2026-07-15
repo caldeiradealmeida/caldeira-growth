@@ -1,6 +1,7 @@
 import type { Language } from "@/contexts/LanguageContext";
 
-export type ContentByLang = Record<Language, Content>;
+export type ContentByLang = Record<"pt" | "en", Content> &
+  Partial<Record<Extract<Language, "es">, Content>>;
 
 export type PrivacySection =
   | { kind: "text"; title: string; body: string }
@@ -751,5 +752,149 @@ export const content: ContentByLang = {
         "Caldeira Growth Consultoria",
       ],
     },
+  },
+};
+
+content.es = {
+  ...content.pt,
+  nav: {
+    consulting: "Consultoría",
+    speaking: "Conferencias",
+    book: "Libro",
+    articles: "Artículos",
+    media: "Medios",
+    contact: "Contacto",
+  },
+  hero: {
+    headline: "Arquitectura de Crecimiento para Negocios y Líderes",
+    subhead:
+      "Diseñamos sistemas de crecimiento que integran estrategia, cultura, liderazgo y ejecución.",
+    ctaContact: "Agendar una conversación",
+    ctaBook: "Conocer el libro",
+  },
+  media: {
+    title: "En los medios",
+    subtitle:
+      "Artículos, entrevistas y reflexiones sobre estrategia, crecimiento y toma de decisiones.",
+  },
+  articles: {
+    title: "Artículos destacados",
+    subtitle: "Estrategia y crecimiento en lenguaje directo.",
+    readMore: "Leer artículo",
+  },
+  contactCTA: {
+    title:
+      "¿El próximo ciclo de crecimiento requiere más claridad, alineación y capacidad de ejecución?",
+    subtitle:
+      "Converse con Caldeira Growth sobre los desafíos actuales de su organización.",
+    cta: "Agendar una conversación",
+  },
+  contactPage: {
+    headline: "Hablemos",
+    subtitle:
+      "Para conversaciones estratégicas, decisiones críticas o una primera conversación sobre crecimiento.",
+    form: {
+      name: "Nombre",
+      email: "Email",
+      company: "Empresa",
+      role: "Cargo",
+      topic: "¿Sobre qué le gustaría conversar?",
+      topicPlaceholder: "Seleccione un tema",
+      message: "Mensaje",
+      submit: "Enviar mensaje",
+      sending: "Enviando...",
+      successTitle: "Mensaje enviado",
+      successDescription:
+        "Recibimos su contacto. Responderemos lo antes posible.",
+      errorTitle: "No fue posible enviar",
+      errorDescription:
+        "Intente nuevamente en unos instantes o escriba a contato@caldeiragrowth.com.",
+      notConfigured:
+        "El envío por el sitio no está disponible en este momento. Escriba a contato@caldeiragrowth.com.",
+    },
+    topicOptions: [
+      { value: "growth", label: "Crecimiento y estrategia" },
+      {
+        value: "path-to-grow",
+        label: "Programa de Desarrollo Ejecutivo",
+      },
+      { value: "critical", label: "Decisiones críticas" },
+      { value: "org", label: "Organización / estructura" },
+      { value: "speaking", label: "Conferencias" },
+      { value: "other", label: "Otro" },
+    ],
+  },
+  footer: {
+    tagline: "Caldeira Growth",
+    contact: "contato@caldeiragrowth.com",
+    rights: "Todos los derechos reservados.",
+    connectLabel: "Conéctese",
+    privacyPolicy: "Política de Privacidad",
+  },
+  privacyPage: {
+    metaTitle: "Política de Privacidad | Caldeira Growth",
+    metaDescription:
+      "Política de privacidad de Caldeira Growth. Conozca cómo tratamos sus datos.",
+    title: "Política de Privacidad",
+    updated: "Actualizado: 29 de abril de 2025",
+    intro:
+      "Su privacidad es importante para nosotros. Es política de Fortes & Caldeira Consultoria Empresarial respetar su privacidad con relación a cualquier información que podamos recopilar en nuestro sitio www.caldeiragrowth.com y en otros sitios que poseemos y operamos.",
+    sections: [
+      {
+        kind: "text",
+        title: "1. Recopilación de información",
+        body:
+          "Recopilamos información personal como nombre, email y teléfono únicamente cuando usted nos la proporciona voluntariamente por medio de formularios de contacto, inscripción u otros canales similares. También recopilamos datos de navegación por medio de cookies y herramientas de análisis, como Google Analytics y Hotjar.",
+      },
+      {
+        kind: "bullets",
+        title: "2. Uso de la información",
+        intro: "Utilizamos sus datos para:",
+        items: [
+          "Responder contactos y solicitudes;",
+          "Enviar información relevante sobre nuestros servicios;",
+          "Mejorar la experiencia del usuario en el sitio;",
+          "Cumplir obligaciones legales.",
+        ],
+      },
+      {
+        kind: "text",
+        title: "3. Compartir datos",
+        body:
+          "No compartimos información personal públicamente ni con terceros, excepto cuando sea exigido por ley o con su consentimiento.",
+      },
+      {
+        kind: "text",
+        title: "4. Seguridad de los datos",
+        body:
+          "Adoptamos prácticas de seguridad para proteger su información personal, incluyendo cifrado y control de acceso.",
+      },
+      {
+        kind: "text",
+        title: "5. Cookies",
+        body:
+          "Utilizamos cookies para almacenar información de navegación y mejorar la experiencia de uso. Usted puede configurar su navegador para rechazar cookies, pero eso puede limitar algunas funcionalidades del sitio.",
+      },
+      {
+        kind: "text",
+        title: "6. Sus derechos",
+        body:
+          "Usted tiene derecho a acceder, corregir o eliminar los datos personales almacenados por nosotros. Para hacerlo, entre en contacto por email: contato@caldeiragrowth.com",
+      },
+      {
+        kind: "text",
+        title: "7. Cambios en esta política",
+        body:
+          "Nos reservamos el derecho de modificar esta política de privacidad en cualquier momento. Los cambios serán publicados en esta página.",
+      },
+    ],
+    legalLines: [
+      "Responsable del tratamiento de datos: Denis Caldeira de Almeida",
+      "Fortes & Caldeira Consultoria Empresarial",
+      "CNPJ: 06.254.268/0001-36",
+      "Contacto: contato@caldeiragrowth.com",
+      "",
+      "Caldeira Growth Consultoria",
+    ],
   },
 };
