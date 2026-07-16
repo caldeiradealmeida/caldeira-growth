@@ -6,6 +6,7 @@ export type RouteKey =
   | "executiveDevelopment"
   | "speaking"
   | "content"
+  | "cgi"
   | "about"
   | "contact"
   | "articles"
@@ -57,6 +58,11 @@ export const routePaths: Record<RouteKey, Record<Language, string>> = {
     pt: "/conteudo",
     en: "/en/content",
     es: "/es/contenidos",
+  },
+  cgi: {
+    pt: "/cgi",
+    en: "/cgi",
+    es: "/cgi",
   },
   about: {
     pt: "/sobre",

@@ -3,7 +3,7 @@
  * Colunas: timestamp, nome, email, empresa, cargo, tema, mensagem
  */
 var SPREADSHEET_ID = '1NivGOjutCgJTGDjXxt8ydFiCeWrKvbbIdqmkVmwSC9M';
-var SCRIPT_VERSION = '2026-07-10-cgi-v2';
+var SCRIPT_VERSION = '2026-07-16-cgi-v3';
 var ARTICLES_SHEET_NAME = 'Artigos';
 var MEDIA_SHEET_NAME = 'Midia';
 var CGI_SHEET_NAME = 'CGI';
@@ -49,7 +49,15 @@ var CGI_HEADERS = [
   'email_domain_status',
   'email_domain_has_mx',
   'email_domain_has_address_fallback',
-  'email_domain_error'
+  'email_domain_error',
+  'comentarios',
+  'ip',
+  'pais',
+  'regiao',
+  'cidade',
+  'latitude',
+  'longitude',
+  'timezone'
 ];
 
 function doGet(e) {
@@ -194,6 +202,7 @@ function handleCgiAssessmentPost_(payload) {
   var enrichment = payload.websiteEnrichment || {};
   var enrichmentHeadings = Array.isArray(enrichment.headings) ? enrichment.headings : [];
   var emailValidation = payload.emailValidation || {};
+  var requestContext = payload.requestContext || {};
   var sheet = getOrCreateSheet_(CGI_SHEET_NAME, CGI_HEADERS);
   var timestamp = new Date();
 
@@ -255,7 +264,15 @@ function handleCgiAssessmentPost_(payload) {
     String(emailValidation.status || '').trim(),
     String(emailValidation.hasMx || '').trim(),
     String(emailValidation.hasAddressFallback || '').trim(),
-    String(emailValidation.error || '').trim()
+    String(emailValidation.error || '').trim(),
+    String(lead.comments || '').trim(),
+    String(requestContext.ip || '').trim(),
+    String(requestContext.country || '').trim(),
+    String(requestContext.region || '').trim(),
+    String(requestContext.city || '').trim(),
+    String(requestContext.latitude || '').trim(),
+    String(requestContext.longitude || '').trim(),
+    String(requestContext.timezone || '').trim()
   ];
 
   sheet.appendRow(row);
@@ -291,6 +308,12 @@ function sendCgiNotification_(lead, score, attentionPoints, payload) {
       'Desafio: ' + String(lead.currentChallenge || ''),
       'Meta 12m: ' + String(lead.growthGoal || ''),
       'Intencao de investimento: ' + String(lead.investmentIntent || ''),
+      'Comentarios adicionais: ' + String(lead.comments || ''),
+      'Localizacao aproximada: ' + [
+        String((payload.requestContext && payload.requestContext.city) || ''),
+        String((payload.requestContext && payload.requestContext.region) || ''),
+        String((payload.requestContext && payload.requestContext.country) || '')
+      ].filter(Boolean).join(', '),
       '',
       'Resultado:',
       'CGI final: ' + String(score.finalScore || ''),

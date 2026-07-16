@@ -16,6 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Tooltip,
   TooltipContent,
@@ -37,6 +38,7 @@ import {
   normalizeCgiAnswers,
   type CgiScoreResult,
 } from "@/lib/cgiScore";
+import footerLogo from "@/assets/brand/Black logo - no background.svg";
 import {
   AlertCircle,
   ArrowLeft,
@@ -75,6 +77,7 @@ type LeadForm = {
   currentChallenge: string;
   growthGoal: string;
   investmentIntent: string;
+  comments: string;
 };
 
 const initialLead: LeadForm = {
@@ -90,6 +93,7 @@ const initialLead: LeadForm = {
   currentChallenge: "",
   growthGoal: "",
   investmentIntent: "",
+  comments: "",
 };
 
 const CGI_ASSESSMENT_ENDPOINT = import.meta.env.DEV
@@ -265,9 +269,6 @@ function buildReportText({
   aiReport: ReturnType<typeof parseAiReport>;
 }) {
   const aiText = formatAiReportText(aiReport, result);
-  const dimensions = result.dimensionScores
-    .map((item) => `${item.title}: ${item.score}/100`)
-    .join("\n");
   const attention = result.attentionPoints
     .map((item) => `- ${item.title}: ${item.score}/100`)
     .join("\n");
@@ -286,14 +287,16 @@ function buildReportText({
     "Diagnóstico",
     aiText || result.diagnostic,
     "",
-    "Score por dimensão",
-    dimensions,
-    "",
     "3 principais pontos de atenção",
     attention,
     "",
-    "CTA",
-    "Agendar uma conversa estratégica com a Caldeira Growth.",
+    "Contato",
+    "Para aprofundar este diagnóstico e traduzir as hipóteses em decisões práticas, o próximo passo recomendado é uma conversa estratégica com a Caldeira Growth.",
+    "",
+    "Denis Caldeira de Almeida",
+    "Fundador e Estrategista de Crescimento - Caldeira Growth",
+    "contato@caldeiragrowth.com",
+    "www.caldeiragrowth.com",
   ].join("\n");
 }
 
@@ -304,10 +307,13 @@ function escapeHtml(value: string) {
     .replace(/>/g, "&gt;");
 }
 
+function escapeAttr(value: string) {
+  return escapeHtml(value).replace(/"/g, "&quot;");
+}
+
 function formatReportBodyHtml(reportText: string) {
   const sectionTitles = new Set([
     "Diagnóstico",
-    "Score por dimensão",
     "3 principais pontos de atenção",
     "Sumário Executivo",
     "Contexto e diagnóstico",
@@ -317,7 +323,7 @@ function formatReportBodyHtml(reportText: string) {
     "Renúncias estratégicas",
     "Sistema mínimo de governança",
     "Recomendações finais",
-    "CTA",
+    "Contato",
   ]);
 
   return reportText
@@ -328,6 +334,18 @@ function formatReportBodyHtml(reportText: string) {
       const lines = block.split("\n").map((line) => line.trim()).filter(Boolean);
       if (lines.length === 1 && sectionTitles.has(lines[0])) {
         return `<h2>${escapeHtml(lines[0])}</h2>`;
+      }
+      if (lines.length === 1 && /:$/.test(lines[0])) {
+        return `<h3>${escapeHtml(lines[0])}</h3>`;
+      }
+      if (lines.length > 1 && /:$/.test(lines[0])) {
+        const rest = lines.slice(1);
+        const content = rest.every((line) => line.startsWith("- "))
+          ? `<ul>${rest
+              .map((line) => `<li>${escapeHtml(line.replace(/^- /, ""))}</li>`)
+              .join("")}</ul>`
+          : `<p>${escapeHtml(rest.join("\n")).replace(/\n/g, "<br />")}</p>`;
+        return `<h3>${escapeHtml(lines[0])}</h3>${content}`;
       }
       if (lines.every((line) => line.startsWith("- "))) {
         return `<ul>${lines
@@ -372,10 +390,9 @@ function buildReportHtml(
 ) {
   const bodyHtml = formatReportBodyHtml(reportText);
   const scoreBarsHtml = buildScoreBarsHtml(result);
-  const escapedCompany = (companyName || "Caldeira Growth")
-    ? escapeHtml(companyName || "Caldeira Growth")
-    : "Caldeira Growth";
+  const escapedCompany = escapeHtml(companyName || "Caldeira Growth");
   const escapedTitle = `Relatório CGI - ${escapedCompany}`;
+  const escapedLogo = escapeAttr(footerLogo);
 
   return `<!doctype html>
 <html lang="pt-BR">
@@ -383,30 +400,33 @@ function buildReportHtml(
     <meta charset="utf-8" />
     <title>${escapedTitle}</title>
     <style>
-      @page { size: A4; margin: 24mm 22mm; }
+      @page { size: A4; margin: 24mm 22mm 34mm; }
       body { font-family: Arial, sans-serif; color: #252b35; line-height: 1.58; margin: 0; background: #f7f4ef; }
       .cover { min-height: 100vh; box-sizing: border-box; padding: 72px 64px; background: #334257; color: #f5f7f8; display: flex; flex-direction: column; justify-content: space-between; }
       .brand { font-size: 20px; font-weight: 800; letter-spacing: .01em; }
       .cover h1 { font-family: Georgia, serif; font-size: 58px; line-height: 1; font-weight: 700; margin: 120px 0 20px; max-width: 760px; }
       .cover .meta { font-family: Georgia, serif; font-size: 30px; }
-      .page { background: #f7f4ef; padding: 60px 70px 88px; }
+      .page { background: #f7f4ef; padding: 60px 70px 132px; }
       h2 { font-family: Georgia, serif; font-size: 30px; font-weight: 700; margin: 34px 0 14px; color: #2e3340; }
       h2:first-child { margin-top: 0; }
+      h3 { font-family: Georgia, serif; font-size: 20px; font-weight: 700; margin: 24px 0 10px; color: #2e3340; }
       .rule { height: 2px; background: #344763; margin: 0 0 28px; }
       p { font-size: 14px; margin: 0 0 16px; text-align: justify; }
       ul { margin: 0 0 18px 20px; padding: 0; }
       li { font-size: 14px; margin: 0 0 8px; text-align: justify; }
+      h2, h3, .score-row, p, li { break-inside: avoid; }
       .score-bars { margin: 26px 0 34px; }
-      .score-row { margin: 0 0 14px; }
-      .score-label { display: flex; justify-content: space-between; gap: 20px; font-size: 14px; font-weight: 700; margin-bottom: 6px; }
-      .score-track { height: 11px; border-radius: 999px; background: #d4dbe2; overflow: hidden; }
+      .score-row { margin: 0 0 18px; }
+      .score-label { display: flex; justify-content: space-between; gap: 20px; font-size: 14px; font-weight: 700; margin-bottom: 7px; }
+      .score-track { height: 13px; border-radius: 999px; background: #d4dbe2; overflow: hidden; }
       .score-fill { height: 100%; border-radius: 999px; background: #344763; }
-      footer { border-top: 1px solid #c8cdd4; color: #1e2530; font-size: 12px; font-weight: 700; padding-top: 10px; text-align: center; }
+      footer { border-top: 1px solid #c8cdd4; padding-top: 8px; text-align: center; background: #f7f4ef; }
+      footer img { width: 112px; height: auto; }
       @media screen { footer { margin: 44px 70px 0; } }
       @media print {
         .cover { page-break-after: always; }
         body { background: #f7f4ef; }
-        footer { position: fixed; bottom: 10mm; left: 22mm; right: 22mm; }
+        footer { position: fixed; bottom: 8mm; left: 22mm; right: 22mm; height: 14mm; }
       }
     </style>
   </head>
@@ -424,7 +444,7 @@ function buildReportHtml(
       ${scoreBarsHtml}
       ${bodyHtml}
     </section>
-    <footer>Caldeira Growth</footer>
+    <footer><img src="${escapedLogo}" alt="Caldeira Growth" /></footer>
   </body>
 </html>`;
 }
@@ -500,6 +520,20 @@ export default function CGI() {
     return () => window.clearInterval(interval);
   }, [isSubmitting]);
 
+  useEffect(() => {
+    if (!reportReady || !result) return;
+
+    window.dataLayer = window.dataLayer || [];
+    window.dataLayer.push({
+      event: "cgi_report_ready",
+      cgi_score: result.finalScore,
+      cgi_level: result.level.title,
+      company_size: lead.employeeCount,
+      current_challenge: lead.currentChallenge,
+      investment_intent: lead.investmentIntent,
+    });
+  }, [lead.currentChallenge, lead.employeeCount, lead.investmentIntent, reportReady, result]);
+
   const updateLead = (key: keyof LeadForm, value: string) => {
     setLead((current) => ({ ...current, [key]: value }));
   };
@@ -541,6 +575,13 @@ export default function CGI() {
   const startAssessment = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!validateLead()) return;
+    window.dataLayer = window.dataLayer || [];
+    window.dataLayer.push({
+      event: "cgi_lead_submitted",
+      company_size: lead.employeeCount,
+      current_challenge: lead.currentChallenge,
+      investment_intent: lead.investmentIntent,
+    });
     setStep("assessment");
     scrollToAssessment();
   };
@@ -558,6 +599,13 @@ export default function CGI() {
       });
       return;
     }
+    window.dataLayer = window.dataLayer || [];
+    window.dataLayer.push({
+      event: "cgi_dimension_completed",
+      cgi_dimension: currentDimension.id,
+      cgi_dimension_title: currentDimension.title,
+      cgi_dimension_index: dimensionIndex + 1,
+    });
     setDimensionIndex((current) => Math.min(current + 1, dimensionOrder.length - 1));
     scrollToAssessment();
   };
@@ -892,6 +940,20 @@ export default function CGI() {
                           </Select>
                         </div>
                       ))}
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="comments">Comentários adicionais</Label>
+                      <Textarea
+                        id="comments"
+                        value={lead.comments}
+                        onChange={(event) => updateLead("comments", event.target.value)}
+                        placeholder="Opcional: descreva contexto, prioridades, restrições ou algo que ajude a calibrar melhor o diagnóstico."
+                        className="min-h-28"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Este campo é opcional e serve apenas para personalizar melhor o relatório.
+                      </p>
                     </div>
 
                     <div className="hidden" aria-hidden="true">

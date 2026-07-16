@@ -23,6 +23,7 @@ type CgiLead = {
   currentChallenge?: string;
   growthGoal?: string;
   investmentIntent?: string;
+  comments?: string;
 };
 
 type CgiPayload = {
@@ -53,6 +54,16 @@ type WebsiteEnrichment = {
   error?: string;
 };
 
+type RequestContext = {
+  ip: string;
+  country: string;
+  region: string;
+  city: string;
+  latitude: string;
+  longitude: string;
+  timezone: string;
+};
+
 type EmailValidation = {
   status: "ok" | "error";
   domain: string;
@@ -71,6 +82,40 @@ function getAppsScriptUrl(): string {
     process.env.VITE_CONTACT_FORM_URL?.trim() ||
     ""
   );
+}
+
+function firstHeaderValue(value: string | string[] | undefined): string {
+  return Array.isArray(value) ? String(value[0] || "").trim() : String(value || "").trim();
+}
+
+function getClientIp(req: VercelRequest): string {
+  const vercelForwarded = firstHeaderValue(req.headers["x-vercel-forwarded-for"]);
+  if (vercelForwarded) return vercelForwarded.split(",")[0].trim();
+
+  const forwarded = firstHeaderValue(req.headers["x-forwarded-for"]);
+  if (forwarded) return forwarded.split(",")[0].trim();
+
+  return firstHeaderValue(req.headers["x-real-ip"]);
+}
+
+function safeDecode(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
+function getRequestContext(req: VercelRequest): RequestContext {
+  return {
+    ip: getClientIp(req),
+    country: firstHeaderValue(req.headers["x-vercel-ip-country"]),
+    region: firstHeaderValue(req.headers["x-vercel-ip-country-region"]),
+    city: safeDecode(firstHeaderValue(req.headers["x-vercel-ip-city"])),
+    latitude: firstHeaderValue(req.headers["x-vercel-ip-latitude"]),
+    longitude: firstHeaderValue(req.headers["x-vercel-ip-longitude"]),
+    timezone: firstHeaderValue(req.headers["x-vercel-ip-timezone"]),
+  };
 }
 
 function readPayload(req: VercelRequest): CgiPayload {
@@ -412,11 +457,13 @@ async function generateAiDiagnostic({
   answers,
   score,
   websiteEnrichment,
+  requestContext,
 }: {
   lead: CgiLead;
   answers: Record<string, number>;
   score: CgiScoreResult;
   websiteEnrichment: WebsiteEnrichment;
+  requestContext: RequestContext;
 }): Promise<AiResult> {
   const apiKey = process.env.OPENAI_API_KEY?.trim();
   if (!apiKey) return { status: "not_configured", text: "", plainText: "" };
@@ -458,6 +505,7 @@ async function generateAiDiagnostic({
                 text: JSON.stringify({
                   report_guide: buildCgiReportPromptContext(),
                   lead,
+                  request_context: requestContext,
                   public_website_context: websiteEnrichment,
                   cgi: score,
                   dimensions: CGI_DIMENSIONS,
@@ -544,12 +592,14 @@ export default async function handler(
   }
 
   const score = calculateCgiScore(answers);
+  const requestContext = getRequestContext(req);
   const websiteEnrichment = await enrichCompanyWebsite(payload.lead?.companyWebsite);
   const ai = await generateAiDiagnostic({
     lead: payload.lead as CgiLead,
     answers,
     score,
     websiteEnrichment,
+    requestContext,
   });
 
   const url = getAppsScriptUrl();
@@ -560,6 +610,7 @@ export default async function handler(
       score,
       ai,
       websiteEnrichment,
+      requestContext,
     });
     return;
   }
@@ -571,6 +622,7 @@ export default async function handler(
     score,
     emailValidation: leadValidation.emailValidation,
     websiteEnrichment,
+    requestContext,
     aiReport: ai.text,
     aiReportText: ai.plainText,
     aiStatus: ai.status,
@@ -604,6 +656,7 @@ export default async function handler(
       score,
       ai,
       websiteEnrichment,
+      requestContext,
     });
     return;
   }
@@ -627,6 +680,7 @@ export default async function handler(
       score,
       ai,
       websiteEnrichment,
+      requestContext,
     });
     return;
   }
@@ -637,5 +691,6 @@ export default async function handler(
     score,
     ai,
     websiteEnrichment,
+    requestContext,
   });
 }

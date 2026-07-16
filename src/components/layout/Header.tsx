@@ -85,6 +85,9 @@ export default function Header() {
                   <DropdownMenuItem asChild>
                     <a {...bookSiteLinkProps}>{c.book}</a>
                   </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link to={localizedPath("cgi", lang)}>{c.cgi}</Link>
+                  </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             ) : null}
@@ -181,6 +184,13 @@ export default function Header() {
                     >
                       {c.book}
                     </a>
+                    <Link
+                      to={localizedPath("cgi", lang)}
+                      onClick={() => setOpen(false)}
+                      className="px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      {c.cgi}
+                    </Link>
                   </div>
                 </>
               ) : null}

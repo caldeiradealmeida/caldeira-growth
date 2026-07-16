@@ -37,6 +37,7 @@ export const navigation: Localized<{
   articles: string;
   media: string;
   book: string;
+  cgi: string;
 }> = {
   pt: {
     home: "Início",
@@ -49,6 +50,7 @@ export const navigation: Localized<{
     articles: "Artigos",
     media: "Mídia",
     book: "Livro",
+    cgi: "CGI",
   },
   en: {
     home: "Home",
@@ -61,6 +63,7 @@ export const navigation: Localized<{
     articles: "Articles",
     media: "Media",
     book: "Book",
+    cgi: "CGI",
   },
   es: {
     home: "Inicio",
@@ -73,6 +76,7 @@ export const navigation: Localized<{
     articles: "Artículos",
     media: "Medios",
     book: "Libro",
+    cgi: "CGI",
   },
 };
 
