@@ -92,6 +92,10 @@ const initialLead: LeadForm = {
   investmentIntent: "",
 };
 
+const CGI_ASSESSMENT_ENDPOINT = import.meta.env.DEV
+  ? "https://www.caldeiragrowth.com/api/cgi-assessment"
+  : "/api/cgi-assessment";
+
 const dimensionOrder = CGI_DIMENSIONS.map((dimension) => dimension.id);
 
 function questionsByDimension(dimensionId: CgiDimensionId) {
@@ -103,6 +107,12 @@ function getScoreTone(score: number): string {
   if (score >= 60) return "text-primary";
   if (score >= 40) return "text-amber-700";
   return "text-destructive";
+}
+
+function normalizeWebsiteInput(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
 }
 
 function parseAiReport(value: string): {
@@ -609,13 +619,18 @@ export default function CGI() {
       investment_intent: lead.investmentIntent,
     });
 
+    const normalizedLead = {
+      ...lead,
+      companyWebsite: normalizeWebsiteInput(lead.companyWebsite),
+    };
+
     try {
-      const response = await fetch("/api/cgi-assessment", {
+      const response = await fetch(CGI_ASSESSMENT_ENDPOINT, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "cgi_assessment",
-          lead,
+          lead: normalizedLead,
           answers: normalizedAnswers,
           score: localScore,
           aiStatus: "not_configured",
@@ -817,13 +832,19 @@ export default function CGI() {
                         <Label htmlFor="companyWebsite">Site da empresa</Label>
                         <Input
                           id="companyWebsite"
-                          type="url"
+                          type="text"
                           inputMode="url"
                           autoComplete="url"
-                          placeholder="https://www.empresa.com.br"
+                          placeholder="empresa.com.br"
                           value={lead.companyWebsite}
                           onChange={(event) =>
                             updateLead("companyWebsite", event.target.value)
+                          }
+                          onBlur={(event) =>
+                            updateLead(
+                              "companyWebsite",
+                              normalizeWebsiteInput(event.target.value)
+                            )
                           }
                         />
                       </div>
@@ -1092,10 +1113,24 @@ export default function CGI() {
                         Abrir e-mail com relatório
                       </Button>
                       {!reportReady && (
-                        <p className="text-sm text-muted-foreground">
-                          O relatório completo será liberado quando o diagnóstico
-                          com IA terminar.
-                        </p>
+                        <div className="space-y-2 text-sm text-muted-foreground">
+                          <p>
+                            O relatório completo será liberado quando o diagnóstico
+                            com IA terminar.
+                          </p>
+                          {isSubmitting && (
+                            <>
+                              <Progress value={reportProgress} />
+                              <p className="text-xs">
+                                {reportProgress < 35
+                                  ? "Calculando score e preparando contexto."
+                                  : reportProgress < 75
+                                    ? "Lendo os sinais públicos do site e estruturando o diagnóstico."
+                                    : "Finalizando o parecer executivo e preparando o PDF."}
+                              </p>
+                            </>
+                          )}
+                        </div>
                       )}
                     </div>
                   </CardContent>
