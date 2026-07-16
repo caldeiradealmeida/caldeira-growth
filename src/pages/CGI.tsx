@@ -368,9 +368,6 @@ function buildReportText({
     `Respondente: ${lead.name}`,
     `Cargo: ${lead.role}`,
     "",
-    `CGI final: ${result.finalScore}`,
-    `Nível: ${result.level.title}`,
-    "",
     "Diagnóstico",
     aiText || result.diagnostic,
     "",
@@ -446,6 +443,9 @@ function formatReportBodyHtml(reportText: string) {
           </div>
         `;
       }
+      if (block.startsWith("Para aprofundar este diagnóstico")) {
+        return `<p class="contact-callout">${escapeHtml(block)}</p>`;
+      }
       if (lines.every((line) => line.startsWith("- "))) {
         return `<ul>${lines
           .map((line) => `<li>${escapeHtml(line.replace(/^- /, ""))}</li>`)
@@ -454,6 +454,21 @@ function formatReportBodyHtml(reportText: string) {
       return `<p>${escapeHtml(block).replace(/\n/g, "<br />")}</p>`;
     })
     .join("\n");
+}
+
+function buildFinalScoreHtml(result: CgiScoreResult) {
+  return `
+    <section class="final-score">
+      <div>
+        <p class="final-score-label">CGI final</p>
+        <p class="final-score-number">${result.finalScore}</p>
+      </div>
+      <div class="final-score-copy">
+        <p class="final-score-level">${escapeHtml(result.level.title)}</p>
+        <p>${escapeHtml(result.level.description)}</p>
+      </div>
+    </section>
+  `;
 }
 
 function buildScoreBarsHtml(result: CgiScoreResult) {
@@ -488,6 +503,7 @@ function buildReportHtml(
   result: CgiScoreResult
 ) {
   const bodyHtml = formatReportBodyHtml(reportText);
+  const finalScoreHtml = buildFinalScoreHtml(result);
   const scoreBarsHtml = buildScoreBarsHtml(result);
   const escapedCompany = escapeHtml(companyName || "Caldeira Growth");
   const escapedTitle = `Relatório CGI - ${escapedCompany}`;
@@ -529,13 +545,19 @@ function buildReportHtml(
       ul { margin: 0 0 18px 20px; padding: 0; }
       li { font-size: 14px; margin: 0 0 8px; text-align: justify; }
       h2, h3, .score-row, p, li { break-inside: avoid; }
+      .final-score { align-items: center; background: #344763; color: #f7f4ef; display: grid; gap: 28px; grid-template-columns: 180px 1fr; margin: 0 0 34px; padding: 28px 32px; break-inside: avoid; }
+      .final-score-label { font-size: 13px; font-weight: 800; letter-spacing: .16em; margin: 0 0 2px; text-align: left; text-transform: uppercase; }
+      .final-score-number { font-family: Georgia, serif; font-size: 88px; font-weight: 700; line-height: .95; margin: 0; text-align: left; }
+      .final-score-copy p { color: rgba(247,244,239,.86); font-size: 14px; margin: 0; text-align: left; }
+      .final-score-copy .final-score-level { color: #ffffff; font-family: Georgia, serif; font-size: 27px; font-weight: 700; line-height: 1.12; margin: 0 0 8px; }
       .score-bars { margin: 26px 0 34px; }
       .score-row { margin: 0 0 18px; }
       .score-label { display: flex; justify-content: space-between; gap: 20px; font-size: 14px; font-weight: 700; margin-bottom: 7px; }
       .score-track { height: 13px; border-radius: 999px; background: #d4dbe2; overflow: hidden; }
       .score-fill { height: 100%; border-radius: 999px; background: #344763; }
-      .signature-block { margin: 22px 0 8px; break-inside: avoid; }
-      .signature-block img { display: block; width: 190px; height: auto; margin: 0 0 -20px -18px; }
+      .contact-callout { border-left: 4px solid #344763; color: #1f2935; font-size: 15px; font-weight: 700; line-height: 1.62; padding: 4px 0 4px 16px; text-align: left; }
+      .signature-block { margin: 34px 0 8px; break-inside: avoid; }
+      .signature-block img { display: block; width: 475px; max-width: 90%; height: auto; margin: -10px 0 -58px -48px; }
       .signature-block p { margin-top: 0; text-align: left; }
       footer { border-top: 1px solid #c8cdd4; padding-top: 8px; text-align: center; background: #f7f4ef; }
       footer img { width: 112px; height: auto; }
@@ -569,6 +591,7 @@ function buildReportHtml(
       </section>
       <section class="page">
         <div class="rule"></div>
+        ${finalScoreHtml}
         ${scoreBarsHtml}
         ${bodyHtml}
       </section>
