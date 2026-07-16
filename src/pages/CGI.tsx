@@ -509,7 +509,10 @@ function buildReportHtml(
     <style>
       @page { size: A4; margin: 24mm 22mm 34mm; }
       @page:first { margin: 0; }
-      body { font-family: Arial, sans-serif; color: #252b35; line-height: 1.58; margin: 0; background: #f7f4ef; }
+      * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      body { font-family: Arial, sans-serif; color: #252b35; line-height: 1.58; margin: 0; background: #e7e2d9; }
+      .screen-toolbar { background: #ffffff; border-bottom: 1px solid #d8d1c5; color: #344763; font: 600 13px Arial, sans-serif; padding: 12px 18px; position: sticky; top: 0; z-index: 10; text-align: center; }
+      .report { margin: 28px auto 56px; width: 210mm; max-width: calc(100vw - 32px); box-shadow: 0 18px 45px rgba(30, 37, 48, .16); }
       .cover { width: 210mm; min-height: 297mm; box-sizing: border-box; color: #f5f7f8; position: relative; overflow: hidden; background: #334257; }
       .cover-bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
       .cover-content { position: relative; z-index: 1; min-height: 297mm; box-sizing: border-box; padding: 270px 70px 92px; display: flex; flex-direction: column; justify-content: space-between; }
@@ -517,7 +520,7 @@ function buildReportHtml(
       .cover h1 { font-family: Georgia, serif; font-size: 54px; line-height: 1.03; font-weight: 700; margin: 18px 0 20px; max-width: 720px; }
       .cover .meta { font-family: Georgia, serif; font-size: 24px; color: rgba(255,255,255,.9); }
       .cover-details { font-size: 15px; line-height: 1.7; color: rgba(255,255,255,.86); }
-      .page { background: #f7f4ef; padding: 60px 70px 132px; }
+      .page { background: #f7f4ef; min-height: 297mm; padding: 60px 70px 132px; }
       h2 { font-family: Georgia, serif; font-size: 30px; font-weight: 700; margin: 34px 0 14px; color: #2e3340; }
       h2:first-child { margin-top: 0; }
       h3 { font-family: Georgia, serif; font-size: 20px; font-weight: 700; margin: 24px 0 10px; color: #2e3340; }
@@ -532,41 +535,98 @@ function buildReportHtml(
       .score-track { height: 13px; border-radius: 999px; background: #d4dbe2; overflow: hidden; }
       .score-fill { height: 100%; border-radius: 999px; background: #344763; }
       .signature-block { margin: 22px 0 8px; break-inside: avoid; }
-      .signature-block img { display: block; width: 190px; height: auto; margin: 0 0 -20px -18px; mix-blend-mode: multiply; }
+      .signature-block img { display: block; width: 190px; height: auto; margin: 0 0 -20px -18px; }
       .signature-block p { margin-top: 0; text-align: left; }
       footer { border-top: 1px solid #c8cdd4; padding-top: 8px; text-align: center; background: #f7f4ef; }
       footer img { width: 112px; height: auto; }
       @media screen { footer { margin: 44px 70px 0; } }
       @media print {
-        .cover { page-break-after: always; }
+        .screen-toolbar { display: none; }
         body { background: #f7f4ef; }
+        .report { box-shadow: none; margin: 0; max-width: none; width: auto; }
+        .cover { min-height: 297mm; page-break-after: always; width: 210mm; }
+        .page { min-height: auto; padding: 0; }
         footer { margin: 18mm 22mm 0; }
       }
     </style>
   </head>
   <body>
-    <section class="cover">
-      <img class="cover-bg" src="${escapedCover}" alt="" />
-      <div class="cover-content">
-        <div>
-          <div class="cover-kicker">Caldeira Growth Index</div>
-          <h1>${escapedTitle}</h1>
-          <div class="meta">Diagnóstico executivo de maturidade de crescimento</div>
+    <div class="screen-toolbar">Use “Salvar em PDF” para exportar esta versão do relatório.</div>
+    <main class="report">
+      <section class="cover">
+        <img class="cover-bg" src="${escapedCover}" alt="" />
+        <div class="cover-content">
+          <div>
+            <div class="cover-kicker">Caldeira Growth Index</div>
+            <h1>${escapedTitle}</h1>
+            <div class="meta">Diagnóstico executivo de maturidade de crescimento</div>
+          </div>
+          <div class="cover-details">
+            <div>Empresa: ${escapedCompany}</div>
+            <div>Data: ${reportDate}</div>
+          </div>
         </div>
-        <div class="cover-details">
-          <div>Empresa: ${escapedCompany}</div>
-          <div>Data: ${reportDate}</div>
-        </div>
-      </div>
-    </section>
-    <section class="page">
-      <div class="rule"></div>
-      ${scoreBarsHtml}
-      ${bodyHtml}
-    </section>
-    <footer><img src="${escapedLogo}" alt="Caldeira Growth" /></footer>
+      </section>
+      <section class="page">
+        <div class="rule"></div>
+        ${scoreBarsHtml}
+        ${bodyHtml}
+      </section>
+      <footer><img src="${escapedLogo}" alt="Caldeira Growth" /></footer>
+    </main>
   </body>
 </html>`;
+}
+
+function writeReportDocument(reportWindow: Window, html: string) {
+  reportWindow.document.open();
+  reportWindow.document.write(html);
+  reportWindow.document.close();
+}
+
+async function waitForReportAssets(reportWindow: Window, timeoutMs = 5000) {
+  const documentReady = new Promise<void>((resolve) => {
+    if (reportWindow.document.readyState === "complete") {
+      resolve();
+      return;
+    }
+    reportWindow.addEventListener("load", () => resolve(), { once: true });
+  });
+
+  const fontsReady =
+    "fonts" in reportWindow.document
+      ? reportWindow.document.fonts.ready.then(() => undefined)
+      : Promise.resolve();
+
+  const imagesReady = Promise.all(
+    Array.from(reportWindow.document.images).map(
+      (image) =>
+        new Promise<void>((resolve) => {
+          if (image.complete && image.naturalWidth > 0) {
+            resolve();
+            return;
+          }
+          image.addEventListener("load", () => resolve(), { once: true });
+          image.addEventListener("error", () => resolve(), { once: true });
+        })
+    )
+  ).then(() => undefined);
+
+  let timeoutId = 0;
+  const timeout = new Promise<void>((resolve) => {
+    timeoutId = window.setTimeout(() => {
+      if (import.meta.env.DEV) {
+        console.warn("[CGI] Tempo limite ao aguardar assets do relatório.");
+      }
+      resolve();
+    }, timeoutMs);
+  });
+
+  await Promise.race([
+    Promise.all([documentReady, fontsReady, imagesReady]).then(() => undefined),
+    timeout,
+  ]);
+  window.clearTimeout(timeoutId);
 }
 
 export default function CGI() {
@@ -740,17 +800,16 @@ export default function CGI() {
     if (!reportReady || !reportText) return;
     const reportWindow = window.open("", "_blank");
     if (!reportWindow) return;
-    reportWindow.document.write(buildReportHtml(reportText, lead.company, result));
-    reportWindow.document.close();
+    writeReportDocument(reportWindow, buildReportHtml(reportText, lead.company, result));
     reportWindow.focus();
   };
 
-  const printReport = () => {
+  const printReport = async () => {
     if (!reportReady || !reportText) return;
     const reportWindow = window.open("", "_blank");
     if (!reportWindow) return;
-    reportWindow.document.write(buildReportHtml(reportText, lead.company, result));
-    reportWindow.document.close();
+    writeReportDocument(reportWindow, buildReportHtml(reportText, lead.company, result));
+    await waitForReportAssets(reportWindow);
     reportWindow.focus();
     reportWindow.print();
   };
