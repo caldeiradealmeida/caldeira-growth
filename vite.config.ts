@@ -7,6 +7,8 @@ import { componentTagger } from "lovable-tagger";
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
   const contactUrl = env.VITE_CONTACT_FORM_URL?.trim();
+  const cgiApiOrigin =
+    env.VITE_CGI_API_ORIGIN?.trim() || "https://www.caldeiragrowth.com";
 
   const devProxy =
     mode === "development" && contactUrl
@@ -19,11 +21,11 @@ export default defineConfig(({ mode }) => {
             rewrite: () => new URL(contactUrl).pathname + new URL(contactUrl).search,
           },
           "/api/cgi-assessment": {
-            target: new URL(contactUrl).origin,
+            target: new URL(cgiApiOrigin).origin,
             changeOrigin: true,
             secure: true,
             followRedirects: true,
-            rewrite: () => new URL(contactUrl).pathname + new URL(contactUrl).search,
+            rewrite: () => "/api/cgi-assessment",
           },
           "/api/content": {
             target: new URL(contactUrl).origin,

@@ -168,6 +168,24 @@ function getSubmitErrorMessage(data: unknown): string {
   return "Seu resultado foi calculado, mas houve uma falha ao salvar os dados. Tente enviar novamente ou entre em contato pela página de contato.";
 }
 
+function getSaveErrorMessage(save: unknown): string {
+  if (!save || typeof save !== "object") {
+    return "Seu relatório foi gerado, mas houve uma falha ao salvar os dados na planilha.";
+  }
+
+  const error = String((save as { error?: unknown }).error || "");
+  if (error === "not_configured") {
+    return "Seu relatório foi gerado, mas a URL do Google Apps Script não está configurada no servidor.";
+  }
+  if (error === "apps_script_outdated_or_wrong_deployment") {
+    return "Seu relatório foi gerado, mas o Google Apps Script publicado parece estar em uma versão antiga.";
+  }
+  if (error === "upstream_request_failed") {
+    return "Seu relatório foi gerado, mas o servidor não conseguiu se comunicar com o Google Apps Script.";
+  }
+  return "Seu relatório foi gerado, mas houve uma falha ao salvar os dados na planilha.";
+}
+
 function scrollToAssessment() {
   window.setTimeout(() => {
     document
@@ -410,6 +428,7 @@ export default function CGI() {
   const [startedAt] = useState(() => String(Date.now()));
   const [website, setWebsite] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [reportProgress, setReportProgress] = useState(0);
   const [submitError, setSubmitError] = useState("");
   const [serverAiReport, setServerAiReport] = useState("");
   const [aiStatus, setAiStatus] = useState("");
@@ -454,6 +473,22 @@ export default function CGI() {
       metaDescription?.setAttribute("content", prevDescription);
     };
   }, []);
+
+  useEffect(() => {
+    if (!isSubmitting) return;
+
+    setReportProgress(12);
+    const interval = window.setInterval(() => {
+      setReportProgress((current) => {
+        if (current < 45) return current + 7;
+        if (current < 72) return current + 4;
+        if (current < 90) return current + 2;
+        return current;
+      });
+    }, 1800);
+
+    return () => window.clearInterval(interval);
+  }, [isSubmitting]);
 
   const updateLead = (key: keyof LeadForm, value: string) => {
     setLead((current) => ({ ...current, [key]: value }));
@@ -560,6 +595,7 @@ export default function CGI() {
     setResult(localScore);
     setStep("result");
     setIsSubmitting(true);
+    setReportProgress(8);
     setSubmitError("");
     scrollToAssessment();
 
@@ -597,6 +633,10 @@ export default function CGI() {
       setResult(data.score ?? localScore);
       setServerAiReport(data.ai?.text ?? "");
       setAiStatus(data.ai?.status ?? "");
+      setReportProgress(100);
+      if (data.save?.ok === false) {
+        setSubmitError(getSaveErrorMessage(data.save));
+      }
     } catch (error) {
       setSubmitError(
         error instanceof Error
@@ -607,7 +647,7 @@ export default function CGI() {
         console.error("[CGI] submit error", error);
       }
     } finally {
-      setIsSubmitting(false);
+      window.setTimeout(() => setIsSubmitting(false), 350);
     }
   };
 
@@ -1075,8 +1115,25 @@ export default function CGI() {
                       <Loader2 className="h-4 w-4 animate-spin" />
                       <AlertTitle>Gerando relatório</AlertTitle>
                       <AlertDescription>
-                        Salvando respostas, analisando o site informado e gerando
-                        o diagnóstico executivo com IA.
+                        <span className="block">
+                          Salvando respostas, analisando o site informado e gerando
+                          o diagnóstico executivo com IA.
+                        </span>
+                        <span className="mt-3 block">
+                          A IA é usada como motor de redação e análise, mas o parecer
+                          segue o modelo proprietário de maturidade de crescimento da
+                          Caldeira Growth.
+                        </span>
+                        <span className="mt-4 block">
+                          <Progress value={reportProgress} />
+                        </span>
+                        <span className="mt-2 block text-xs text-muted-foreground">
+                          {reportProgress < 35
+                            ? "Calculando score e preparando contexto."
+                            : reportProgress < 75
+                              ? "Lendo os sinais públicos do site e estruturando o diagnóstico."
+                              : "Finalizando o parecer executivo e preparando o PDF."}
+                        </span>
                       </AlertDescription>
                     </Alert>
                   )}

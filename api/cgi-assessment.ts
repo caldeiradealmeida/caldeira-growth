@@ -554,9 +554,13 @@ export default async function handler(
 
   const url = getAppsScriptUrl();
   if (!url) {
-    res
-      .status(503)
-      .json({ ok: false, error: "not_configured", score, ai, websiteEnrichment });
+    res.status(200).json({
+      ok: true,
+      save: { ok: false, error: "not_configured" },
+      score,
+      ai,
+      websiteEnrichment,
+    });
     return;
   }
 
@@ -590,10 +594,13 @@ export default async function handler(
       data = { raw: snippet(text), contentType: upstream.headers.get("content-type") };
     }
   } catch (error) {
-    res.status(502).json({
-      ok: false,
-      error: "upstream_request_failed",
-      detail: error instanceof Error ? error.message : String(error),
+    res.status(200).json({
+      ok: true,
+      save: {
+        ok: false,
+        error: "upstream_request_failed",
+        detail: error instanceof Error ? error.message : String(error),
+      },
       score,
       ai,
       websiteEnrichment,
@@ -608,12 +615,15 @@ export default async function handler(
         ? "apps_script_outdated_or_wrong_deployment"
         : "upstream_failed";
 
-    res.status(502).json({
-      ok: false,
-      error,
-      upstreamStatus: upstream.status,
-      upstreamUrl: upstream.url,
-      upstream: data,
+    res.status(200).json({
+      ok: true,
+      save: {
+        ok: false,
+        error,
+        upstreamStatus: upstream.status,
+        upstreamUrl: upstream.url,
+        upstream: data,
+      },
       score,
       ai,
       websiteEnrichment,
@@ -621,5 +631,11 @@ export default async function handler(
     return;
   }
 
-  res.status(200).json({ ok: true, score, ai, websiteEnrichment });
+  res.status(200).json({
+    ok: true,
+    save: { ok: true },
+    score,
+    ai,
+    websiteEnrichment,
+  });
 }
