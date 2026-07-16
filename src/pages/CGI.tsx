@@ -465,7 +465,7 @@ function buildFinalScoreHtml(result: CgiScoreResult) {
       </div>
       <div class="final-score-copy">
         <p class="final-score-level">${escapeHtml(result.level.title)}</p>
-        <p>${escapeHtml(result.level.description)}</p>
+        <p>${escapeHtml(result.level.summary)}</p>
       </div>
     </section>
   `;
