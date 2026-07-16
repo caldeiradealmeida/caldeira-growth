@@ -11,38 +11,43 @@ export default defineConfig(({ mode }) => {
     env.VITE_CGI_API_ORIGIN?.trim() || "https://www.caldeiragrowth.com";
 
   const devProxy =
-    mode === "development" && contactUrl
+    mode === "development"
       ? {
-          "/api/contact": {
-            target: new URL(contactUrl).origin,
-            changeOrigin: true,
-            secure: true,
-            followRedirects: true,
-            rewrite: () => new URL(contactUrl).pathname + new URL(contactUrl).search,
-          },
+          ...(contactUrl
+            ? {
+                "/api/contact": {
+                  target: new URL(contactUrl).origin,
+                  changeOrigin: true,
+                  secure: true,
+                  followRedirects: true,
+                  rewrite: () =>
+                    new URL(contactUrl).pathname + new URL(contactUrl).search,
+                },
+                "/api/content": {
+                  target: new URL(contactUrl).origin,
+                  changeOrigin: true,
+                  secure: true,
+                  followRedirects: true,
+                  rewrite: (pathName: string) => {
+                    const requestUrl = new URL(pathName, "http://local");
+                    const upstreamUrl = new URL(contactUrl);
+                    const type = requestUrl.searchParams.get("type");
+                    if (type === "articles") {
+                      upstreamUrl.searchParams.set("action", "articles_csv");
+                    } else if (type === "media") {
+                      upstreamUrl.searchParams.set("action", "media_csv");
+                    }
+                    return upstreamUrl.pathname + upstreamUrl.search;
+                  },
+                },
+              }
+            : {}),
           "/api/cgi-assessment": {
             target: new URL(cgiApiOrigin).origin,
             changeOrigin: true,
             secure: true,
             followRedirects: true,
             rewrite: () => "/api/cgi-assessment",
-          },
-          "/api/content": {
-            target: new URL(contactUrl).origin,
-            changeOrigin: true,
-            secure: true,
-            followRedirects: true,
-            rewrite: (pathName: string) => {
-              const requestUrl = new URL(pathName, "http://local");
-              const upstreamUrl = new URL(contactUrl);
-              const type = requestUrl.searchParams.get("type");
-              if (type === "articles") {
-                upstreamUrl.searchParams.set("action", "articles_csv");
-              } else if (type === "media") {
-                upstreamUrl.searchParams.set("action", "media_csv");
-              }
-              return upstreamUrl.pathname + upstreamUrl.search;
-            },
           },
         }
       : undefined;

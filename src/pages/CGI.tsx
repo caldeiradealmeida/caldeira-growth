@@ -98,9 +98,7 @@ const initialLead: LeadForm = {
   comments: "",
 };
 
-const CGI_ASSESSMENT_ENDPOINT = import.meta.env.DEV
-  ? "https://www.caldeiragrowth.com/api/cgi-assessment"
-  : "/api/cgi-assessment";
+const CGI_ASSESSMENT_ENDPOINT = "/api/cgi-assessment";
 const CGI_LAST_ASSESSMENT_KEY = "caldeira-growth:cgi:last-assessment";
 
 const devLeadFallback: LeadForm = {
@@ -1119,20 +1117,6 @@ export default function CGI() {
                           </Select>
                         </div>
                       ))}
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="comments">Comentários adicionais</Label>
-                      <Textarea
-                        id="comments"
-                        value={lead.comments}
-                        onChange={(event) => updateLead("comments", event.target.value)}
-                        placeholder="Opcional: descreva contexto, prioridades, restrições ou algo que ajude a calibrar melhor o diagnóstico."
-                        className="min-h-28"
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        Este campo é opcional e serve apenas para personalizar melhor o relatório.
-                      </p>
                     </div>
 
                     <div className="hidden" aria-hidden="true">
