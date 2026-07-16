@@ -39,6 +39,8 @@ import {
   type CgiScoreResult,
 } from "@/lib/cgiScore";
 import footerLogo from "@/assets/brand/Black logo - no background.svg";
+import reportSignature from "@/assets/report/assinatura-denis.png";
+import reportCover from "@/assets/report/cgi-report-cover.png";
 import {
   AlertCircle,
   ArrowLeft,
@@ -312,6 +314,7 @@ function escapeAttr(value: string) {
 }
 
 function formatReportBodyHtml(reportText: string) {
+  const escapedSignature = escapeAttr(reportSignature);
   const sectionTitles = new Set([
     "Diagnóstico",
     "3 principais pontos de atenção",
@@ -346,6 +349,17 @@ function formatReportBodyHtml(reportText: string) {
               .join("")}</ul>`
           : `<p>${escapeHtml(rest.join("\n")).replace(/\n/g, "<br />")}</p>`;
         return `<h3>${escapeHtml(lines[0])}</h3>${content}`;
+      }
+      if (lines[0] === "Denis Caldeira de Almeida") {
+        return `
+          <div class="signature-block">
+            <img src="${escapedSignature}" alt="Assinatura Denis Caldeira" />
+            <p>
+              <strong>Denis Caldeira de Almeida</strong><br />
+              ${escapeHtml(lines.slice(1).join("\n")).replace(/\n/g, "<br />")}
+            </p>
+          </div>
+        `;
       }
       if (lines.every((line) => line.startsWith("- "))) {
         return `<ul>${lines
@@ -393,6 +407,14 @@ function buildReportHtml(
   const escapedCompany = escapeHtml(companyName || "Caldeira Growth");
   const escapedTitle = `Relatório CGI - ${escapedCompany}`;
   const escapedLogo = escapeAttr(footerLogo);
+  const escapedCover = escapeAttr(reportCover);
+  const reportDate = escapeHtml(
+    new Intl.DateTimeFormat("pt-BR", {
+      day: "2-digit",
+      month: "long",
+      year: "numeric",
+    }).format(new Date())
+  );
 
   return `<!doctype html>
 <html lang="pt-BR">
@@ -401,11 +423,15 @@ function buildReportHtml(
     <title>${escapedTitle}</title>
     <style>
       @page { size: A4; margin: 24mm 22mm 34mm; }
+      @page:first { margin: 0; }
       body { font-family: Arial, sans-serif; color: #252b35; line-height: 1.58; margin: 0; background: #f7f4ef; }
-      .cover { min-height: 100vh; box-sizing: border-box; padding: 72px 64px; background: #334257; color: #f5f7f8; display: flex; flex-direction: column; justify-content: space-between; }
-      .brand { font-size: 20px; font-weight: 800; letter-spacing: .01em; }
-      .cover h1 { font-family: Georgia, serif; font-size: 58px; line-height: 1; font-weight: 700; margin: 120px 0 20px; max-width: 760px; }
-      .cover .meta { font-family: Georgia, serif; font-size: 30px; }
+      .cover { width: 210mm; min-height: 297mm; box-sizing: border-box; color: #f5f7f8; position: relative; overflow: hidden; background: #334257; }
+      .cover-bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+      .cover-content { position: relative; z-index: 1; min-height: 297mm; box-sizing: border-box; padding: 270px 70px 92px; display: flex; flex-direction: column; justify-content: space-between; }
+      .cover-kicker { font-size: 15px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: rgba(255,255,255,.82); }
+      .cover h1 { font-family: Georgia, serif; font-size: 54px; line-height: 1.03; font-weight: 700; margin: 18px 0 20px; max-width: 720px; }
+      .cover .meta { font-family: Georgia, serif; font-size: 24px; color: rgba(255,255,255,.9); }
+      .cover-details { font-size: 15px; line-height: 1.7; color: rgba(255,255,255,.86); }
       .page { background: #f7f4ef; padding: 60px 70px 132px; }
       h2 { font-family: Georgia, serif; font-size: 30px; font-weight: 700; margin: 34px 0 14px; color: #2e3340; }
       h2:first-child { margin-top: 0; }
@@ -420,24 +446,33 @@ function buildReportHtml(
       .score-label { display: flex; justify-content: space-between; gap: 20px; font-size: 14px; font-weight: 700; margin-bottom: 7px; }
       .score-track { height: 13px; border-radius: 999px; background: #d4dbe2; overflow: hidden; }
       .score-fill { height: 100%; border-radius: 999px; background: #344763; }
+      .signature-block { margin: 22px 0 8px; break-inside: avoid; }
+      .signature-block img { display: block; width: 190px; height: auto; margin: 0 0 -20px -18px; mix-blend-mode: multiply; }
+      .signature-block p { margin-top: 0; text-align: left; }
       footer { border-top: 1px solid #c8cdd4; padding-top: 8px; text-align: center; background: #f7f4ef; }
       footer img { width: 112px; height: auto; }
       @media screen { footer { margin: 44px 70px 0; } }
       @media print {
         .cover { page-break-after: always; }
         body { background: #f7f4ef; }
-        footer { position: fixed; bottom: 8mm; left: 22mm; right: 22mm; height: 14mm; }
+        footer { margin: 18mm 22mm 0; }
       }
     </style>
   </head>
   <body>
     <section class="cover">
-      <div class="brand">Caldeira</div>
-      <div>
-        <h1>${escapedTitle}</h1>
-        <div class="meta">Caldeira Growth Index</div>
+      <img class="cover-bg" src="${escapedCover}" alt="" />
+      <div class="cover-content">
+        <div>
+          <div class="cover-kicker">Caldeira Growth Index</div>
+          <h1>${escapedTitle}</h1>
+          <div class="meta">Diagnóstico executivo de maturidade de crescimento</div>
+        </div>
+        <div class="cover-details">
+          <div>Empresa: ${escapedCompany}</div>
+          <div>Data: ${reportDate}</div>
+        </div>
       </div>
-      <div>Diagnóstico executivo de maturidade de crescimento</div>
     </section>
     <section class="page">
       <div class="rule"></div>
