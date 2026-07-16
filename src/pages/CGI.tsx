@@ -101,8 +101,31 @@ const initialLead: LeadForm = {
 const CGI_ASSESSMENT_ENDPOINT = import.meta.env.DEV
   ? "https://www.caldeiragrowth.com/api/cgi-assessment"
   : "/api/cgi-assessment";
+const CGI_LAST_ASSESSMENT_KEY = "caldeira-growth:cgi:last-assessment";
+
+const devLeadFallback: LeadForm = {
+  name: "Denis Caldeira de Almeida",
+  email: "deniscaldeiradealmeida@gmail.com",
+  phone: "+5511934347844",
+  company: "Teste CGI",
+  companyWebsite: "https://caldeiragrowth.com",
+  role: "CEO",
+  sector: "Consultoria",
+  employeeCount: "1-10",
+  annualRevenue: "Prefiro não informar",
+  currentChallenge: "Crescer receita",
+  growthGoal: "11-25%",
+  investmentIntent: "Ainda avaliando",
+  comments: "Regeneração local a partir do respostas_json da planilha.",
+};
 
 const dimensionOrder = CGI_DIMENSIONS.map((dimension) => dimension.id);
+
+type SavedCgiAssessment = {
+  lead: LeadForm;
+  answers: Record<string, number>;
+  savedAt: string;
+};
 
 function questionsByDimension(dimensionId: CgiDimensionId) {
   return CGI_QUESTIONS.filter((question) => question.dimensionId === dimensionId);
@@ -119,6 +142,70 @@ function normalizeWebsiteInput(value: string): string {
   const trimmed = value.trim();
   if (!trimmed) return "";
   return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+}
+
+function readSavedCgiAssessment(): SavedCgiAssessment | null {
+  if (typeof window === "undefined") return null;
+
+  try {
+    const raw = window.localStorage.getItem(CGI_LAST_ASSESSMENT_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<SavedCgiAssessment>;
+    if (!parsed.lead || !parsed.answers) return null;
+    return parsed as SavedCgiAssessment;
+  } catch {
+    return null;
+  }
+}
+
+function saveCgiAssessment(lead: LeadForm, answers: Record<string, number>) {
+  if (typeof window === "undefined") return;
+
+  const payload: SavedCgiAssessment = {
+    lead,
+    answers,
+    savedAt: new Date().toISOString(),
+  };
+  window.localStorage.setItem(CGI_LAST_ASSESSMENT_KEY, JSON.stringify(payload));
+}
+
+function parseAnswersJsonInput(value: string): Record<string, number> | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  try {
+    const parsed = JSON.parse(trimmed) as unknown;
+    const candidate =
+      parsed &&
+      typeof parsed === "object" &&
+      !Array.isArray(parsed) &&
+      ("respostas_json" in parsed || "answers" in parsed)
+        ? (parsed as { respostas_json?: unknown; answers?: unknown }).respostas_json ??
+          (parsed as { answers?: unknown }).answers
+        : parsed;
+
+    const answers =
+      typeof candidate === "string"
+        ? (JSON.parse(candidate) as Record<string, unknown>)
+        : (candidate as Record<string, unknown>);
+
+    const normalized = normalizeCgiAnswers(answers);
+    return areCgiAnswersComplete(normalized) ? normalized : null;
+  } catch {
+    return null;
+  }
+}
+
+function withDevLeadFallback(lead: LeadForm): LeadForm {
+  return {
+    ...devLeadFallback,
+    ...Object.fromEntries(
+      Object.entries(lead).map(([key, value]) => [
+        key,
+        String(value || "").trim() || devLeadFallback[key as keyof LeadForm],
+      ])
+    ),
+  } as LeadForm;
 }
 
 function parseAiReport(value: string): {
@@ -498,6 +585,8 @@ export default function CGI() {
   const [serverAiReport, setServerAiReport] = useState("");
   const [aiStatus, setAiStatus] = useState("");
   const [result, setResult] = useState<CgiScoreResult | null>(null);
+  const [hasSavedAssessment, setHasSavedAssessment] = useState(false);
+  const [devAnswersJson, setDevAnswersJson] = useState("");
 
   const currentDimension = CGI_DIMENSIONS[dimensionIndex];
   const currentQuestions = useMemo(
@@ -537,6 +626,10 @@ export default function CGI() {
       document.title = prevTitle;
       metaDescription?.setAttribute("content", prevDescription);
     };
+  }, []);
+
+  useEffect(() => {
+    setHasSavedAssessment(Boolean(readSavedCgiAssessment()));
   }, []);
 
   useEffect(() => {
@@ -673,8 +766,12 @@ export default function CGI() {
     window.location.href = `mailto:${lead.email}?subject=${subject}&body=${body}`;
   };
 
-  const submitAssessment = async () => {
-    const normalizedAnswers = normalizeCgiAnswers(answers);
+  const submitAssessmentWithData = async (
+    assessmentLead: LeadForm,
+    assessmentAnswers: Record<string, number>,
+    options?: { isRegeneration?: boolean }
+  ) => {
+    const normalizedAnswers = normalizeCgiAnswers(assessmentAnswers);
     if (!areCgiAnswersComplete(normalizedAnswers)) {
       toast({
         title: "Assessment incompleto",
@@ -685,11 +782,22 @@ export default function CGI() {
     }
 
     const localScore = calculateCgiScore(normalizedAnswers);
+    const normalizedLead = {
+      ...assessmentLead,
+      companyWebsite: normalizeWebsiteInput(assessmentLead.companyWebsite),
+    };
+
+    setLead(normalizedLead);
+    setAnswers(normalizedAnswers);
     setResult(localScore);
     setStep("result");
     setIsSubmitting(true);
     setReportProgress(8);
     setSubmitError("");
+    setServerAiReport("");
+    setAiStatus("");
+    saveCgiAssessment(normalizedLead, normalizedAnswers);
+    setHasSavedAssessment(true);
     scrollToAssessment();
 
     window.dataLayer = window.dataLayer || [];
@@ -697,15 +805,11 @@ export default function CGI() {
       event: "cgi_completed",
       cgi_score: localScore.finalScore,
       cgi_level: localScore.level.title,
-      company_size: lead.employeeCount,
-      current_challenge: lead.currentChallenge,
-      investment_intent: lead.investmentIntent,
+      company_size: normalizedLead.employeeCount,
+      current_challenge: normalizedLead.currentChallenge,
+      investment_intent: normalizedLead.investmentIntent,
+      cgi_regenerated: Boolean(options?.isRegeneration),
     });
-
-    const normalizedLead = {
-      ...lead,
-      companyWebsite: normalizeWebsiteInput(lead.companyWebsite),
-    };
 
     try {
       const response = await fetch(CGI_ASSESSMENT_ENDPOINT, {
@@ -718,7 +822,9 @@ export default function CGI() {
           score: localScore,
           aiStatus: "not_configured",
           aiReport: "",
-          startedAt,
+          startedAt: options?.isRegeneration
+            ? String(Date.now() - 10000)
+            : startedAt,
           website,
         }),
       });
@@ -747,6 +853,44 @@ export default function CGI() {
     } finally {
       window.setTimeout(() => setIsSubmitting(false), 350);
     }
+  };
+
+  const submitAssessment = () => {
+    void submitAssessmentWithData(lead, answers);
+  };
+
+  const regenerateSavedAssessment = () => {
+    const saved = readSavedCgiAssessment();
+    if (!saved) {
+      toast({
+        title: "Nenhum assessment salvo",
+        description:
+          "Gere um CGI uma vez nesta máquina para habilitar a regeneração local.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    void submitAssessmentWithData(saved.lead, saved.answers, {
+      isRegeneration: true,
+    });
+  };
+
+  const generateFromAnswersJson = () => {
+    const parsedAnswers = parseAnswersJsonInput(devAnswersJson);
+    if (!parsedAnswers) {
+      toast({
+        title: "respostas_json inválido",
+        description:
+          "Cole o JSON completo das respostas, ou um objeto com respostas_json/answers.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    void submitAssessmentWithData(withDevLeadFallback(lead), parsedAnswers, {
+      isRegeneration: true,
+    });
   };
 
   return (
@@ -1002,10 +1146,54 @@ export default function CGI() {
                       />
                     </div>
 
+                    {import.meta.env.DEV && (
+                      <div className="rounded-lg border border-dashed border-primary/35 bg-primary/5 p-4 space-y-3">
+                        <div>
+                          <p className="text-sm font-semibold">
+                            Ferramenta local de teste
+                          </p>
+                          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                            Cole o valor da coluna respostas_json da planilha para
+                            gerar o relatório sem responder as 40 perguntas. Se os
+                            campos obrigatórios acima estiverem vazios, serão usados
+                            dados de teste locais.
+                          </p>
+                        </div>
+                        <Textarea
+                          value={devAnswersJson}
+                          onChange={(event) => setDevAnswersJson(event.target.value)}
+                          placeholder='{"q1":5,"q2":4,...}'
+                          className="min-h-28 font-mono text-xs"
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={generateFromAnswersJson}
+                          disabled={isSubmitting || !devAnswersJson.trim()}
+                        >
+                          <Sparkles className="mr-2 h-4 w-4" />
+                          Gerar a partir de respostas_json
+                        </Button>
+                      </div>
+                    )}
+
                     <Button type="submit" size="lg" className="w-full md:w-auto">
                       Começar assessment
                       <ArrowRight className="ml-2 h-4 w-4" />
                     </Button>
+                    {import.meta.env.DEV && hasSavedAssessment && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="lg"
+                        className="w-full md:w-auto"
+                        onClick={regenerateSavedAssessment}
+                        disabled={isSubmitting}
+                      >
+                        <Sparkles className="mr-2 h-4 w-4" />
+                        Regerar último relatório salvo
+                      </Button>
+                    )}
                   </form>
                 </CardContent>
               </Card>
@@ -1209,6 +1397,17 @@ export default function CGI() {
                         <Mail className="mr-2 h-4 w-4" />
                         Abrir e-mail com relatório
                       </Button>
+                      {import.meta.env.DEV && hasSavedAssessment && (
+                        <Button
+                          size="lg"
+                          variant="outline"
+                          onClick={regenerateSavedAssessment}
+                          disabled={isSubmitting}
+                        >
+                          <Sparkles className="mr-2 h-4 w-4" />
+                          Regerar último relatório salvo
+                        </Button>
+                      )}
                       {!reportReady && (
                         <div className="space-y-2 text-sm text-muted-foreground">
                           <p>
