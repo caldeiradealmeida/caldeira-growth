@@ -395,6 +395,16 @@ function escapeAttr(value: string) {
   return escapeHtml(value).replace(/"/g, "&quot;");
 }
 
+function formatReportListItem(line: string) {
+  const text = line.replace(/^- /, "");
+  const labelMatch = text.match(/^([^:]{1,90}):\s*(.*)$/);
+  if (!labelMatch) return escapeHtml(text);
+
+  return `<strong>${escapeHtml(labelMatch[1])}:</strong> ${escapeHtml(
+    labelMatch[2]
+  )}`;
+}
+
 function formatReportBodyHtml(reportText: string) {
   const escapedSignature = escapeAttr(reportSignature);
   const sectionTitles = new Set([
@@ -427,7 +437,7 @@ function formatReportBodyHtml(reportText: string) {
         const rest = lines.slice(1);
         const content = rest.every((line) => line.startsWith("- "))
           ? `<ul>${rest
-              .map((line) => `<li>${escapeHtml(line.replace(/^- /, ""))}</li>`)
+              .map((line) => `<li>${formatReportListItem(line)}</li>`)
               .join("")}</ul>`
           : `<p>${escapeHtml(rest.join("\n")).replace(/\n/g, "<br />")}</p>`;
         return `<h3>${escapeHtml(lines[0])}</h3>${content}`;
@@ -448,7 +458,7 @@ function formatReportBodyHtml(reportText: string) {
       }
       if (lines.every((line) => line.startsWith("- "))) {
         return `<ul>${lines
-          .map((line) => `<li>${escapeHtml(line.replace(/^- /, ""))}</li>`)
+          .map((line) => `<li>${formatReportListItem(line)}</li>`)
           .join("")}</ul>`;
       }
       return `<p>${escapeHtml(block).replace(/\n/g, "<br />")}</p>`;
