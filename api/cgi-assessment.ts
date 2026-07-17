@@ -18,6 +18,7 @@ type CgiLead = {
   companyWebsite?: string;
   role?: string;
   sector?: string;
+  commercialRelationshipModel?: string;
   employeeCount?: string;
   annualRevenue?: string;
   currentChallenge?: string;
