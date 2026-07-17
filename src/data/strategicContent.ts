@@ -95,6 +95,14 @@ export const testimonials = [
     target: "Homepage e Consultoria",
     proof: "integração entre áreas e decisões estratégicas",
   },
+  {
+    quote:
+      "O programa fortaleceu nossa capacidade de desenvolver ideias, colaborar entre subsidiárias e atuar de forma mais estratégica.",
+    attribution:
+      "Jasmine Huang, Regional Sales Engineering Supervisor, Maschinenfabrik Reinhausen",
+    target: "Homepage e Desenvolvimento Executivo",
+    proof: "desenvolvimento executivo conectado ao negócio",
+  },
 ];
 
 export const homeContent: Localized<{

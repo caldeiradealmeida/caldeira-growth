@@ -405,11 +405,43 @@ function extractOutputText(response: unknown): string {
     .trim();
 }
 
-function formatAiReportForEmail(value: string): string {
+function formatAiReportForEmail(value: string, language: "pt" | "en" | "es" = "pt"): string {
   if (!value) return "";
   try {
     const parsed = JSON.parse(value) as Record<string, unknown>;
     const lines: string[] = [];
+    const labels = {
+      pt: {
+        executiveSummary: "Sumário Executivo",
+        diagnosis: "Contexto e diagnóstico",
+        dimensionReading: "Leitura por dimensão",
+        bottlenecks: "Gargalos críticos",
+        bets: "Apostas estratégicas recomendadas",
+        renunciations: "Renúncias estratégicas",
+        governance: "Sistema mínimo de governança",
+        recommendations: "Recomendações finais",
+      },
+      en: {
+        executiveSummary: "Executive Summary",
+        diagnosis: "Context and diagnosis",
+        dimensionReading: "Reading by dimension",
+        bottlenecks: "Critical bottlenecks",
+        bets: "Recommended strategic bets",
+        renunciations: "Strategic renunciations",
+        governance: "Minimum governance system",
+        recommendations: "Final recommendations",
+      },
+      es: {
+        executiveSummary: "Resumen ejecutivo",
+        diagnosis: "Contexto y diagnóstico",
+        dimensionReading: "Lectura por dimensión",
+        bottlenecks: "Cuellos de botella críticos",
+        bets: "Apuestas estratégicas recomendadas",
+        renunciations: "Renuncias estratégicas",
+        governance: "Sistema mínimo de gobernanza",
+        recommendations: "Recomendaciones finales",
+      },
+    }[language];
 
     const addText = (title: string, field: string) => {
       const text = parsed[field];
@@ -438,14 +470,14 @@ function formatAiReportForEmail(value: string): string {
       }
     };
 
-    addText("Sumário Executivo", "executive_summary");
-    addText("Contexto e diagnóstico", "strategic_diagnosis");
-    addList("Leitura por dimensão", "dimension_reading");
-    addList("Gargalos críticos", "critical_bottlenecks");
-    addList("Apostas estratégicas recomendadas", "strategic_bets");
-    addList("Renúncias estratégicas", "renunciations");
-    addList("Sistema mínimo de governança", "governance_system");
-    addList("Recomendações finais", "final_recommendations");
+    addText(labels.executiveSummary, "executive_summary");
+    addText(labels.diagnosis, "strategic_diagnosis");
+    addList(labels.dimensionReading, "dimension_reading");
+    addList(labels.bottlenecks, "critical_bottlenecks");
+    addList(labels.bets, "strategic_bets");
+    addList(labels.renunciations, "renunciations");
+    addList(labels.governance, "governance_system");
+    addList(labels.recommendations, "final_recommendations");
 
     return lines.join("\n").trim();
   } catch {
@@ -587,7 +619,7 @@ async function generateAiDiagnostic({
   const localizedDimensions = CGI_DIMENSIONS.map((dimension) => ({
     ...dimension,
     title: dimensionTranslations[language][dimension.id] || dimension.title,
-    shortTitle: dimensionTranslations[language][dimension.id] || dimension.shortTitle,
+    shortTitle: dimensionTranslations[language][dimension.id] || dimension.title,
   }));
   const localizedScore = {
     ...score,
@@ -678,7 +710,7 @@ async function generateAiDiagnostic({
     return {
       status: "generated",
       text,
-      plainText: formatAiReportForEmail(text),
+      plainText: formatAiReportForEmail(text, language),
     };
   } catch (error) {
     console.error("[CGI OpenAI] error", error);

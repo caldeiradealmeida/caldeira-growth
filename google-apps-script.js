@@ -346,6 +346,43 @@ function sendCgiLeadReport_(lead, score, attentionPoints, payload) {
   try {
     var email = String(lead.email || '').trim();
     if (!email) return;
+    var language = String(payload.language || 'pt').trim();
+    var allLabels = {
+      pt: {
+        greeting: 'Olá, ',
+        intro: 'Segue o seu resultado do CGI - Caldeira Growth Index.',
+        finalScore: 'CGI final',
+        level: 'Nível',
+        diagnosis: 'Diagnóstico',
+        scoreByDimension: 'Score por dimensão',
+        attentionPoints: '3 principais pontos de atenção',
+        nextStep: 'Para aprofundar o diagnóstico, o próximo passo recomendado é solicitar uma conversa estratégica com a Caldeira Growth.',
+        subject: 'Seu CGI - Caldeira Growth Index'
+      },
+      en: {
+        greeting: 'Hello, ',
+        intro: 'Here is your CGI - Caldeira Growth Index result.',
+        finalScore: 'Final CGI',
+        level: 'Level',
+        diagnosis: 'Diagnosis',
+        scoreByDimension: 'Score by dimension',
+        attentionPoints: '3 main attention points',
+        nextStep: 'To deepen the diagnosis, the recommended next step is to request a strategic conversation with Caldeira Growth.',
+        subject: 'Your CGI - Caldeira Growth Index'
+      },
+      es: {
+        greeting: 'Hola, ',
+        intro: 'Este es su resultado del CGI - Caldeira Growth Index.',
+        finalScore: 'CGI final',
+        level: 'Nivel',
+        diagnosis: 'Diagnóstico',
+        scoreByDimension: 'Score por dimensión',
+        attentionPoints: '3 principales puntos de atención',
+        nextStep: 'Para profundizar el diagnóstico, el próximo paso recomendado es solicitar una conversación estratégica con Caldeira Growth.',
+        subject: 'Su CGI - Caldeira Growth Index'
+      }
+    };
+    var labels = allLabels[language] || allLabels.pt;
 
     var dimensionLines = (score.dimensionScores || [])
       .map(function (item) {
@@ -355,28 +392,28 @@ function sendCgiLeadReport_(lead, score, attentionPoints, payload) {
 
     var aiReport = String(payload.aiReportText || payload.aiReport || '').trim();
     var body = [
-      'Olá, ' + String(lead.name || '').trim() + '.',
+      labels.greeting + String(lead.name || '').trim() + '.',
       '',
-      'Segue o seu resultado do CGI - Caldeira Growth Index.',
+      labels.intro,
       '',
-      'CGI final: ' + String(score.finalScore || ''),
-      'Nível: ' + String(score.level && score.level.title ? score.level.title : ''),
+      labels.finalScore + ': ' + String(score.finalScore || ''),
+      labels.level + ': ' + String(score.level && score.level.title ? score.level.title : ''),
       '',
-      'Diagnóstico:',
+      labels.diagnosis + ':',
       aiReport || String(score.diagnostic || ''),
       '',
-      'Score por dimensão:',
+      labels.scoreByDimension + ':',
       dimensionLines,
       '',
-      '3 principais pontos de atenção:',
+      labels.attentionPoints + ':',
       attentionPoints,
       '',
-      'Para aprofundar o diagnóstico, o próximo passo recomendado é agendar uma conversa estratégica com a Caldeira Growth.',
+      labels.nextStep,
       '',
       'Caldeira Growth'
     ].join('\n');
 
-    MailApp.sendEmail(email, 'Seu CGI - Caldeira Growth Index', body);
+    MailApp.sendEmail(email, labels.subject, body);
   } catch (err) {
     console.error('Erro ao enviar relatório CGI ao lead: ' + String(err));
   }
