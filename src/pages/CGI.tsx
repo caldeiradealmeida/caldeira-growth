@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
+import SEO from "@/components/SEO";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -23,15 +24,14 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { sectionLayout } from "@/lib/sectionLayout";
 import {
-  CGI_DIMENSIONS,
-  CGI_PRIMARY_CTA,
-  CGI_QUALIFICATION_FIELDS,
   CGI_QUESTIONS,
-  CGI_SCALE,
+  getCgiConfig,
   type CgiDimensionId,
 } from "@/data/cgiConfig";
+import type { Language } from "@/lib/routing";
 import {
   areCgiAnswersComplete,
   calculateCgiScore,
@@ -101,6 +101,369 @@ const initialLead: LeadForm = {
 const CGI_ASSESSMENT_ENDPOINT = "/api/cgi-assessment";
 const CGI_LAST_ASSESSMENT_KEY = "caldeira-growth:cgi:last-assessment";
 
+const cgiUi: Record<
+  Language,
+  {
+    metaTitle: string;
+    metaDescription: string;
+    badge: string;
+    heroTitle: string;
+    heroText: string;
+    start: string;
+    stats: [string, string][];
+    trust: Array<{ title: string; body: string }>;
+    step1: string;
+    contextTitle: string;
+    contextBody: string;
+    labels: Record<keyof LeadForm, string>;
+    selectPlaceholder: string;
+    commentsPlaceholder: string;
+    commentsHelp: string;
+    begin: string;
+    step2: string;
+    answered: (answered: number, total: number) => string;
+    back: string;
+    nextDimension: string;
+    generate: string;
+    step3: string;
+    finalScore: string;
+    openReport: string;
+    printReport: string;
+    emailReport: string;
+    reportPending: string;
+    reportStages: string[];
+    reportAlertTitle: string;
+    reportAlertBody: string;
+    reportIpBody: string;
+    proprietaryBody: string;
+    savedTitle: string;
+    savedBody: string;
+    scoreByDimension: string;
+    attentionTitle: string;
+    attentionBody: string;
+    invalidRequiredTitle: string;
+    invalidRequiredBody: string;
+    invalidEmailTitle: string;
+    invalidEmailBody: string;
+    incompleteDimensionTitle: string;
+    incompleteDimensionBody: string;
+    incompleteAssessmentTitle: string;
+    incompleteAssessmentBody: string;
+    saveFailureTitle: string;
+    reportDocTitle: string;
+    reportSubtitle: string;
+    dimensionReadingTitle: string;
+    criticalBottlenecksTitle: string;
+    strategicBetsTitle: string;
+    renunciationsTitle: string;
+    governanceTitle: string;
+    finalRecommendationsTitle: string;
+    company: string;
+    respondent: string;
+    role: string;
+    diagnosis: string;
+    contact: string;
+    contactText: string;
+    founderLine: string;
+    toolbar: string;
+  }
+> = {
+  pt: {
+    metaTitle: "CGI - Caldeira Growth Index | Assessment de crescimento",
+    metaDescription:
+      "Assessment gratuito de maturidade de crescimento empresarial da Caldeira Growth. Descubra gargalos e prioridades em menos de 10 minutos.",
+    badge: "CGI - Caldeira Growth Index",
+    heroTitle: "Avalie a capacidade de crescimento da sua organização.",
+    heroText:
+      "O Caldeira Growth Index analisa cinco dimensões que sustentam o crescimento e produz uma leitura executiva sobre gargalos, prioridades e capacidades organizacionais.",
+    start: "Iniciar assessment",
+    stats: [["5", "dimensões críticas"], ["40", "perguntas executivas"], ["0-100", "score de maturidade"]],
+    trust: [
+      { title: "Consultivo", body: "Perguntas orientadas a decisões de crescimento, não um quiz genérico." },
+      { title: "Estruturado", body: "Score calculado por dimensão, preservando o modelo proprietário da Caldeira Growth." },
+      { title: "Executivo", body: "Relatório com leitura de gargalos, prioridades e hipóteses para decisão." },
+    ],
+    step1: "Etapa 1 de 3",
+    contextTitle: "Antes do assessment, precisamos contextualizar sua empresa.",
+    contextBody:
+      "Esses dados ajudam a interpretar o resultado com mais precisão e a registrar o diagnóstico na base da Caldeira Growth.",
+    labels: {
+      name: "Nome",
+      email: "E-mail",
+      phone: "Telefone",
+      company: "Empresa",
+      companyWebsite: "Site da empresa",
+      role: "Cargo",
+      sector: "Setor",
+      employeeCount: "Número de funcionários",
+      annualRevenue: "Faturamento anual aproximado",
+      currentChallenge: "Principal desafio atual",
+      growthGoal: "Meta de crescimento para os próximos 12 meses",
+      investmentIntent: "Pretende investir em crescimento e desenvolvimento da organização nos próximos 12 meses?",
+      comments: "Comentários adicionais",
+    },
+    selectPlaceholder: "Selecione",
+    commentsPlaceholder:
+      "Adicione mais informações relevantes sobre o negócio ou aprofunde pontos das questões abordadas para enriquecer o diagnóstico.",
+    commentsHelp: "Campo opcional. Use apenas se houver contexto adicional que ajude a qualificar a leitura executiva.",
+    begin: "Começar assessment",
+    step2: "Etapa 2 de 3",
+    answered: (answered, total) => `${answered} de ${total}`,
+    back: "Voltar",
+    nextDimension: "Próxima dimensão",
+    generate: "Gerar meu CGI",
+    step3: "Etapa 3 de 3",
+    finalScore: "CGI final",
+    openReport: "Abrir relatório",
+    printReport: "Imprimir ou salvar em PDF",
+    emailReport: "Abrir e-mail com relatório",
+    reportPending: "O relatório completo será liberado quando o diagnóstico com IA terminar.",
+    reportStages: [
+      "Consolidando as respostas.",
+      "Comparando as cinco dimensões.",
+      "Identificando os principais gargalos.",
+      "Estruturando prioridades.",
+      "Preparando o parecer executivo.",
+    ],
+    reportAlertTitle: "Seu índice já foi calculado",
+    reportAlertBody:
+      "Estamos preparando a leitura executiva, os principais gargalos e as recomendações iniciais. Essa etapa pode levar alguns segundos.",
+    reportIpBody:
+      "Estamos analisando suas respostas, o contexto público observado da empresa e as relações entre as cinco dimensões do crescimento.",
+    proprietaryBody:
+      "A IA é usada como motor de redação e análise, mas o parecer segue o modelo proprietário de maturidade de crescimento da Caldeira Growth.",
+    savedTitle: "Resultado registrado",
+    savedBody: "Seus dados foram salvos e o relatório foi preparado.",
+    scoreByDimension: "Score por dimensão",
+    attentionTitle: "3 principais pontos de atenção",
+    attentionBody:
+      "Essa dimensão aparece entre as menores notas e deve ser priorizada em uma conversa estratégica.",
+    invalidRequiredTitle: "Campos obrigatórios",
+    invalidRequiredBody: "Preencha todos os dados antes de iniciar o assessment.",
+    invalidEmailTitle: "E-mail inválido",
+    invalidEmailBody: "Informe um e-mail corporativo válido para continuar.",
+    incompleteDimensionTitle: "Dimensão incompleta",
+    incompleteDimensionBody: "Responda todas as perguntas desta dimensão para continuar.",
+    incompleteAssessmentTitle: "Assessment incompleto",
+    incompleteAssessmentBody: "Responda as 40 perguntas para gerar seu CGI.",
+    saveFailureTitle: "Falha ao salvar",
+    reportDocTitle: "Relatório CGI",
+    reportSubtitle: "Diagnóstico executivo de maturidade de crescimento",
+    dimensionReadingTitle: "Leitura por dimensão",
+    criticalBottlenecksTitle: "Gargalos críticos",
+    strategicBetsTitle: "Apostas estratégicas recomendadas",
+    renunciationsTitle: "Renúncias estratégicas",
+    governanceTitle: "Sistema mínimo de governança",
+    finalRecommendationsTitle: "Recomendações finais",
+    company: "Empresa",
+    respondent: "Respondente",
+    role: "Cargo",
+    diagnosis: "Diagnóstico",
+    contact: "Contato",
+    contactText:
+      "Para aprofundar este diagnóstico e traduzir as hipóteses em decisões práticas, o próximo passo recomendado é uma conversa estratégica com a Caldeira Growth.",
+    founderLine: "Fundador e Estrategista de Crescimento - Caldeira Growth",
+    toolbar:
+      "Uma versão preparada para impressão foi aberta. No navegador, selecione “Salvar como PDF”.",
+  },
+  en: {
+    metaTitle: "CGI - Caldeira Growth Index | Growth assessment",
+    metaDescription:
+      "Free Caldeira Growth assessment to identify growth bottlenecks, priorities and organizational capabilities.",
+    badge: "CGI - Caldeira Growth Index",
+    heroTitle: "Assess your organization's growth capability.",
+    heroText:
+      "The Caldeira Growth Index analyzes five dimensions that sustain growth and produces an executive reading of bottlenecks, priorities and organizational capabilities.",
+    start: "Start assessment",
+    stats: [["5", "critical dimensions"], ["40", "executive questions"], ["0-100", "maturity score"]],
+    trust: [
+      { title: "Consultative", body: "Questions oriented to growth decisions, not a generic quiz." },
+      { title: "Structured", body: "Score calculated by dimension, preserving Caldeira Growth's proprietary model." },
+      { title: "Executive", body: "Report with bottlenecks, priorities and decision hypotheses." },
+    ],
+    step1: "Step 1 of 3",
+    contextTitle: "Before the assessment, we need to understand your company context.",
+    contextBody:
+      "These details help interpret the result more accurately and register the diagnosis in Caldeira Growth's base.",
+    labels: {
+      name: "Name",
+      email: "Email",
+      phone: "Phone",
+      company: "Company",
+      companyWebsite: "Company website",
+      role: "Role",
+      sector: "Sector",
+      employeeCount: "Number of employees",
+      annualRevenue: "Approximate annual revenue",
+      currentChallenge: "Main current challenge",
+      growthGoal: "Growth target for the next 12 months",
+      investmentIntent: "Do you intend to invest in organizational growth and development in the next 12 months?",
+      comments: "Additional comments",
+    },
+    selectPlaceholder: "Select",
+    commentsPlaceholder:
+      "Add relevant information about the business or expand on points covered in the questions to enrich the diagnosis.",
+    commentsHelp: "Optional field. Use it only if there is additional context that helps qualify the executive reading.",
+    begin: "Start assessment",
+    step2: "Step 2 of 3",
+    answered: (answered, total) => `${answered} of ${total}`,
+    back: "Back",
+    nextDimension: "Next dimension",
+    generate: "Generate my CGI",
+    step3: "Step 3 of 3",
+    finalScore: "Final CGI",
+    openReport: "Open report",
+    printReport: "Print or save as PDF",
+    emailReport: "Open email with report",
+    reportPending: "The full report will be released when the AI diagnosis is complete.",
+    reportStages: [
+      "Consolidating the answers.",
+      "Comparing the five dimensions.",
+      "Identifying the main bottlenecks.",
+      "Structuring priorities.",
+      "Preparing the executive opinion.",
+    ],
+    reportAlertTitle: "Your index has already been calculated",
+    reportAlertBody:
+      "We are preparing the executive reading, the main bottlenecks and the initial recommendations. This step may take a few seconds.",
+    reportIpBody:
+      "We are analyzing your answers, the company's observed public context and the relationships among the five growth dimensions.",
+    proprietaryBody:
+      "AI is used as a writing and analysis engine, but the opinion follows Caldeira Growth's proprietary growth maturity model.",
+    savedTitle: "Result registered",
+    savedBody: "Your data has been saved and the report was prepared.",
+    scoreByDimension: "Score by dimension",
+    attentionTitle: "3 main attention points",
+    attentionBody:
+      "This dimension appears among the lowest scores and should be prioritized in a strategic conversation.",
+    invalidRequiredTitle: "Required fields",
+    invalidRequiredBody: "Fill in all data before starting the assessment.",
+    invalidEmailTitle: "Invalid email",
+    invalidEmailBody: "Enter a valid business email to continue.",
+    incompleteDimensionTitle: "Incomplete dimension",
+    incompleteDimensionBody: "Answer every question in this dimension to continue.",
+    incompleteAssessmentTitle: "Incomplete assessment",
+    incompleteAssessmentBody: "Answer all 40 questions to generate your CGI.",
+    saveFailureTitle: "Save failure",
+    reportDocTitle: "CGI Report",
+    reportSubtitle: "Executive diagnosis of growth maturity",
+    dimensionReadingTitle: "Reading by dimension",
+    criticalBottlenecksTitle: "Critical bottlenecks",
+    strategicBetsTitle: "Recommended strategic bets",
+    renunciationsTitle: "Strategic renunciations",
+    governanceTitle: "Minimum governance system",
+    finalRecommendationsTitle: "Final recommendations",
+    company: "Company",
+    respondent: "Respondent",
+    role: "Role",
+    diagnosis: "Diagnosis",
+    contact: "Contact",
+    contactText:
+      "To deepen this diagnosis and translate the hypotheses into practical decisions, the recommended next step is a strategic conversation with Caldeira Growth.",
+    founderLine: "Founder and Growth Strategist - Caldeira Growth",
+    toolbar:
+      "A print-ready version has opened. In your browser, select “Save as PDF”.",
+  },
+  es: {
+    metaTitle: "CGI - Caldeira Growth Index | Diagnóstico de crecimiento",
+    metaDescription:
+      "Assessment gratuito de Caldeira Growth para identificar cuellos de botella, prioridades y capacidades organizacionales de crecimiento.",
+    badge: "CGI - Caldeira Growth Index",
+    heroTitle: "Evalúe la capacidad de crecimiento de su organización.",
+    heroText:
+      "El Caldeira Growth Index analiza cinco dimensiones que sostienen el crecimiento y produce una lectura ejecutiva sobre cuellos de botella, prioridades y capacidades organizacionales.",
+    start: "Iniciar diagnóstico",
+    stats: [["5", "dimensiones críticas"], ["40", "preguntas ejecutivas"], ["0-100", "score de madurez"]],
+    trust: [
+      { title: "Consultivo", body: "Preguntas orientadas a decisiones de crecimiento, no un quiz genérico." },
+      { title: "Estructurado", body: "Score calculado por dimensión, preservando el modelo propietario de Caldeira Growth." },
+      { title: "Ejecutivo", body: "Informe con cuellos de botella, prioridades e hipótesis para decisión." },
+    ],
+    step1: "Etapa 1 de 3",
+    contextTitle: "Antes del diagnóstico, necesitamos contextualizar su empresa.",
+    contextBody:
+      "Estos datos ayudan a interpretar el resultado con más precisión y registrar el diagnóstico en la base de Caldeira Growth.",
+    labels: {
+      name: "Nombre",
+      email: "Email",
+      phone: "Teléfono",
+      company: "Empresa",
+      companyWebsite: "Sitio de la empresa",
+      role: "Cargo",
+      sector: "Sector",
+      employeeCount: "Número de empleados",
+      annualRevenue: "Facturación anual aproximada",
+      currentChallenge: "Principal desafío actual",
+      growthGoal: "Meta de crecimiento para los próximos 12 meses",
+      investmentIntent: "¿Pretende invertir en crecimiento y desarrollo de la organización en los próximos 12 meses?",
+      comments: "Comentarios adicionales",
+    },
+    selectPlaceholder: "Seleccione",
+    commentsPlaceholder:
+      "Agregue información relevante sobre el negocio o profundice puntos abordados en las preguntas para enriquecer el diagnóstico.",
+    commentsHelp: "Campo opcional. Úselo solo si hay contexto adicional que ayude a cualificar la lectura ejecutiva.",
+    begin: "Comenzar diagnóstico",
+    step2: "Etapa 2 de 3",
+    answered: (answered, total) => `${answered} de ${total}`,
+    back: "Volver",
+    nextDimension: "Próxima dimensión",
+    generate: "Generar mi CGI",
+    step3: "Etapa 3 de 3",
+    finalScore: "CGI final",
+    openReport: "Abrir informe",
+    printReport: "Imprimir o guardar como PDF",
+    emailReport: "Abrir email con informe",
+    reportPending: "El informe completo se liberará cuando el diagnóstico con IA termine.",
+    reportStages: [
+      "Consolidando las respuestas.",
+      "Comparando las cinco dimensiones.",
+      "Identificando los principales cuellos de botella.",
+      "Estructurando prioridades.",
+      "Preparando el parecer ejecutivo.",
+    ],
+    reportAlertTitle: "Su índice ya fue calculado",
+    reportAlertBody:
+      "Estamos preparando la lectura ejecutiva, los principales cuellos de botella y las recomendaciones iniciales. Esta etapa puede llevar algunos segundos.",
+    reportIpBody:
+      "Estamos analizando sus respuestas, el contexto público observado de la empresa y las relaciones entre las cinco dimensiones de crecimiento.",
+    proprietaryBody:
+      "La IA se usa como motor de redacción y análisis, pero el parecer sigue el modelo propietario de madurez de crecimiento de Caldeira Growth.",
+    savedTitle: "Resultado registrado",
+    savedBody: "Sus datos fueron guardados y el informe fue preparado.",
+    scoreByDimension: "Score por dimensión",
+    attentionTitle: "3 principales puntos de atención",
+    attentionBody:
+      "Esta dimensión aparece entre las menores notas y debe priorizarse en una conversación estratégica.",
+    invalidRequiredTitle: "Campos obligatorios",
+    invalidRequiredBody: "Complete todos los datos antes de iniciar el diagnóstico.",
+    invalidEmailTitle: "Email inválido",
+    invalidEmailBody: "Informe un email corporativo válido para continuar.",
+    incompleteDimensionTitle: "Dimensión incompleta",
+    incompleteDimensionBody: "Responda todas las preguntas de esta dimensión para continuar.",
+    incompleteAssessmentTitle: "Diagnóstico incompleto",
+    incompleteAssessmentBody: "Responda las 40 preguntas para generar su CGI.",
+    saveFailureTitle: "Error al guardar",
+    reportDocTitle: "Informe CGI",
+    reportSubtitle: "Diagnóstico ejecutivo de madurez de crecimiento",
+    dimensionReadingTitle: "Lectura por dimensión",
+    criticalBottlenecksTitle: "Cuellos de botella críticos",
+    strategicBetsTitle: "Apuestas estratégicas recomendadas",
+    renunciationsTitle: "Renuncias estratégicas",
+    governanceTitle: "Sistema mínimo de gobernanza",
+    finalRecommendationsTitle: "Recomendaciones finales",
+    company: "Empresa",
+    respondent: "Respondente",
+    role: "Cargo",
+    diagnosis: "Diagnóstico",
+    contact: "Contacto",
+    contactText:
+      "Para profundizar este diagnóstico y traducir las hipótesis en decisiones prácticas, el próximo paso recomendado es una conversación estratégica con Caldeira Growth.",
+    founderLine: "Fundador y Estrategista de Crecimiento - Caldeira Growth",
+    toolbar:
+      "Se abrió una versión preparada para impresión. En el navegador, seleccione “Guardar como PDF”.",
+  },
+};
+
 const devLeadFallback: LeadForm = {
   name: "Denis Caldeira de Almeida",
   email: "deniscaldeiradealmeida@gmail.com",
@@ -117,7 +480,10 @@ const devLeadFallback: LeadForm = {
   comments: "Regeneração local a partir do respostas_json da planilha.",
 };
 
-const dimensionOrder = CGI_DIMENSIONS.map((dimension) => dimension.id);
+const dimensionOrder = CGI_QUESTIONS.reduce<CgiDimensionId[]>((acc, question) => {
+  if (!acc.includes(question.dimensionId)) acc.push(question.dimensionId);
+  return acc;
+}, []);
 
 type SavedCgiAssessment = {
   lead: LeadForm;
@@ -125,8 +491,11 @@ type SavedCgiAssessment = {
   savedAt: string;
 };
 
-function questionsByDimension(dimensionId: CgiDimensionId) {
-  return CGI_QUESTIONS.filter((question) => question.dimensionId === dimensionId);
+function questionsByDimension(
+  questions: typeof CGI_QUESTIONS,
+  dimensionId: CgiDimensionId
+) {
+  return questions.filter((question) => question.dimensionId === dimensionId);
 }
 
 function getScoreTone(score: number): string {
@@ -234,9 +603,9 @@ function parseAiReport(value: string): {
   }
 }
 
-function getSubmitErrorMessage(data: unknown): string {
+function getSubmitErrorMessage(data: unknown, t = cgiUi.pt): string {
   if (!data || typeof data !== "object") {
-    return "Seu resultado foi calculado, mas houve uma falha ao salvar os dados. Tente enviar novamente ou entre em contato pela página de contato.";
+    return t.savedBody;
   }
 
   const error = String((data as { error?: unknown }).error || "");
@@ -251,7 +620,7 @@ function getSubmitErrorMessage(data: unknown): string {
   }
 
   if (error === "invalid_email_domain") {
-    return "Não foi possível validar o domínio do e-mail informado. Verifique se o e-mail está correto e use um domínio que receba mensagens.";
+    return t.invalidEmailBody;
   }
 
   if (error === "upstream_request_failed") {
@@ -266,12 +635,12 @@ function getSubmitErrorMessage(data: unknown): string {
     return "Seu resultado foi calculado, mas a implantação publicada do Google Apps Script não contém as funções novas. Publique uma nova versão do Web App com o script atualizado.";
   }
 
-  return "Seu resultado foi calculado, mas houve uma falha ao salvar os dados. Tente enviar novamente ou entre em contato pela página de contato.";
+  return t.savedBody;
 }
 
-function getSaveErrorMessage(save: unknown): string {
+function getSaveErrorMessage(save: unknown, t = cgiUi.pt): string {
   if (!save || typeof save !== "object") {
-    return "Seu relatório foi gerado, mas houve uma falha ao salvar os dados na planilha.";
+    return t.savedBody;
   }
 
   const error = String((save as { error?: unknown }).error || "");
@@ -284,7 +653,7 @@ function getSaveErrorMessage(save: unknown): string {
   if (error === "upstream_request_failed") {
     return "Seu relatório foi gerado, mas o servidor não conseguiu se comunicar com o Google Apps Script.";
   }
-  return "Seu relatório foi gerado, mas houve uma falha ao salvar os dados na planilha.";
+  return t.savedBody;
 }
 
 function scrollToAssessment() {
@@ -297,7 +666,8 @@ function scrollToAssessment() {
 
 function formatAiReportText(
   aiReport: ReturnType<typeof parseAiReport>,
-  fallback: CgiScoreResult
+  fallback: CgiScoreResult,
+  t: (typeof cgiUi)[Language]
 ) {
   if (!aiReport) return "";
 
@@ -305,15 +675,27 @@ function formatAiReportText(
     Array.isArray(items) ? items.map((item) => `- ${item}`).join("\n") : "";
   const dimensionReading = Array.isArray(aiReport.dimension_reading)
     ? aiReport.dimension_reading
-        .map((item) =>
-          [
-            `- ${item.dimension || "Dimensão"}${item.score ? ` (${item.score}/100)` : ""}`,
+        .map((item, index) => {
+          const matchingDimension =
+            typeof item.score === "number"
+              ? fallback.dimensionScores.find(
+                  (score) => score.score === item.score
+                )
+              : undefined;
+          const dimensionLabel =
+            matchingDimension?.title ||
+            fallback.dimensionScores[index]?.title ||
+            item.dimension ||
+            t.dimensionReadingTitle;
+          const scoreValue = item.score ?? matchingDimension?.score;
+          return [
+            `- ${dimensionLabel}${scoreValue ? ` (${scoreValue}/100)` : ""}`,
             item.analysis,
             item.implication,
           ]
             .filter(Boolean)
-            .join(": ")
-        )
+            .join(": ");
+        })
         .join("\n")
     : "";
 
@@ -322,21 +704,21 @@ function formatAiReportText(
     aiReport.report_subtitle,
     aiReport.executive_summary,
     aiReport.strategic_diagnosis || aiReport.priority_diagnosis,
-    dimensionReading ? `Leitura por dimensão:\n${dimensionReading}` : "",
+    dimensionReading ? `${t.dimensionReadingTitle}:\n${dimensionReading}` : "",
     list(aiReport.critical_bottlenecks)
-      ? `Gargalos críticos:\n${list(aiReport.critical_bottlenecks)}`
+      ? `${t.criticalBottlenecksTitle}:\n${list(aiReport.critical_bottlenecks)}`
       : "",
     list(aiReport.strategic_bets)
-      ? `Apostas estratégicas recomendadas:\n${list(aiReport.strategic_bets)}`
+      ? `${t.strategicBetsTitle}:\n${list(aiReport.strategic_bets)}`
       : "",
     list(aiReport.renunciations)
-      ? `Renúncias estratégicas:\n${list(aiReport.renunciations)}`
+      ? `${t.renunciationsTitle}:\n${list(aiReport.renunciations)}`
       : "",
     list(aiReport.governance_system)
-      ? `Sistema mínimo de governança:\n${list(aiReport.governance_system)}`
+      ? `${t.governanceTitle}:\n${list(aiReport.governance_system)}`
       : "",
     list(aiReport.final_recommendations || aiReport.recommended_next_steps)
-      ? `Recomendações finais:\n${list(
+      ? `${t.finalRecommendationsTitle}:\n${list(
           aiReport.final_recommendations || aiReport.recommended_next_steps
         )}`
       : "",
@@ -350,35 +732,37 @@ function buildReportText({
   lead,
   result,
   aiReport,
+  t,
 }: {
   lead: LeadForm;
   result: CgiScoreResult;
   aiReport: ReturnType<typeof parseAiReport>;
+  t: (typeof cgiUi)[Language];
 }) {
-  const aiText = formatAiReportText(aiReport, result);
+  const aiText = formatAiReportText(aiReport, result, t);
   const attention = result.attentionPoints
     .map((item) => `- ${item.title}: ${item.score}/100`)
     .join("\n");
 
   return [
-    `Relatório CGI - ${lead.company || "Caldeira Growth"}`,
+    `${t.reportDocTitle} - ${lead.company || "Caldeira Growth"}`,
     "Caldeira Growth Index",
     "",
-    `Empresa: ${lead.company}`,
-    `Respondente: ${lead.name}`,
-    `Cargo: ${lead.role}`,
+    `${t.company}: ${lead.company}`,
+    `${t.respondent}: ${lead.name}`,
+    `${t.role}: ${lead.role}`,
     "",
-    "Diagnóstico",
+    t.diagnosis,
     aiText || result.diagnostic,
     "",
-    "3 principais pontos de atenção",
+    t.attentionTitle,
     attention,
     "",
-    "Contato",
-    "Para aprofundar este diagnóstico e traduzir as hipóteses em decisões práticas, o próximo passo recomendado é uma conversa estratégica com a Caldeira Growth.",
+    t.contact,
+    t.contactText,
     "",
     "Denis Caldeira de Almeida",
-    "Fundador e Estrategista de Crescimento - Caldeira Growth",
+    t.founderLine,
     "contato@caldeiragrowth.com",
     "www.caldeiragrowth.com",
   ].join("\n");
@@ -409,7 +793,11 @@ function formatReportBodyHtml(reportText: string) {
   const escapedSignature = escapeAttr(reportSignature);
   const sectionTitles = new Set([
     "Diagnóstico",
+    "Diagnosis",
+    "Diagnóstico",
     "3 principais pontos de atenção",
+    "3 main attention points",
+    "3 principales puntos de atención",
     "Sumário Executivo",
     "Contexto e diagnóstico",
     "Leitura por dimensão",
@@ -453,7 +841,11 @@ function formatReportBodyHtml(reportText: string) {
           </div>
         `;
       }
-      if (block.startsWith("Para aprofundar este diagnóstico")) {
+      if (
+        block.startsWith("Para aprofundar este diagnóstico") ||
+        block.startsWith("To deepen this diagnosis") ||
+        block.startsWith("Para profundizar este diagnóstico")
+      ) {
         return `<p class="contact-callout">${escapeHtml(block)}</p>`;
       }
       if (lines.every((line) => line.startsWith("- "))) {
@@ -466,11 +858,11 @@ function formatReportBodyHtml(reportText: string) {
     .join("\n");
 }
 
-function buildFinalScoreHtml(result: CgiScoreResult) {
+function buildFinalScoreHtml(result: CgiScoreResult, finalScoreLabel: string) {
   return `
     <section class="final-score">
       <div>
-        <p class="final-score-label">CGI final</p>
+        <p class="final-score-label">${escapeHtml(finalScoreLabel)}</p>
         <p class="final-score-number">${result.finalScore}</p>
       </div>
       <div class="final-score-copy">
@@ -481,10 +873,10 @@ function buildFinalScoreHtml(result: CgiScoreResult) {
   `;
 }
 
-function buildScoreBarsHtml(result: CgiScoreResult) {
+function buildScoreBarsHtml(result: CgiScoreResult, title: string) {
   return `
     <section class="score-bars">
-      <h2>Score por dimensão</h2>
+      <h2>${escapeHtml(title)}</h2>
       ${result.dimensionScores
         .map(
           (item) => `
@@ -510,17 +902,19 @@ function buildScoreBarsHtml(result: CgiScoreResult) {
 function buildReportHtml(
   reportText: string,
   companyName: string,
-  result: CgiScoreResult
+  result: CgiScoreResult,
+  t: (typeof cgiUi)[Language],
+  lang: Language
 ) {
   const bodyHtml = formatReportBodyHtml(reportText);
-  const finalScoreHtml = buildFinalScoreHtml(result);
-  const scoreBarsHtml = buildScoreBarsHtml(result);
+  const finalScoreHtml = buildFinalScoreHtml(result, t.finalScore);
+  const scoreBarsHtml = buildScoreBarsHtml(result, t.scoreByDimension);
   const escapedCompany = escapeHtml(companyName || "Caldeira Growth");
-  const escapedTitle = `Relatório CGI - ${escapedCompany}`;
+  const escapedTitle = `${escapeHtml(t.reportDocTitle)} - ${escapedCompany}`;
   const escapedLogo = escapeAttr(footerLogo);
   const escapedCover = escapeAttr(reportCover);
   const reportDate = escapeHtml(
-    new Intl.DateTimeFormat("pt-BR", {
+    new Intl.DateTimeFormat(lang === "pt" ? "pt-BR" : lang === "es" ? "es-419" : "en", {
       day: "2-digit",
       month: "long",
       year: "numeric",
@@ -528,7 +922,7 @@ function buildReportHtml(
   );
 
   return `<!doctype html>
-<html lang="pt-BR">
+<html lang="${lang === "pt" ? "pt-BR" : lang === "es" ? "es-419" : "en"}">
   <head>
     <meta charset="utf-8" />
     <title>${escapedTitle}</title>
@@ -583,7 +977,7 @@ function buildReportHtml(
     </style>
   </head>
   <body>
-    <div class="screen-toolbar">Use “Salvar em PDF” para exportar esta versão do relatório.</div>
+    <div class="screen-toolbar">${escapeHtml(t.toolbar)}</div>
     <main class="report">
       <section class="cover">
         <img class="cover-bg" src="${escapedCover}" alt="" />
@@ -591,11 +985,11 @@ function buildReportHtml(
           <div>
             <div class="cover-kicker">Caldeira Growth Index</div>
             <h1>${escapedTitle}</h1>
-            <div class="meta">Diagnóstico executivo de maturidade de crescimento</div>
+            <div class="meta">${escapeHtml(t.reportSubtitle)}</div>
           </div>
           <div class="cover-details">
-            <div>Empresa: ${escapedCompany}</div>
-            <div>Data: ${reportDate}</div>
+            <div>${escapeHtml(t.company)}: ${escapedCompany}</div>
+            <div>${lang === "en" ? "Date" : lang === "es" ? "Fecha" : "Data"}: ${reportDate}</div>
           </div>
         </div>
       </section>
@@ -664,6 +1058,9 @@ async function waitForReportAssets(reportWindow: Window, timeoutMs = 5000) {
 
 export default function CGI() {
   const { toast } = useToast();
+  const { lang } = useLanguage();
+  const config = getCgiConfig(lang);
+  const t = cgiUi[lang];
   const [step, setStep] = useState<Step>("lead");
   const [lead, setLead] = useState<LeadForm>(initialLead);
   const [answers, setAnswers] = useState<Record<string, number>>({});
@@ -679,10 +1076,10 @@ export default function CGI() {
   const [hasSavedAssessment, setHasSavedAssessment] = useState(false);
   const [devAnswersJson, setDevAnswersJson] = useState("");
 
-  const currentDimension = CGI_DIMENSIONS[dimensionIndex];
+  const currentDimension = config.dimensions[dimensionIndex];
   const currentQuestions = useMemo(
-    () => questionsByDimension(currentDimension.id),
-    [currentDimension.id]
+    () => questionsByDimension(config.questions, currentDimension.id),
+    [config.questions, currentDimension.id]
   );
   const answeredCount = Object.keys(normalizeCgiAnswers(answers)).length;
   const progress = Math.round((answeredCount / CGI_QUESTIONS.length) * 100);
@@ -691,7 +1088,7 @@ export default function CGI() {
   );
   const aiReport = parseAiReport(serverAiReport);
   const reportText = result
-    ? buildReportText({ lead, result, aiReport })
+    ? buildReportText({ lead, result, aiReport, t })
     : "";
   const reportReady = aiStatus === "generated" && Boolean(serverAiReport) && Boolean(aiReport);
 
@@ -700,24 +1097,22 @@ export default function CGI() {
     const metaDescription = document.querySelector('meta[name="description"]');
     const prevDescription = metaDescription?.getAttribute("content") || "";
 
-    document.title = "CGI - Caldeira Growth Index | Assessment de crescimento";
-    metaDescription?.setAttribute(
-      "content",
-      "Assessment gratuito de maturidade de crescimento empresarial da Caldeira Growth. Descubra gargalos e prioridades em menos de 10 minutos."
-    );
+    document.title = t.metaTitle;
+    metaDescription?.setAttribute("content", t.metaDescription);
 
     window.dataLayer = window.dataLayer || [];
     window.dataLayer.push({
       event: "page_view_cgi",
-      page_path: "/cgi",
-      page_title: "CGI - Caldeira Growth Index",
+      page_path: window.location.pathname,
+      page_title: t.metaTitle,
+      language: lang,
     });
 
     return () => {
       document.title = prevTitle;
       metaDescription?.setAttribute("content", prevDescription);
     };
-  }, []);
+  }, [lang, t.metaDescription, t.metaTitle]);
 
   useEffect(() => {
     setHasSavedAssessment(Boolean(readSavedCgiAssessment()));
@@ -747,11 +1142,12 @@ export default function CGI() {
       event: "cgi_report_ready",
       cgi_score: result.finalScore,
       cgi_level: result.level.title,
+      language: lang,
       company_size: lead.employeeCount,
       current_challenge: lead.currentChallenge,
       investment_intent: lead.investmentIntent,
     });
-  }, [lead.currentChallenge, lead.employeeCount, lead.investmentIntent, reportReady, result]);
+  }, [lang, lead.currentChallenge, lead.employeeCount, lead.investmentIntent, reportReady, result]);
 
   const updateLead = (key: keyof LeadForm, value: string) => {
     setLead((current) => ({ ...current, [key]: value }));
@@ -774,16 +1170,16 @@ export default function CGI() {
     const missing = required.find((key) => !lead[key].trim());
     if (missing) {
       toast({
-        title: "Campos obrigatorios",
-        description: "Preencha todos os dados antes de iniciar o assessment.",
+        title: t.invalidRequiredTitle,
+        description: t.invalidRequiredBody,
         variant: "destructive",
       });
       return false;
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(lead.email)) {
       toast({
-        title: "E-mail invalido",
-        description: "Informe um e-mail corporativo valido para continuar.",
+        title: t.invalidEmailTitle,
+        description: t.invalidEmailBody,
         variant: "destructive",
       });
       return false;
@@ -812,8 +1208,8 @@ export default function CGI() {
   const goToNextDimension = () => {
     if (!currentDimensionComplete) {
       toast({
-        title: "Dimensão incompleta",
-        description: "Responda todas as perguntas desta dimensão para continuar.",
+        title: t.incompleteDimensionTitle,
+        description: t.incompleteDimensionBody,
         variant: "destructive",
       });
       return;
@@ -833,7 +1229,7 @@ export default function CGI() {
     if (!reportReady || !reportText) return;
     const reportWindow = window.open("", "_blank");
     if (!reportWindow) return;
-    writeReportDocument(reportWindow, buildReportHtml(reportText, lead.company, result));
+    writeReportDocument(reportWindow, buildReportHtml(reportText, lead.company, result, t, lang));
     reportWindow.focus();
   };
 
@@ -841,7 +1237,7 @@ export default function CGI() {
     if (!reportReady || !reportText) return;
     const reportWindow = window.open("", "_blank");
     if (!reportWindow) return;
-    writeReportDocument(reportWindow, buildReportHtml(reportText, lead.company, result));
+    writeReportDocument(reportWindow, buildReportHtml(reportText, lead.company, result, t, lang));
     await waitForReportAssets(reportWindow);
     reportWindow.focus();
     reportWindow.print();
@@ -864,14 +1260,14 @@ export default function CGI() {
     const normalizedAnswers = normalizeCgiAnswers(assessmentAnswers);
     if (!areCgiAnswersComplete(normalizedAnswers)) {
       toast({
-        title: "Assessment incompleto",
-        description: "Responda as 40 perguntas para gerar seu CGI.",
+        title: t.incompleteAssessmentTitle,
+        description: t.incompleteAssessmentBody,
         variant: "destructive",
       });
       return;
     }
 
-    const localScore = calculateCgiScore(normalizedAnswers);
+    const localScore = calculateCgiScore(normalizedAnswers, lang);
     const normalizedLead = {
       ...assessmentLead,
       companyWebsite: normalizeWebsiteInput(assessmentLead.companyWebsite),
@@ -895,6 +1291,7 @@ export default function CGI() {
       event: "cgi_completed",
       cgi_score: localScore.finalScore,
       cgi_level: localScore.level.title,
+      language: lang,
       company_size: normalizedLead.employeeCount,
       current_challenge: normalizedLead.currentChallenge,
       investment_intent: normalizedLead.investmentIntent,
@@ -907,6 +1304,7 @@ export default function CGI() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "cgi_assessment",
+          language: lang,
           lead: normalizedLead,
           answers: normalizedAnswers,
           score: localScore,
@@ -921,21 +1319,22 @@ export default function CGI() {
       const data = await response.json();
 
       if (!response.ok || data.ok !== true) {
-        throw new Error(getSubmitErrorMessage(data));
+        throw new Error(getSubmitErrorMessage(data, t));
       }
 
-      setResult(data.score ?? localScore);
+      // Keep the client-side score because it carries localized dimension and level labels.
+      setResult(localScore);
       setServerAiReport(data.ai?.text ?? "");
       setAiStatus(data.ai?.status ?? "");
       setReportProgress(100);
       if (data.save?.ok === false) {
-        setSubmitError(getSaveErrorMessage(data.save));
+        setSubmitError(getSaveErrorMessage(data.save, t));
       }
     } catch (error) {
       setSubmitError(
         error instanceof Error
           ? error.message
-          : "Seu resultado foi calculado, mas houve uma falha ao salvar os dados. Tente enviar novamente ou entre em contato pela página de contato."
+          : t.savedBody
       );
       if (import.meta.env.DEV) {
         console.error("[CGI] submit error", error);
@@ -986,20 +1385,20 @@ export default function CGI() {
   return (
     <main className="min-h-screen bg-background">
       <Header />
+      <SEO routeKey="cgi" title={t.metaTitle} description={t.metaDescription} noIndex />
 
       <section className="pt-28 pb-16 md:pt-36 md:pb-24 bg-gradient-to-br from-primary via-primary to-primary/90 text-primary-foreground">
         <div className={sectionLayout.container}>
           <div className="grid gap-10 lg:grid-cols-[1.05fr_0.95fr] lg:items-end">
             <div className="max-w-3xl">
               <Badge className="bg-accent text-accent-foreground hover:bg-accent">
-                CGI - Caldeira Growth Index
+                {t.badge}
               </Badge>
               <h1 className="mt-6 text-4xl font-semibold tracking-tight md:text-6xl">
-                Descubra o nível de maturidade de crescimento da sua empresa.
+                {t.heroTitle}
               </h1>
               <p className="mt-6 max-w-2xl text-lg leading-relaxed text-primary-foreground/85 md:text-xl">
-                Em menos de 10 minutos, identifique os principais gargalos que
-                podem limitar sua próxima fase de crescimento.
+                {t.heroText}
               </p>
               <div className="mt-8 flex flex-col gap-3 sm:flex-row">
                 <Button
@@ -1011,7 +1410,7 @@ export default function CGI() {
                       ?.scrollIntoView({ behavior: "smooth" })
                   }
                 >
-                  Iniciar assessment
+                  {t.start}
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
                 <Button
@@ -1020,19 +1419,15 @@ export default function CGI() {
                   className="border-primary-foreground/30 bg-transparent text-primary-foreground hover:bg-primary-foreground/10"
                   asChild
                 >
-                  <a href={CGI_PRIMARY_CTA.href}>
-                    {CGI_PRIMARY_CTA.label}
+                  <a href={config.primaryCta.href}>
+                    {config.primaryCta.label}
                   </a>
                 </Button>
               </div>
             </div>
 
             <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
-              {[
-                ["5", "dimensões críticas"],
-                ["40", "perguntas executivas"],
-                ["0-100", "score de maturidade"],
-              ].map(([value, label]) => (
+              {t.stats.map(([value, label]) => (
                 <div
                   key={label}
                   className="rounded-lg border border-primary-foreground/20 bg-primary-foreground/8 p-5"
@@ -1052,29 +1447,27 @@ export default function CGI() {
             <div className="flex gap-3">
               <ShieldCheck className="mt-1 h-5 w-5 text-primary" />
               <div>
-                <p className="font-medium">Consultivo</p>
+                <p className="font-medium">{t.trust[0].title}</p>
                 <p className="text-sm text-muted-foreground">
-                  Perguntas orientadas a decisões de crescimento, não um quiz
-                  genérico.
+                  {t.trust[0].body}
                 </p>
               </div>
             </div>
             <div className="flex gap-3">
               <BarChart3 className="mt-1 h-5 w-5 text-primary" />
               <div>
-                <p className="font-medium">Determinístico</p>
+                <p className="font-medium">{t.trust[1].title}</p>
                 <p className="text-sm text-muted-foreground">
-                  Score calculado por dimensão, com peso igual de 20%.
+                  {t.trust[1].body}
                 </p>
               </div>
             </div>
             <div className="flex gap-3">
               <Sparkles className="mt-1 h-5 w-5 text-primary" />
               <div>
-                <p className="font-medium">Preparado para IA</p>
+                <p className="font-medium">{t.trust[2].title}</p>
                 <p className="text-sm text-muted-foreground">
-                  A arquitetura já separa dados, score e diagnóstico para
-                  relatórios futuros.
+                  {t.trust[2].body}
                 </p>
               </div>
             </div>
@@ -1087,13 +1480,12 @@ export default function CGI() {
           {step === "lead" && (
             <div className="grid gap-10 lg:grid-cols-[0.8fr_1.2fr]">
               <div className={sectionLayout.prose}>
-                <Badge variant="outline">Etapa 1 de 3</Badge>
+                <Badge variant="outline">{t.step1}</Badge>
                 <h2 className="mt-5 text-3xl font-semibold tracking-tight md:text-4xl">
-                  Antes do assessment, precisamos contextualizar sua empresa.
+                  {t.contextTitle}
                 </h2>
                 <p className={sectionLayout.subtitle}>
-                  Esses dados ajudam a interpretar o resultado com mais precisao
-                  e a registrar o diagnóstico na base da Caldeira Growth.
+                  {t.contextBody}
                 </p>
               </div>
 
@@ -1102,7 +1494,7 @@ export default function CGI() {
                   <form onSubmit={startAssessment} className="space-y-6">
                     <div className="grid gap-5 md:grid-cols-2">
                       <div className="space-y-2">
-                        <Label htmlFor="name">Nome *</Label>
+                        <Label htmlFor="name">{t.labels.name} *</Label>
                         <Input
                           id="name"
                           autoComplete="name"
@@ -1112,7 +1504,7 @@ export default function CGI() {
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="email">E-mail *</Label>
+                        <Label htmlFor="email">{t.labels.email} *</Label>
                         <Input
                           id="email"
                           type="email"
@@ -1123,7 +1515,7 @@ export default function CGI() {
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="phone">Telefone *</Label>
+                        <Label htmlFor="phone">{t.labels.phone} *</Label>
                         <Input
                           id="phone"
                           type="tel"
@@ -1134,7 +1526,7 @@ export default function CGI() {
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="company">Empresa *</Label>
+                        <Label htmlFor="company">{t.labels.company} *</Label>
                         <Input
                           id="company"
                           autoComplete="organization"
@@ -1146,7 +1538,7 @@ export default function CGI() {
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="companyWebsite">Site da empresa</Label>
+                        <Label htmlFor="companyWebsite">{t.labels.companyWebsite}</Label>
                         <Input
                           id="companyWebsite"
                           type="text"
@@ -1166,7 +1558,7 @@ export default function CGI() {
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="role">Cargo *</Label>
+                        <Label htmlFor="role">{t.labels.role} *</Label>
                         <Input
                           id="role"
                           autoComplete="organization-title"
@@ -1176,7 +1568,7 @@ export default function CGI() {
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="sector">Setor *</Label>
+                        <Label htmlFor="sector">{t.labels.sector} *</Label>
                         <Input
                           id="sector"
                           value={lead.sector}
@@ -1189,7 +1581,7 @@ export default function CGI() {
                     </div>
 
                     <div className="grid gap-5 md:grid-cols-2">
-                      {CGI_QUALIFICATION_FIELDS.map((field) => (
+                      {config.qualificationFields.map((field) => (
                         <div className="space-y-2" key={field.id}>
                           <Label>{field.label} *</Label>
                           <Select
@@ -1197,7 +1589,7 @@ export default function CGI() {
                             onValueChange={(value) => updateLead(field.id, value)}
                           >
                             <SelectTrigger>
-                              <SelectValue placeholder="Selecione" />
+                              <SelectValue placeholder={t.selectPlaceholder} />
                             </SelectTrigger>
                             <SelectContent>
                               {field.options.map((option) => (
@@ -1254,7 +1646,7 @@ export default function CGI() {
                     )}
 
                     <Button type="submit" size="lg" className="w-full md:w-auto">
-                      Começar assessment
+                      {t.begin}
                       <ArrowRight className="ml-2 h-4 w-4" />
                     </Button>
                     {import.meta.env.DEV && hasSavedAssessment && (
@@ -1281,7 +1673,7 @@ export default function CGI() {
               <div className="mb-8">
                 <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
                   <div>
-                    <Badge variant="outline">Etapa 2 de 3</Badge>
+                    <Badge variant="outline">{t.step2}</Badge>
                     <h2 className="mt-4 text-3xl font-semibold tracking-tight">
                       {currentDimension.title}
                     </h2>
@@ -1291,7 +1683,7 @@ export default function CGI() {
                   </div>
                   <div className="min-w-[220px]">
                     <div className="mb-2 flex items-center justify-between text-sm">
-                      <span>{answeredCount} de {CGI_QUESTIONS.length}</span>
+                      <span>{t.answered(answeredCount, CGI_QUESTIONS.length)}</span>
                       <span>{progress}%</span>
                     </div>
                     <Progress value={progress} />
@@ -1299,7 +1691,7 @@ export default function CGI() {
                 </div>
 
                 <div className="mt-6 grid gap-2 sm:grid-cols-5">
-                  {CGI_DIMENSIONS.map((dimension, index) => (
+                  {config.dimensions.map((dimension, index) => (
                     <button
                       key={dimension.id}
                       type="button"
@@ -1351,7 +1743,7 @@ export default function CGI() {
                               value={answers[question.id]?.toString()}
                               onValueChange={(value) => setAnswer(question.id, value)}
                             >
-                              {CGI_SCALE.map((item) => (
+                              {config.scale.map((item) => (
                                 <Label
                                   key={item.value}
                                   htmlFor={`${question.id}-${item.value}`}
@@ -1383,6 +1775,27 @@ export default function CGI() {
                     ))}
                   </div>
 
+                  {dimensionIndex === config.dimensions.length - 1 && (
+                    <div className="mt-8 rounded-lg border border-border bg-muted/25 p-5">
+                      <div className="space-y-2">
+                        <Label htmlFor="comments">{t.labels.comments}</Label>
+                        <Textarea
+                          id="comments"
+                          value={lead.comments}
+                          onChange={(event) =>
+                            updateLead("comments", event.target.value)
+                          }
+                          placeholder={t.commentsPlaceholder}
+                          rows={4}
+                          className="resize-y bg-background"
+                        />
+                        <p className="text-xs leading-relaxed text-muted-foreground">
+                          {t.commentsHelp}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="mt-8 flex flex-col gap-3 border-t border-border pt-6 sm:flex-row sm:justify-between">
                     <Button
                       variant="outline"
@@ -1395,16 +1808,16 @@ export default function CGI() {
                       }}
                     >
                       <ArrowLeft className="mr-2 h-4 w-4" />
-                      Voltar
+                      {t.back}
                     </Button>
-                    {dimensionIndex < CGI_DIMENSIONS.length - 1 ? (
+                    {dimensionIndex < config.dimensions.length - 1 ? (
                       <Button onClick={goToNextDimension}>
-                        Próxima dimensão
+                        {t.nextDimension}
                         <ArrowRight className="ml-2 h-4 w-4" />
                       </Button>
                     ) : (
                       <Button onClick={submitAssessment}>
-                        Gerar meu CGI
+                        {t.generate}
                         <Target className="ml-2 h-4 w-4" />
                       </Button>
                     )}
@@ -1420,10 +1833,10 @@ export default function CGI() {
                 <Card className="border-primary/20">
                   <CardContent className="p-6 md:p-8">
                     <Badge className="bg-accent text-accent-foreground hover:bg-accent">
-                      Etapa 3 de 3
+                      {t.step3}
                     </Badge>
                     <p className="mt-6 text-sm font-medium uppercase tracking-wide text-muted-foreground">
-                      CGI final
+                      {t.finalScore}
                     </p>
                     <p
                       className={`mt-2 text-7xl font-semibold tracking-tight ${getScoreTone(
@@ -1441,9 +1854,9 @@ export default function CGI() {
 
                     <div className="mt-8 flex flex-col gap-3">
                       <Button size="lg" asChild>
-                        <a href={CGI_PRIMARY_CTA.href}>
+                        <a href={config.primaryCta.href}>
                           <CalendarDays className="mr-2 h-4 w-4" />
-                          {CGI_PRIMARY_CTA.label}
+                          {config.primaryCta.label}
                         </a>
                       </Button>
                       <Button
@@ -1453,7 +1866,7 @@ export default function CGI() {
                         disabled={!reportReady}
                       >
                         <FileText className="mr-2 h-4 w-4" />
-                        Abrir relatório
+                        {t.openReport}
                       </Button>
                       <Button
                         size="lg"
@@ -1462,7 +1875,7 @@ export default function CGI() {
                         disabled={!reportReady}
                       >
                         <Printer className="mr-2 h-4 w-4" />
-                        Salvar em PDF
+                        {t.printReport}
                       </Button>
                       <Button
                         size="lg"
@@ -1471,7 +1884,7 @@ export default function CGI() {
                         disabled={!reportReady}
                       >
                         <Mail className="mr-2 h-4 w-4" />
-                        Abrir e-mail com relatório
+                        {t.emailReport}
                       </Button>
                       {import.meta.env.DEV && hasSavedAssessment && (
                         <Button
@@ -1487,18 +1900,18 @@ export default function CGI() {
                       {!reportReady && (
                         <div className="space-y-2 text-sm text-muted-foreground">
                           <p>
-                            O relatório completo será liberado quando o diagnóstico
-                            com IA terminar.
+                            {t.reportPending}
                           </p>
                           {isSubmitting && (
                             <>
                               <Progress value={reportProgress} />
                               <p className="text-xs">
-                                {reportProgress < 35
-                                  ? "Calculando score e preparando contexto."
-                                  : reportProgress < 75
-                                    ? "Lendo os sinais públicos do site e estruturando o diagnóstico."
-                                    : "Finalizando o parecer executivo e preparando o PDF."}
+                                {t.reportStages[
+                                  Math.min(
+                                    t.reportStages.length - 1,
+                                    Math.floor((reportProgress / 100) * t.reportStages.length)
+                                  )
+                                ]}
                               </p>
                             </>
                           )}
@@ -1512,7 +1925,7 @@ export default function CGI() {
                   {submitError && (
                     <Alert variant="destructive">
                       <AlertCircle className="h-4 w-4" />
-                      <AlertTitle>Falha ao salvar</AlertTitle>
+                      <AlertTitle>{t.saveFailureTitle}</AlertTitle>
                       <AlertDescription>{submitError}</AlertDescription>
                     </Alert>
                   )}
@@ -1520,26 +1933,27 @@ export default function CGI() {
                   {isSubmitting && (
                     <Alert>
                       <Loader2 className="h-4 w-4 animate-spin" />
-                      <AlertTitle>Gerando relatório</AlertTitle>
+                      <AlertTitle>{t.reportAlertTitle}</AlertTitle>
                       <AlertDescription>
                         <span className="block">
-                          Salvando respostas, analisando o site informado e gerando
-                          o diagnóstico executivo com IA.
+                          {t.reportAlertBody}
                         </span>
                         <span className="mt-3 block">
-                          A IA é usada como motor de redação e análise, mas o parecer
-                          segue o modelo proprietário de maturidade de crescimento da
-                          Caldeira Growth.
+                          {t.reportIpBody}
+                        </span>
+                        <span className="mt-3 block">
+                          {t.proprietaryBody}
                         </span>
                         <span className="mt-4 block">
                           <Progress value={reportProgress} />
                         </span>
                         <span className="mt-2 block text-xs text-muted-foreground">
-                          {reportProgress < 35
-                            ? "Calculando score e preparando contexto."
-                            : reportProgress < 75
-                              ? "Lendo os sinais públicos do site e estruturando o diagnóstico."
-                              : "Finalizando o parecer executivo e preparando o PDF."}
+                          {t.reportStages[
+                            Math.min(
+                              t.reportStages.length - 1,
+                              Math.floor((reportProgress / 100) * t.reportStages.length)
+                            )
+                          ]}
                         </span>
                       </AlertDescription>
                     </Alert>
@@ -1548,20 +1962,19 @@ export default function CGI() {
                   {!isSubmitting && !submitError && (
                     <Alert className="border-primary/20">
                       <CheckCircle2 className="h-4 w-4 text-primary" />
-                      <AlertTitle>Resultado registrado</AlertTitle>
+                      <AlertTitle>{t.savedTitle}</AlertTitle>
                       <AlertDescription>
-                        Seus dados foram salvos e o relatório foi enviado para o
-                        e-mail informado.{" "}
+                        {t.savedBody}{" "}
                         {aiStatus === "generated"
-                          ? "Um diagnóstico executivo com IA também foi gerado."
-                          : "O diagnóstico principal foi calculado pelas regras do CGI."}
+                          ? t.proprietaryBody
+                          : result.diagnostic}
                       </AlertDescription>
                     </Alert>
                   )}
 
                   <Card>
                     <CardContent className="p-6 md:p-8">
-                      <h3 className="text-xl font-semibold">Score por dimensão</h3>
+                      <h3 className="text-xl font-semibold">{t.scoreByDimension}</h3>
                       <div className="mt-6 space-y-5">
                         {result.dimensionScores.map((item) => (
                           <div key={item.dimensionId}>
@@ -1585,7 +1998,7 @@ export default function CGI() {
                   <Card>
                     <CardContent className="p-6 md:p-8">
                       <h3 className="text-xl font-semibold">
-                        3 principais pontos de atenção
+                        {t.attentionTitle}
                       </h3>
                       <div className="mt-5 grid gap-3">
                         {result.attentionPoints.map((item) => (
@@ -1598,8 +2011,7 @@ export default function CGI() {
                               <Badge variant="outline">{item.score}/100</Badge>
                             </div>
                             <p className="mt-2 text-sm text-muted-foreground">
-                              Essa dimensão aparece entre as menores notas e deve
-                              ser priorizada em uma conversa estratégica.
+                              {t.attentionBody}
                             </p>
                           </div>
                         ))}

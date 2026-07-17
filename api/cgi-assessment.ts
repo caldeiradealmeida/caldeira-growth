@@ -28,6 +28,7 @@ type CgiLead = {
 
 type CgiPayload = {
   action?: string;
+  language?: "pt" | "en" | "es";
   lead?: CgiLead;
   answers?: Record<string, unknown>;
   score?: unknown;
@@ -452,29 +453,159 @@ function formatAiReportForEmail(value: string): string {
   }
 }
 
+function hasPortugueseLeak(value: string): boolean {
+  const normalized = value
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase();
+  const markers = [
+    "crescimento",
+    "estrategia",
+    "mercado e cliente",
+    "maquina de crescimento",
+    "execucao",
+    "lideranca",
+    "gargalo",
+    "recomendacao",
+    "empresa parece",
+    "proxima fase",
+    "decisao",
+    "governanca",
+    "renuncia",
+    "prioridade",
+  ];
+  return markers.filter((marker) => normalized.includes(marker)).length >= 3;
+}
+
+async function rewriteAiReportLanguage({
+  apiKey,
+  model,
+  text,
+  language,
+}: {
+  apiKey: string;
+  model: string;
+  text: string;
+  language: "en" | "es";
+}): Promise<string> {
+  const instruction =
+    language === "es"
+      ? "Reescriba TODO el contenido textual de este JSON en español latinoamericano neutro, adecuado para Panamá y América Latina. Mantenga exactamente las mismas claves, estructura, números, marcas, URLs y nombres propios. No deje ninguna frase en portugués. Devuelva solo JSON válido."
+      : "Rewrite ALL textual content in this JSON in natural executive English. Keep exactly the same keys, structure, numbers, brands, URLs and proper names. Do not leave any Portuguese or Spanish sentences. Return only valid JSON.";
+
+  const response = await fetch("https://api.openai.com/v1/responses", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model,
+      store: false,
+      input: [
+        {
+          role: "system",
+          content: [{ type: "input_text", text: instruction }],
+        },
+        {
+          role: "user",
+          content: [{ type: "input_text", text }],
+        },
+      ],
+      text: { format: { type: "json_object" } },
+      max_output_tokens: 5200,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error("[CGI OpenAI] rewrite_failed", response.status, errorText);
+    return text;
+  }
+
+  const data = await response.json();
+  return extractOutputText(data) || text;
+}
+
 async function generateAiDiagnostic({
   lead,
   answers,
   score,
   websiteEnrichment,
   requestContext,
+  language,
 }: {
   lead: CgiLead;
   answers: Record<string, number>;
   score: CgiScoreResult;
   websiteEnrichment: WebsiteEnrichment;
   requestContext: RequestContext;
+  language: "pt" | "en" | "es";
 }): Promise<AiResult> {
   const apiKey = process.env.OPENAI_API_KEY?.trim();
   if (!apiKey) return { status: "not_configured", text: "", plainText: "" };
 
   const model = process.env.OPENAI_MODEL?.trim() || "gpt-5.5";
+  const dimensionTranslations: Record<
+    "pt" | "en" | "es",
+    Record<string, string>
+  > = {
+    pt: {
+      strategy: "Estratégia",
+      market: "Mercado e Cliente",
+      growthMachine: "Máquina de Crescimento",
+      execution: "Execução e Gestão",
+      leadership: "Liderança e Cultura de Crescimento",
+    },
+    en: {
+      strategy: "Strategy",
+      market: "Market and Customer",
+      growthMachine: "Growth Machine",
+      execution: "Execution and Management",
+      leadership: "Leadership and Growth Culture",
+    },
+    es: {
+      strategy: "Estrategia",
+      market: "Mercado y Cliente",
+      growthMachine: "Máquina de Crecimiento",
+      execution: "Ejecución y Gestión",
+      leadership: "Liderazgo y Cultura de Crecimiento",
+    },
+  };
   const compactAnswers = CGI_QUESTIONS.map((question) => ({
     id: question.id,
-    dimension: question.dimensionId,
-    question: question.text,
+    dimension:
+      dimensionTranslations[language][question.dimensionId] || question.dimensionId,
+    question:
+      language === "pt"
+        ? question.text
+        : `Assessment question ${question.id} for ${
+            dimensionTranslations[language][question.dimensionId] || question.dimensionId
+          }`,
     answer: answers[question.id],
   }));
+  const localizedDimensions = CGI_DIMENSIONS.map((dimension) => ({
+    ...dimension,
+    title: dimensionTranslations[language][dimension.id] || dimension.title,
+    shortTitle: dimensionTranslations[language][dimension.id] || dimension.shortTitle,
+  }));
+  const localizedScore = {
+    ...score,
+    dimensionScores: score.dimensionScores.map((item) => ({
+      ...item,
+      title: dimensionTranslations[language][item.dimensionId] || item.title,
+    })),
+    attentionPoints: score.attentionPoints.map((item) => ({
+      ...item,
+      title: dimensionTranslations[language][item.dimensionId] || item.title,
+    })),
+  };
+  const languageInstruction =
+    language === "en"
+      ? "CRITICAL LANGUAGE RULE: write every title, paragraph, bullet and recommendation in natural executive English. Do not write Portuguese or Spanish words, except proper names, brands, URLs and literal user-provided values."
+      : language === "es"
+        ? "REGLA CRÍTICA DE IDIOMA: escriba todos los títulos, párrafos, bullets y recomendaciones en español latinoamericano neutro, adecuado para Panamá y América Latina. No escriba palabras en portugués o inglés, excepto nombres propios, marcas, URLs y valores literales informados por el usuario. Use los nombres de dimensión en español."
+        : "REGRA CRÍTICA DE IDIOMA: escreva todos os títulos, parágrafos, bullets e recomendações em português executivo do Brasil. Não misture inglês ou espanhol, exceto nomes próprios, marcas, URLs e valores literais informados pelo usuário.";
 
   try {
     const response = await fetch("https://api.openai.com/v1/responses", {
@@ -493,7 +624,7 @@ async function generateAiDiagnostic({
               {
                 type: "input_text",
                 text:
-                  "Você é um consultor sênior da Caldeira Growth. Gere um relatório executivo no formato de parecer estratégico, usando o guia de estilo e conteúdo fornecido. O relatório deve ser discursivo, analítico e útil, mas enxuto para uma versão gratuita: limite o conteúdo total a aproximadamente 10.000 a 13.000 caracteres, incluindo espaços, para resultar em cerca de 6 a 8 páginas quando diagramado com capa, gráficos e rodapé. Não escreva um comentário curto sobre o índice, mas também não produza um relatório longo de consultoria completa. Use o CGI como evidência inicial para construir hipóteses executivas sobre qualidade do crescimento, foco, disciplina de gestão, mercado, máquina comercial, execução, liderança e cultura. Se houver public_website_context com status ok, use título, descrição, headings e texto observado do site como contexto público sobre posicionamento, oferta, linguagem comercial e possíveis segmentos atendidos. Use lead.comments, quando existir, para calibrar hipóteses, prioridades e linguagem do diagnóstico. Trate esses sinais como observações externas a validar, não como fatos definitivos. Não invente dados financeiros, nomes, fatos ou números fora do assessment, do comentário livre e do site observado. Quando faltar informação, explicite como hipótese qualificada. Retorne apenas JSON válido com as chaves: report_title, report_subtitle, email_subject, executive_summary, strategic_diagnosis, dimension_reading, critical_bottlenecks, strategic_bets, renunciations, governance_system, final_recommendations. executive_summary deve ter 2 parágrafos. strategic_diagnosis deve ter 4 a 5 parágrafos discursivos. dimension_reading deve ser array de objetos com dimension, score, analysis, implication; cada analysis deve ter 1 parágrafo curto e cada implication deve explicar a consequência estratégica em 1 parágrafo curto. critical_bottlenecks, strategic_bets, renunciations, governance_system e final_recommendations devem ser arrays com 2 a 3 itens; cada item deve ser um texto completo de 50 a 85 palavras. Escreva em português do Brasil, com linguagem de parecer estratégico, sem markdown decorativo.",
+                  `${languageInstruction}\n\nVocê é um consultor sênior da Caldeira Growth. Gere um relatório executivo no formato de parecer estratégico, usando o guia de estilo e conteúdo fornecido. O relatório deve ser discursivo, analítico e útil, mas enxuto para uma versão gratuita: limite o conteúdo total a aproximadamente 10.000 a 13.000 caracteres, incluindo espaços, para resultar em cerca de 6 a 8 páginas quando diagramado com capa, gráficos e rodapé. Não escreva um comentário curto sobre o índice, mas também não produza um relatório longo de consultoria completa. Use o CGI como evidência inicial para construir hipóteses executivas sobre qualidade do crescimento, foco, disciplina de gestão, mercado, máquina comercial, execução, liderança e cultura. Se houver public_website_context com status ok, use título, descrição, headings e texto observado do site como contexto público sobre posicionamento, oferta, linguagem comercial e possíveis segmentos atendidos. O conteúdo do site pode estar em idioma diferente do idioma solicitado; nesse caso, use apenas o significado como contexto e escreva tudo no idioma solicitado. Não copie frases do site em outro idioma. Use lead.comments, quando existir, para calibrar hipóteses, prioridades e linguagem do diagnóstico. Trate esses sinais como observações externas a validar, não como fatos definitivos. Não invente dados financeiros, nomes, fatos ou números fora do assessment, do comentário livre e do site observado. Quando faltar informação, explicite como hipótese qualificada. Retorne apenas JSON válido com as chaves: report_title, report_subtitle, email_subject, executive_summary, strategic_diagnosis, dimension_reading, critical_bottlenecks, strategic_bets, renunciations, governance_system, final_recommendations. executive_summary deve ter 2 parágrafos. strategic_diagnosis deve ter 4 a 5 parágrafos discursivos. dimension_reading deve ser array de objetos com dimension, score, analysis, implication; cada analysis deve ter 1 parágrafo curto e cada implication deve explicar a consequência estratégica em 1 parágrafo curto. critical_bottlenecks, strategic_bets, renunciations, governance_system e final_recommendations devem ser arrays com 2 a 3 itens; cada item deve ser um texto completo de 50 a 85 palavras. Sem markdown decorativo.`,
               },
             ],
           },
@@ -507,8 +638,9 @@ async function generateAiDiagnostic({
                   lead,
                   request_context: requestContext,
                   public_website_context: websiteEnrichment,
-                  cgi: score,
-                  dimensions: CGI_DIMENSIONS,
+                  language,
+                  cgi: localizedScore,
+                  dimensions: localizedDimensions,
                   answers: compactAnswers,
                 }),
               },
@@ -531,7 +663,18 @@ async function generateAiDiagnostic({
     }
 
     const data = await response.json();
-    const text = extractOutputText(data);
+    let text = extractOutputText(data);
+    if (language !== "pt") {
+      if (hasPortugueseLeak(text)) {
+        console.warn("[CGI OpenAI] portuguese_leak_detected", { language });
+      }
+      text = await rewriteAiReportLanguage({
+        apiKey,
+        model,
+        text,
+        language,
+      });
+    }
     return {
       status: "generated",
       text,
@@ -591,6 +734,8 @@ export default async function handler(
     return;
   }
 
+  const language: "pt" | "en" | "es" =
+    payload.language === "en" || payload.language === "es" ? payload.language : "pt";
   const score = calculateCgiScore(answers);
   const requestContext = getRequestContext(req);
   const websiteEnrichment = await enrichCompanyWebsite(payload.lead?.companyWebsite);
@@ -600,6 +745,7 @@ export default async function handler(
     score,
     websiteEnrichment,
     requestContext,
+    language,
   });
 
   const url = getAppsScriptUrl();
@@ -617,6 +763,7 @@ export default async function handler(
 
   const upstreamPayload = {
     action: "cgi_assessment",
+    language,
     lead: payload.lead,
     answers,
     score,

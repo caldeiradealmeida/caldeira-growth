@@ -112,6 +112,25 @@ export default function DesenvolvimentoExecutivo() {
                 </p>
               ))}
             </div>
+            <div className="mt-12 grid gap-6 md:grid-cols-2">
+              {p.caseTestimonials.slice(0, 2).map((item) => (
+                <figure
+                  key={item.name}
+                  className="border-l border-primary/25 pl-6"
+                >
+                  <blockquote className="text-base leading-relaxed text-foreground/90">
+                    “{item.quote}”
+                  </blockquote>
+                  <figcaption className="mt-5 text-sm text-muted-foreground">
+                    <strong className="text-foreground">{item.name}</strong>
+                    <br />
+                    {item.role}
+                    <br />
+                    {item.company}
+                  </figcaption>
+                </figure>
+              ))}
+            </div>
           </div>
         </div>
       </section>

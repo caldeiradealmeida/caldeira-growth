@@ -88,7 +88,7 @@ export default function Index() {
                 asChild
                 className="border border-white/60 bg-transparent text-white hover:bg-white/10 font-medium text-base px-7 py-5 transition-colors duration-300 w-fit"
               >
-                <a href="#abordagem">{h.secondaryCta}</a>
+                <Link to={localizedPath("cgi", lang)}>{h.secondaryCta}</Link>
               </Button>
             </div>
           </div>
@@ -121,6 +121,37 @@ export default function Index() {
           ))}
         </div>
       </TextSection>
+
+      <section className={`${sectionLayout.sectionY} bg-background`}>
+        <div className={sectionLayout.container}>
+          <div className="grid gap-10 md:grid-cols-[0.95fr_1.05fr] md:items-start">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">
+                Caldeira Growth Index
+              </p>
+              <h2 className={`${sectionLayout.title} mt-4`}>
+                {h.diagnosticTitle}
+              </h2>
+            </div>
+            <div className="space-y-5">
+              {h.diagnosticBody.map((paragraph) => (
+                <p
+                  key={paragraph}
+                  className="text-base md:text-[17px] leading-[1.75] text-foreground/88"
+                >
+                  {paragraph}
+                </p>
+              ))}
+              <p className="border-l border-primary/30 pl-5 text-sm leading-relaxed text-muted-foreground">
+                {h.diagnosticNote}
+              </p>
+              <Button asChild size="lg" className="mt-2">
+                <Link to={localizedPath("cgi", lang)}>{h.diagnosticCta}</Link>
+              </Button>
+            </div>
+          </div>
+        </div>
+      </section>
 
       <section className={`${sectionLayout.sectionY} bg-background`}>
         <div className={sectionLayout.container}>

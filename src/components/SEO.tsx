@@ -17,6 +17,7 @@ type SEOProps = {
   title: string;
   description: string;
   image?: string;
+  noIndex?: boolean;
 };
 
 function setMeta(attr: "name" | "property", value: string) {
@@ -44,7 +45,13 @@ function upsertLink(rel: string, href: string, hreflang?: string) {
   link.href = href;
 }
 
-export default function SEO({ routeKey, title, description, image }: SEOProps) {
+export default function SEO({
+  routeKey,
+  title,
+  description,
+  image,
+  noIndex = false,
+}: SEOProps) {
   const { lang } = useLanguage();
   const location = useLocation();
   const resolvedRouteKey = routeKey ?? routeKeyFromPath(location.pathname);
@@ -65,12 +72,11 @@ export default function SEO({ routeKey, title, description, image }: SEOProps) {
     document.title = title;
 
     setMeta("name", "description").content = description;
-    setMeta("name", "robots").content = isRouteIndexableInLanguage(
-      resolvedRouteKey,
-      lang
-    )
-      ? "index, follow"
-      : "noindex, follow";
+    const robots =
+      noIndex || !isRouteIndexableInLanguage(resolvedRouteKey, lang)
+        ? "noindex, follow"
+        : "index, follow";
+    setMeta("name", "robots").content = robots;
     setMeta("property", "og:title").content = title;
     setMeta(
       "property",
@@ -121,6 +127,7 @@ export default function SEO({ routeKey, title, description, image }: SEOProps) {
     description,
     image,
     lang,
+    noIndex,
     resolvedRouteKey,
     title,
   ]);

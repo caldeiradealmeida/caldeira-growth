@@ -64,7 +64,7 @@ export default function Contato() {
     const topicLabel =
       c.topicOptions.find((o) => o.value === topic)?.label ?? topic;
 
-    if (!nome || !email || !topic) {
+    if (!nome || !email || !topic || mensagem.length < 20) {
       toast({
         title:
           lang === "pt"
@@ -74,10 +74,10 @@ export default function Contato() {
               : "Campos obligatorios",
         description:
           lang === "pt"
-            ? "Preencha nome, e-mail e o tema."
+            ? "Preencha nome, e-mail, tema e uma mensagem com pelo menos 20 caracteres."
             : lang === "en"
-              ? "Please fill in name, email, and topic."
-              : "Complete nombre, email y tema.",
+              ? "Please fill in name, email, topic, and a message with at least 20 characters."
+              : "Complete nombre, email, tema y un mensaje con al menos 20 caracteres.",
         variant: "destructive",
       });
       return;
@@ -241,11 +241,21 @@ export default function Contato() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="mensagem">{f.message}</Label>
+                <Label htmlFor="mensagem">{f.message} *</Label>
                 <Textarea
                   id="mensagem"
                   name="mensagem"
                   rows={5}
+                  required
+                  minLength={20}
+                  maxLength={1200}
+                  placeholder={
+                    lang === "pt"
+                      ? "Conte brevemente o desafio da sua organização ou o tema que gostaria de discutir."
+                      : lang === "en"
+                        ? "Briefly describe your organization's challenge or the topic you would like to discuss."
+                        : "Describa brevemente el desafío de su organización o el tema que le gustaría discutir."
+                  }
                   className="resize-y min-h-[120px]"
                 />
               </div>

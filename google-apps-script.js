@@ -57,7 +57,8 @@ var CGI_HEADERS = [
   'cidade',
   'latitude',
   'longitude',
-  'timezone'
+  'timezone',
+  'idioma'
 ];
 
 function doGet(e) {
@@ -272,7 +273,8 @@ function handleCgiAssessmentPost_(payload) {
     String(requestContext.city || '').trim(),
     String(requestContext.latitude || '').trim(),
     String(requestContext.longitude || '').trim(),
-    String(requestContext.timezone || '').trim()
+    String(requestContext.timezone || '').trim(),
+    String(payload.language || '').trim()
   ];
 
   sheet.appendRow(row);

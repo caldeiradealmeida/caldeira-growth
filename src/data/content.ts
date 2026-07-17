@@ -158,7 +158,7 @@ export const content: ContentByLang = {
       headline: "Crescimento exige decisão — e clareza sobre onde apostar.",
       subhead:
         "Apoio CEOs e lideranças em decisões estratégicas que definem o crescimento — com clareza, foco e execução.",
-      ctaContact: "Agendar conversa",
+    ctaContact: "Solicitar conversa",
       ctaBook: "Conhecer o livro",
     },
     about: {
@@ -226,7 +226,7 @@ export const content: ContentByLang = {
     },
     contactCTA: {
       title: "Toda empresa cresce até onde sua clareza permite.",
-      cta: "Agendar conversa",
+      cta: "Solicitar conversa",
     },
     contactPage: {
       headline: "Vamos conversar",
@@ -242,9 +242,9 @@ export const content: ContentByLang = {
         message: "Mensagem",
         submit: "Enviar mensagem",
         sending: "Enviando…",
-        successTitle: "Mensagem enviada",
+        successTitle: "Mensagem recebida",
         successDescription:
-          "Recebemos seu contato. Retornaremos o mais breve possível.",
+          "Recebemos as informações sobre o seu contexto. Entraremos em contato pelo e-mail informado.",
         errorTitle: "Não foi possível enviar",
         errorDescription:
           "Tente novamente em instantes ou escreva para contato@caldeiragrowth.com.",
@@ -280,7 +280,7 @@ export const content: ContentByLang = {
         title: "Crescimento exige decisão.",
         subtitle:
           "Apoio líderes e empresas a enfrentarem decisões estratégicas com clareza, profundidade e execução disciplinada.",
-        cta: "Agendar conversa",
+        cta: "Solicitar conversa",
       },
       forWhom: {
         title: "Para quem precisa decidir",
@@ -372,7 +372,7 @@ export const content: ContentByLang = {
       },
       finalCta: {
         title: "Toda empresa cresce até onde sua clareza permite.",
-        cta: "Agendar conversa",
+        cta: "Solicitar conversa",
       },
     },
     footer: {
@@ -462,7 +462,7 @@ export const content: ContentByLang = {
       headline: "Growth demands decision — and clarity on where to commit.",
       subhead:
         "I support CEOs and leadership teams in the strategic choices that define growth — with clarity, focus, and execution.",
-      ctaContact: "Schedule a conversation",
+    ctaContact: "Request a conversation",
       ctaBook: "Discover the book",
     },
     about: {
@@ -530,7 +530,7 @@ export const content: ContentByLang = {
     },
     contactCTA: {
       title: "Every company grows only as far as its clarity allows.",
-      cta: "Schedule a conversation",
+      cta: "Request a conversation",
     },
     contactPage: {
       headline: "Let’s talk",
@@ -546,9 +546,9 @@ export const content: ContentByLang = {
         message: "Message",
         submit: "Send message",
         sending: "Sending…",
-        successTitle: "Message sent",
+        successTitle: "Message received",
         successDescription:
-          "We received your message and will get back to you as soon as we can.",
+          "We have received the information about your context and will contact you through the email address provided.",
         errorTitle: "Could not send",
         errorDescription:
           "Please try again shortly or email contato@caldeiragrowth.com.",
@@ -584,7 +584,7 @@ export const content: ContentByLang = {
         title: "Growth demands decision.",
         subtitle:
           "I support leaders and companies facing strategic choices — with clarity, depth, and disciplined execution.",
-        cta: "Schedule a conversation",
+        cta: "Request a conversation",
       },
       forWhom: {
         title: "For those who must decide",
@@ -676,7 +676,7 @@ export const content: ContentByLang = {
       },
       finalCta: {
         title: "Every company grows only as far as its clarity allows.",
-        cta: "Schedule a conversation",
+        cta: "Request a conversation",
       },
     },
     footer: {
@@ -769,7 +769,7 @@ content.es = {
     headline: "Arquitectura de Crecimiento para Negocios y Líderes",
     subhead:
       "Diseñamos sistemas de crecimiento que integran estrategia, cultura, liderazgo y ejecución.",
-    ctaContact: "Agendar una conversación",
+    ctaContact: "Solicitar una conversación",
     ctaBook: "Conocer el libro",
   },
   media: {
@@ -787,7 +787,7 @@ content.es = {
       "¿El próximo ciclo de crecimiento requiere más claridad, alineación y capacidad de ejecución?",
     subtitle:
       "Converse con Caldeira Growth sobre los desafíos actuales de su organización.",
-    cta: "Agendar una conversación",
+    cta: "Solicitar una conversación",
   },
   contactPage: {
     headline: "Hablemos",
@@ -803,9 +803,9 @@ content.es = {
       message: "Mensaje",
       submit: "Enviar mensaje",
       sending: "Enviando...",
-      successTitle: "Mensaje enviado",
+      successTitle: "Mensaje recibido",
       successDescription:
-        "Recibimos su contacto. Responderemos lo antes posible.",
+        "Hemos recibido la información sobre su contexto y nos pondremos en contacto a través del correo electrónico informado.",
       errorTitle: "No fue posible enviar",
       errorDescription:
         "Intente nuevamente en unos instantes o escriba a contato@caldeiragrowth.com.",

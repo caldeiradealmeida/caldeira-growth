@@ -81,6 +81,7 @@ const App = () => (
             <Route path="/en/media" element={<Midia />} />
             <Route path="/en/contact" element={<Contato />} />
             <Route path="/en/privacy-policy" element={<PrivacyPolicy />} />
+            <Route path="/en/cgi" element={<CGI />} />
 
             <Route path="/es" element={<Index />} />
             <Route path="/es/consultoria" element={<Consultoria />} />
@@ -99,6 +100,7 @@ const App = () => (
               path="/es/politica-de-privacidad"
               element={<PrivacyPolicy />}
             />
+            <Route path="/es/cgi" element={<CGI />} />
 
             <Route path="*" element={<NotFound />} />
           </Routes>

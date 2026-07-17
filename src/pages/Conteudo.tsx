@@ -58,7 +58,7 @@ export default function Conteudo() {
                   ? localizedPath("articles", lang)
                   : item.kind === "media"
                     ? localizedPath("media", lang)
-                    : "/cgi";
+                    : localizedPath("cgi", lang);
 
               return (
                 <Link
@@ -90,4 +90,3 @@ export default function Conteudo() {
     </main>
   );
 }
-

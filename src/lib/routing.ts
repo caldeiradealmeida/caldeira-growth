@@ -28,6 +28,7 @@ const SPANISH_INDEXABLE_ROUTES = new Set<RouteKey>([
   "speaking",
   "about",
   "contact",
+  "cgi",
   "privacy",
 ]);
 
@@ -61,8 +62,8 @@ export const routePaths: Record<RouteKey, Record<Language, string>> = {
   },
   cgi: {
     pt: "/cgi",
-    en: "/cgi",
-    es: "/cgi",
+    en: "/en/cgi",
+    es: "/es/cgi",
   },
   about: {
     pt: "/sobre",

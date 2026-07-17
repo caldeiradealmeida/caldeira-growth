@@ -50,7 +50,7 @@ export const navigation: Localized<{
     articles: "Artigos",
     media: "Mídia",
     book: "Livro",
-    cgi: "CGI",
+    cgi: "Diagnóstico de crescimento",
   },
   en: {
     home: "Home",
@@ -63,7 +63,7 @@ export const navigation: Localized<{
     articles: "Articles",
     media: "Media",
     book: "Book",
-    cgi: "CGI",
+    cgi: "Growth assessment",
   },
   es: {
     home: "Inicio",
@@ -76,7 +76,7 @@ export const navigation: Localized<{
     articles: "Artículos",
     media: "Medios",
     book: "Libro",
-    cgi: "CGI",
+    cgi: "Diagnóstico de crecimiento",
   },
 };
 
@@ -107,6 +107,10 @@ export const homeContent: Localized<{
   pains: string[];
   thesisTitle: string;
   thesisParagraphs: string[];
+  diagnosticTitle: string;
+  diagnosticBody: string[];
+  diagnosticNote: string;
+  diagnosticCta: string;
   howTitle: string;
   howSteps: Array<{ title: string; body: string }>;
   solutionsTitle: string;
@@ -123,8 +127,8 @@ export const homeContent: Localized<{
     heroTitle: "Arquitetura de Crescimento para Negócios e Lideranças",
     heroText:
       "Projetamos sistemas de crescimento que alinham estratégia, cultura, liderança e execução.",
-    primaryCta: "Agendar uma conversa",
-    secondaryCta: "Conhecer nossa abordagem",
+    primaryCta: "Solicitar uma conversa",
+    secondaryCta: "Faça seu diagnóstico de crescimento",
     painsTitle:
       "Os desafios de crescimento raramente estão em uma única área",
     painsIntro:
@@ -146,6 +150,16 @@ export const homeContent: Localized<{
       "O crescimento se sustenta quando estratégia, cultura, liderança, estrutura, indicadores, governança e execução funcionam como partes de um mesmo sistema.",
       "A Caldeira Growth ajuda organizações e lideranças a compreender, desenhar e fortalecer esse sistema. Chamamos essa abordagem de Arquitetura de Crescimento.",
     ],
+    diagnosticTitle:
+      "Identifique o que está limitando o crescimento da sua organização",
+    diagnosticBody: [
+      "O Caldeira Growth Index é um diagnóstico estruturado sobre as capacidades que sustentam o crescimento.",
+      "A partir de 40 questões, o assessment analisa cinco dimensões da organização: Estratégia, Mercado e Cliente, Máquina de Crescimento, Execução e Gestão, e Liderança e Cultura.",
+      "Ao final, o participante recebe uma leitura executiva com o índice geral, o desempenho por dimensão, os principais gargalos e uma análise inicial das prioridades estratégicas.",
+    ],
+    diagnosticNote:
+      "O diagnóstico não substitui um projeto de consultoria. Ele oferece uma primeira leitura estruturada sobre os fatores que podem estar limitando o próximo ciclo da organização.",
+    diagnosticCta: "Fazer o diagnóstico",
     howTitle: "Da compreensão do problema à capacidade de execução",
     howSteps: [
       {
@@ -216,14 +230,14 @@ export const homeContent: Localized<{
       "O próximo ciclo de crescimento exige mais clareza, alinhamento e capacidade de execução?",
     finalText:
       "Converse com a Caldeira Growth sobre os desafios atuais da sua organização.",
-    finalCta: "Agendar uma conversa",
+    finalCta: "Solicitar uma conversa",
   },
   en: {
     heroTitle: "Growth Architecture for Businesses and Leaders",
     heroText:
       "We design growth systems that align strategy, culture, leadership and execution.",
-    primaryCta: "Schedule a conversation",
-    secondaryCta: "Explore our approach",
+    primaryCta: "Request a conversation",
+    secondaryCta: "Assess your growth capability",
     painsTitle: "Growth challenges rarely sit within a single function",
     painsIntro:
       "As a company grows, complexity, interdependence and the need for coordination grow with it. What worked at one stage may no longer be enough for the next cycle.",
@@ -243,6 +257,16 @@ export const homeContent: Localized<{
       "Growth becomes sustainable when strategy, culture, leadership, structure, metrics, governance and execution operate as parts of the same system.",
       "Caldeira Growth helps organizations and leaders understand, design and strengthen that system. We call this approach Growth Architecture.",
     ],
+    diagnosticTitle:
+      "Identify what is limiting your organization's growth",
+    diagnosticBody: [
+      "The Caldeira Growth Index is a structured assessment of the capabilities that sustain growth.",
+      "Through 40 questions, the assessment analyzes five organizational dimensions: Strategy, Market and Customer, Growth Machine, Execution and Management, and Leadership and Growth Culture.",
+      "At the end, participants receive an executive reading with the overall index, performance by dimension, key bottlenecks and an initial analysis of strategic priorities.",
+    ],
+    diagnosticNote:
+      "The assessment does not replace a consulting project. It offers an initial structured reading of the factors that may be limiting the organization's next cycle.",
+    diagnosticCta: "Take the growth assessment",
     howTitle: "From understanding the problem to execution capability",
     howSteps: [],
     solutionsTitle: "One thesis, different forms of work",
@@ -255,14 +279,14 @@ export const homeContent: Localized<{
       "Does your next growth cycle require greater clarity, alignment and execution capability?",
     finalText:
       "Talk to Caldeira Growth about your organization's current challenges.",
-    finalCta: "Schedule a conversation",
+    finalCta: "Request a conversation",
   },
   es: {
     heroTitle: "Arquitectura de Crecimiento para Negocios y Líderes",
     heroText:
       "Diseñamos sistemas de crecimiento que integran estrategia, cultura, liderazgo y ejecución.",
-    primaryCta: "Agendar una conversación",
-    secondaryCta: "Conocer nuestro enfoque",
+    primaryCta: "Solicitar una conversación",
+    secondaryCta: "Evalúe su capacidad de crecimiento",
     painsTitle:
       "Los desafíos de crecimiento rara vez se concentran en una sola área",
     painsIntro:
@@ -284,6 +308,16 @@ export const homeContent: Localized<{
       "El crecimiento se sostiene cuando la estrategia, la cultura, el liderazgo, la estructura, los indicadores, la gobernanza y la ejecución funcionan como partes de un mismo sistema.",
       "Caldeira Growth ayuda a organizaciones y líderes a comprender, diseñar y fortalecer ese sistema. Llamamos a este enfoque Arquitectura de Crecimiento.",
     ],
+    diagnosticTitle:
+      "Identifique qué está limitando el crecimiento de su organización",
+    diagnosticBody: [
+      "El Caldeira Growth Index es un diagnóstico estructurado sobre las capacidades que sostienen el crecimiento.",
+      "A partir de 40 preguntas, el assessment analiza cinco dimensiones de la organización: Estrategia, Mercado y Cliente, Máquina de Crecimiento, Ejecución y Gestión, y Liderazgo y Cultura.",
+      "Al final, el participante recibe una lectura ejecutiva con el índice general, el desempeño por dimensión, los principales cuellos de botella y un análisis inicial de prioridades estratégicas.",
+    ],
+    diagnosticNote:
+      "El diagnóstico no sustituye un proyecto de consultoría. Ofrece una primera lectura estructurada sobre los factores que pueden estar limitando el próximo ciclo de la organización.",
+    diagnosticCta: "Realizar el diagnóstico",
     howTitle: "De la comprensión del problema a la capacidad de ejecución",
     howSteps: [],
     solutionsTitle: "Una tesis, diferentes formas de actuación",
@@ -298,7 +332,7 @@ export const homeContent: Localized<{
       "¿El próximo ciclo de crecimiento requiere más claridad, alineación y capacidad de ejecución?",
     finalText:
       "Converse con Caldeira Growth sobre los desafíos actuales de su organización.",
-    finalCta: "Agendar una conversación",
+    finalCta: "Solicitar una conversación",
   },
 };
 
@@ -417,7 +451,7 @@ export const consultingContent: Localized<{
     finalTitle: "O desafio da sua empresa não precisa caber em uma categoria pronta",
     finalText:
       "Cada organização possui uma combinação particular de história, cultura, capacidades, oportunidades e restrições. Converse conosco sobre o seu contexto.",
-    cta: "Agendar uma conversa",
+    cta: "Solicitar uma conversa",
   },
   en: {
     metaTitle: "Consulting | Growth Architecture for Organizations",
@@ -460,7 +494,7 @@ export const consultingContent: Localized<{
     ],
     finalTitle: "Your company's challenge does not need to fit a ready-made category",
     finalText: "Every organization has a specific combination of history, culture, capabilities, opportunities and constraints.",
-    cta: "Schedule a conversation",
+    cta: "Request a conversation",
   },
   es: {
     metaTitle: "Consultoría | Arquitectura de Crecimiento para Empresas",
@@ -504,7 +538,7 @@ export const consultingContent: Localized<{
     finalTitle: "El desafío de su empresa no necesita encajar en una categoría lista",
     finalText:
       "Cada organización tiene una combinación particular de historia, cultura, capacidades, oportunidades y restricciones.",
-    cta: "Agendar una conversación",
+    cta: "Solicitar una conversación",
   },
 };
 
@@ -522,6 +556,7 @@ export const executiveContent: Localized<{
   topics: string[];
   caseTitle: string;
   caseText: string[];
+  caseTestimonials: Array<{ quote: string; name: string; role: string; company: string }>;
   workshopsTitle: string;
   workshopsText: string;
   workshops: string[];
@@ -588,6 +623,29 @@ export const executiveContent: Localized<{
       "O programa integrou temas que normalmente são tratados de forma separada, como estratégia, cultura, liderança, modelo de negócio, finanças, growth, indicadores, riscos, organização comercial e alocação de capital.",
       "Mais do que transmitir conceitos, o trabalho buscou desenvolver uma visão integrada do negócio e fortalecer a capacidade dos executivos de analisar problemas, fazer escolhas e conectar suas decisões ao resultado da organização.",
     ],
+    caseTestimonials: [
+      {
+        quote:
+          "O programa ampliou minha visão para além da minha função e do meu time. Passei a compreender melhor como decisões estratégicas são tomadas no nível corporativo, considerando diferentes culturas, requisitos financeiros e impactos organizacionais.",
+        name: "Francisco Jung",
+        role: "US Sales Manager — Commercial, Industrials, Renewables and Data Centers",
+        company: "Maschinenfabrik Reinhausen",
+      },
+      {
+        quote:
+          "O programa ofereceu uma visão abrangente sobre como desenvolver uma estratégia, criar a cultura necessária para executá-la e avaliar projetos até sua implementação.",
+        name: "Jasmine Huang",
+        role: "Regional Sales Engineering Supervisor",
+        company: "Maschinenfabrik Reinhausen",
+      },
+      {
+        quote:
+          "O programa desenvolveu uma visão muito mais estratégica sobre o meu trabalho. As ferramentas financeiras, a análise de riscos e a compreensão dos mecanismos de governança passaram a apoiar decisões mais conscientes.",
+        name: "E. Ruben Maldonado B.",
+        role: "Area Sales Manager",
+        company: "Maschinenfabrik Reinhausen",
+      },
+    ],
     workshopsTitle: "Workshops Executivos",
     workshopsText:
       "Intervenções estruturadas para organizações que precisam alinhar lideranças, tomar decisões ou avançar sobre um desafio específico.",
@@ -647,6 +705,22 @@ export const executiveContent: Localized<{
     topics: ["strategy", "culture", "leadership", "business model", "growth", "finance", "execution", "governance", "decision-making"],
     caseTitle: "Executive development connected to real business challenges",
     caseText: ["At MR, Caldeira Growth developed an Executive Development Program focused on expanding strategic and managerial capabilities across different markets."],
+    caseTestimonials: [
+      {
+        quote:
+          "The program expanded my view beyond my function and my team. I gained a clearer understanding of how strategic decisions are made at the corporate level, considering different cultures, financial requirements and organizational impacts.",
+        name: "Francisco Jung",
+        role: "US Sales Manager — Commercial, Industrials, Renewables and Data Centers",
+        company: "Maschinenfabrik Reinhausen",
+      },
+      {
+        quote:
+          "The program offered a broad view of how to develop a strategy, create the culture needed to execute it and evaluate projects through implementation.",
+        name: "Jasmine Huang",
+        role: "Regional Sales Engineering Supervisor",
+        company: "Maschinenfabrik Reinhausen",
+      },
+    ],
     workshopsTitle: "Executive Workshops",
     workshopsText: "Structured interventions for organizations that need to align leaders, make decisions or advance a specific challenge.",
     workshops: ["strategic planning", "executive alignment", "priorities", "culture", "business model", "execution"],
@@ -683,6 +757,22 @@ export const executiveContent: Localized<{
     topics: ["estrategia", "cultura", "liderazgo", "modelo de negocio", "growth", "finanzas", "ejecución", "gobernanza", "toma de decisión"],
     caseTitle: "Desarrollo ejecutivo conectado a desafíos reales del negocio",
     caseText: ["En MR, Caldeira Growth desarrolló un Programa de Desarrollo Ejecutivo orientado a ampliar la capacidad estratégica y gerencial de líderes en diferentes mercados."],
+    caseTestimonials: [
+      {
+        quote:
+          "El programa amplió mi visión más allá de mi función y de mi equipo. Pasé a comprender mejor cómo se toman decisiones estratégicas a nivel corporativo, considerando diferentes culturas, requisitos financieros e impactos organizacionales.",
+        name: "Francisco Jung",
+        role: "US Sales Manager — Commercial, Industrials, Renewables and Data Centers",
+        company: "Maschinenfabrik Reinhausen",
+      },
+      {
+        quote:
+          "El programa ofreció una visión amplia sobre cómo desarrollar una estrategia, crear la cultura necesaria para ejecutarla y evaluar proyectos hasta su implementación.",
+        name: "Jasmine Huang",
+        role: "Regional Sales Engineering Supervisor",
+        company: "Maschinenfabrik Reinhausen",
+      },
+    ],
     workshopsTitle: "Workshops Ejecutivos",
     workshopsText: "Intervenciones estructuradas para organizaciones que necesitan alinear líderes, tomar decisiones o avanzar sobre un desafío específico.",
     workshops: ["planificación estratégica", "alineación ejecutiva", "prioridades", "cultura", "modelo de negocio", "ejecución"],
@@ -958,7 +1048,7 @@ export const aboutContent: Localized<{
     ],
     ctaTitle: "Converse sobre o próximo ciclo de crescimento da sua organização",
     ctaText: "A primeira conversa parte do contexto real da empresa.",
-    cta: "Agendar uma conversa",
+    cta: "Solicitar uma conversa",
   },
   en: {
     metaTitle: "About | Caldeira Growth",
@@ -979,7 +1069,7 @@ export const aboutContent: Localized<{
     credentials: ["Executive experience in global technology companies and high-growth businesses.", "Board and governance experience.", "Author of Cresça ou Desapareça."],
     ctaTitle: "Talk about your organization's next growth cycle",
     ctaText: "The first conversation starts from the company's real context.",
-    cta: "Schedule a conversation",
+    cta: "Request a conversation",
   },
   es: {
     metaTitle: "Sobre Nosotros | Caldeira Growth",
@@ -1000,7 +1090,7 @@ export const aboutContent: Localized<{
     credentials: ["Experiencia ejecutiva en empresas globales de tecnología y negocios de alto crecimiento.", "Experiencia en consejos y ambientes de gobernanza.", "Autor del libro Cresça ou Desapareça."],
     ctaTitle: "Conversemos sobre el próximo ciclo de crecimiento de su organización",
     ctaText: "La primera conversación parte del contexto real de la empresa.",
-    cta: "Agendar una conversación",
+    cta: "Solicitar una conversación",
   },
 };
 

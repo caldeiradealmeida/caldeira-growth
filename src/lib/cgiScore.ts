@@ -2,8 +2,10 @@ import {
   CGI_DIMENSIONS,
   CGI_LEVELS,
   CGI_QUESTIONS,
+  getCgiConfig,
   type CgiDimensionId,
 } from "../data/cgiConfig";
+import type { Language } from "./routing";
 
 export type CgiAnswers = Record<string, number>;
 
@@ -48,10 +50,14 @@ export function areCgiAnswersComplete(answers: CgiAnswers): boolean {
   return CGI_QUESTIONS.every((question) => clampAnswer(answers[question.id]) !== null);
 }
 
-export function calculateCgiScore(input: Record<string, unknown>): CgiScoreResult {
+export function calculateCgiScore(
+  input: Record<string, unknown>,
+  lang: Language = "pt"
+): CgiScoreResult {
   const answers = normalizeCgiAnswers(input);
+  const config = getCgiConfig(lang);
 
-  const dimensionScores = CGI_DIMENSIONS.map<CgiDimensionScore>((dimension) => {
+  const dimensionScores = config.dimensions.map<CgiDimensionScore>((dimension) => {
     const questions = CGI_QUESTIONS.filter(
       (question) => question.dimensionId === dimension.id
     );
@@ -79,7 +85,7 @@ export function calculateCgiScore(input: Record<string, unknown>): CgiScoreResul
       dimensionScores.length
   );
   const level =
-    CGI_LEVELS.find((item) => finalScore >= item.min && finalScore <= item.max) ||
+    config.levels.find((item) => finalScore >= item.min && finalScore <= item.max) ||
     CGI_LEVELS[0];
   const attentionPoints = [...dimensionScores]
     .sort((a, b) => a.score - b.score)

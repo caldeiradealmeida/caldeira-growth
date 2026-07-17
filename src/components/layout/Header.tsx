@@ -85,9 +85,6 @@ export default function Header() {
                   <DropdownMenuItem asChild>
                     <a {...bookSiteLinkProps}>{c.book}</a>
                   </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
-                    <Link to={localizedPath("cgi", lang)}>{c.cgi}</Link>
-                  </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             ) : null}
@@ -100,6 +97,12 @@ export default function Header() {
                 {c[item.key]}
               </Link>
             ))}
+            <Link
+              to={localizedPath("cgi", lang)}
+              className="ml-1 rounded-md border border-primary/20 px-3 py-2 text-sm font-semibold text-primary hover:bg-primary hover:text-primary-foreground transition-colors"
+            >
+              {c.cgi}
+            </Link>
           </nav>
 
           {/* Language + mobile toggle */}
@@ -184,13 +187,6 @@ export default function Header() {
                     >
                       {c.book}
                     </a>
-                    <Link
-                      to={localizedPath("cgi", lang)}
-                      onClick={() => setOpen(false)}
-                      className="px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-                    >
-                      {c.cgi}
-                    </Link>
                   </div>
                 </>
               ) : null}
@@ -204,6 +200,13 @@ export default function Header() {
                   {c[item.key]}
                 </Link>
               ))}
+              <Link
+                to={localizedPath("cgi", lang)}
+                onClick={() => setOpen(false)}
+                className="mt-2 rounded-md border border-primary/20 px-4 py-3 text-base font-semibold text-primary hover:bg-primary hover:text-primary-foreground transition-colors"
+              >
+                {c.cgi}
+              </Link>
             </div>
           </nav>
         )}
