@@ -8,9 +8,10 @@ import type { CgiUiText } from "../config";
 type CgiLandingProps = {
   t: CgiUiText;
   config: ReturnType<typeof getCgiConfig>;
+  onStartClick: () => void;
 };
 
-export function CgiLanding({ t, config }: CgiLandingProps) {
+export function CgiLanding({ t, config, onStartClick }: CgiLandingProps) {
   return (
     <>
       <section className="pt-28 pb-16 md:pt-36 md:pb-24 bg-gradient-to-br from-primary via-primary to-primary/90 text-primary-foreground">
@@ -30,11 +31,12 @@ export function CgiLanding({ t, config }: CgiLandingProps) {
                 <Button
                   size="lg"
                   className="bg-accent text-accent-foreground hover:bg-accent/90"
-                  onClick={() =>
+                  onClick={() => {
+                    onStartClick();
                     document
                       .getElementById("cgi-assessment")
-                      ?.scrollIntoView({ behavior: "smooth" })
-                  }
+                      ?.scrollIntoView({ behavior: "smooth" });
+                  }}
                 >
                   {t.start}
                   <ArrowRight className="ml-2 h-4 w-4" />

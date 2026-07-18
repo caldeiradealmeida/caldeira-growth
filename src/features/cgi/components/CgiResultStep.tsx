@@ -31,6 +31,7 @@ type CgiResultStepProps = {
   downloadPdf: () => void;
   openEmailDraft: () => void;
   regenerateSavedAssessment: () => void;
+  onCtaClick: () => void;
 };
 
 export function CgiResultStep({
@@ -49,6 +50,7 @@ export function CgiResultStep({
   downloadPdf,
   openEmailDraft,
   regenerateSavedAssessment,
+  onCtaClick,
 }: CgiResultStepProps) {
   return (
     <div className="mx-auto max-w-5xl">
@@ -87,6 +89,7 @@ export function CgiResultStep({
               downloadPdf={downloadPdf}
               openEmailDraft={openEmailDraft}
               regenerateSavedAssessment={regenerateSavedAssessment}
+              onCtaClick={onCtaClick}
             />
           </CardContent>
         </Card>

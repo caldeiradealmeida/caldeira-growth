@@ -1,5 +1,5 @@
 import { CGI_QUESTIONS, type CgiDimensionId } from "@/data/cgiConfig";
-import type { Language } from "@/lib/routing";
+import { localizedPath, type Language } from "@/lib/routing";
 import type { LeadForm } from "../types";
 
 export const initialLead: LeadForm = {
@@ -22,7 +22,16 @@ export const initialLead: LeadForm = {
 };
 
 export const CGI_ASSESSMENT_ENDPOINT = "/api/cgi-assessment";
+export const CGI_START_ENDPOINT = "/api/cgi/start";
+export const CGI_LEAD_ENDPOINT = "/api/cgi/lead";
+export const CGI_PROGRESS_ENDPOINT = "/api/cgi/progress";
+export const CGI_EVENT_ENDPOINT = "/api/cgi/event";
 export const CGI_LAST_ASSESSMENT_KEY = "caldeira-growth:cgi:last-assessment";
+export const CGI_SESSION_KEY = "caldeira-growth:cgi:tab-session";
+export const CGI_ASSESSMENT_STATE_KEY = "caldeira-growth:cgi:assessment-state";
+export const CGI_PRIVACY_POLICY_VERSION = "2026-07-17";
+export const CGI_METHODOLOGY_VERSION = "1.0.0";
+export const CGI_SCORING_VERSION = "1.0.0";
 
 export const cgiUi: Record<
   Language,
@@ -108,6 +117,11 @@ export const cgiUi: Record<
     contactText: string;
     founderLine: string;
     toolbar: string;
+    privacyConsentLabel: string;
+    marketingConsentLabel: string;
+    privacyPolicyHref: string;
+    privacyPolicyLinkLabel: string;
+    privacyReviewNote: string;
   }
 > = {
   pt: {
@@ -272,6 +286,13 @@ export const cgiUi: Record<
     founderLine: "Fundador e Estrategista de Crescimento - Caldeira Growth",
     toolbar:
       "Uma versão preparada para impressão foi aberta. No navegador, selecione “Salvar como PDF”.",
+    privacyConsentLabel:
+      "Li e concordo com a política de privacidade e autorizo o uso dos dados para gerar e registrar este diagnóstico.",
+    marketingConsentLabel:
+      "Aceito receber comunicações da Caldeira Growth sobre conteúdos, programas e serviços relacionados a crescimento.",
+    privacyPolicyHref: localizedPath("privacy", "pt"),
+    privacyPolicyLinkLabel: "Política de privacidade",
+    privacyReviewNote: "Texto de consentimento sujeito à revisão final antes do deploy.",
   },
   en: {
     metaTitle: "CGI - Caldeira Growth Index | Growth assessment",
@@ -435,6 +456,13 @@ export const cgiUi: Record<
     founderLine: "Founder and Growth Strategist - Caldeira Growth",
     toolbar:
       "A print-ready version has opened. In your browser, select “Save as PDF”.",
+    privacyConsentLabel:
+      "I have read and agree with the privacy policy and authorize the use of the data to generate and record this diagnosis.",
+    marketingConsentLabel:
+      "I agree to receive Caldeira Growth communications about growth-related content, programs and services.",
+    privacyPolicyHref: localizedPath("privacy", "en"),
+    privacyPolicyLinkLabel: "Privacy policy",
+    privacyReviewNote: "Consent text subject to final review before deployment.",
   },
   es: {
     metaTitle: "CGI - Caldeira Growth Index | Diagnóstico de crecimiento",
@@ -598,6 +626,13 @@ export const cgiUi: Record<
     founderLine: "Fundador y Estrategista de Crecimiento - Caldeira Growth",
     toolbar:
       "Se abrió una versión preparada para impresión. En el navegador, seleccione “Guardar como PDF”.",
+    privacyConsentLabel:
+      "He leído y acepto la política de privacidad y autorizo el uso de los datos para generar y registrar este diagnóstico.",
+    marketingConsentLabel:
+      "Acepto recibir comunicaciones de Caldeira Growth sobre contenidos, programas y servicios relacionados con crecimiento.",
+    privacyPolicyHref: localizedPath("privacy", "es"),
+    privacyPolicyLinkLabel: "Política de privacidad",
+    privacyReviewNote: "Texto de consentimiento sujeto a revisión final antes del deploy.",
   },
 };
 

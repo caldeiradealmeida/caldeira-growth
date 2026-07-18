@@ -1,7 +1,8 @@
-import type { Dispatch, FormEvent, SetStateAction } from "react";
+import { useEffect, useRef, type Dispatch, type FormEvent, type SetStateAction } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -16,7 +17,7 @@ import { sectionLayout } from "@/lib/sectionLayout";
 import type { getCgiConfig } from "@/data/cgiConfig";
 import { ArrowRight, Sparkles } from "lucide-react";
 import type { CgiUiText } from "../config";
-import type { LeadForm } from "../types";
+import type { CgiConsentState, LeadForm } from "../types";
 import {
   isOtherOption,
   normalizeWebsiteInput,
@@ -30,14 +31,18 @@ type CgiLeadStepProps = {
   website: string;
   devAnswersJson: string;
   isSubmitting: boolean;
+  isLeadSubmitting: boolean;
   hasSavedAssessment: boolean;
+  consent: CgiConsentState;
   startAssessment: (event: FormEvent<HTMLFormElement>) => void;
   updateLead: (key: keyof LeadForm, value: string) => void;
   setLead: Dispatch<SetStateAction<LeadForm>>;
+  setConsent: Dispatch<SetStateAction<CgiConsentState>>;
   setWebsite: (value: string) => void;
   setDevAnswersJson: (value: string) => void;
   generateFromAnswersJson: () => void;
   regenerateSavedAssessment: () => void;
+  onLeadFormView: () => void;
 };
 
 export function CgiLeadStep({
@@ -47,15 +52,34 @@ export function CgiLeadStep({
   website,
   devAnswersJson,
   isSubmitting,
+  isLeadSubmitting,
   hasSavedAssessment,
+  consent,
   startAssessment,
   updateLead,
   setLead,
+  setConsent,
   setWebsite,
   setDevAnswersJson,
   generateFromAnswersJson,
   regenerateSavedAssessment,
+  onLeadFormView,
 }: CgiLeadStepProps) {
+  const formCardRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const element = formCardRef.current;
+    if (!element) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) onLeadFormView();
+      },
+      { threshold: 0.35 }
+    );
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [onLeadFormView]);
+
   return (
     <div className="grid gap-10 lg:grid-cols-[0.8fr_1.2fr]">
       <div className={sectionLayout.prose}>
@@ -81,7 +105,7 @@ export function CgiLeadStep({
         </div>
       </div>
 
-      <Card>
+      <Card ref={formCardRef}>
         <CardContent className="p-6 md:p-8">
           <form onSubmit={startAssessment} className="space-y-6">
             <div className="grid gap-5 md:grid-cols-2">
@@ -292,6 +316,53 @@ export function CgiLeadStep({
               />
             </div>
 
+            <div className="space-y-3 rounded-lg border border-border p-4">
+              <div className="flex items-start gap-3">
+                <Checkbox
+                  id="consentPrivacy"
+                  checked={consent.privacy}
+                  onCheckedChange={(checked) =>
+                    setConsent((current) => ({ ...current, privacy: checked === true }))
+                  }
+                />
+                <Label
+                  htmlFor="consentPrivacy"
+                  className="text-sm font-normal leading-relaxed"
+                >
+                  {t.privacyConsentLabel}{" "}
+                  <a
+                    href={t.privacyPolicyHref}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="font-medium text-primary underline-offset-4 hover:underline"
+                  >
+                    {t.privacyPolicyLinkLabel}
+                  </a>
+                  . *
+                </Label>
+              </div>
+              <div className="flex items-start gap-3">
+                <Checkbox
+                  id="consentMarketing"
+                  checked={consent.marketing}
+                  onCheckedChange={(checked) =>
+                    setConsent((current) => ({ ...current, marketing: checked === true }))
+                  }
+                />
+                <Label
+                  htmlFor="consentMarketing"
+                  className="text-sm font-normal leading-relaxed"
+                >
+                  {t.marketingConsentLabel}
+                </Label>
+              </div>
+              {import.meta.env.DEV && (
+                <p className="text-xs text-muted-foreground">
+                  {t.privacyReviewNote}
+                </p>
+              )}
+            </div>
+
             {import.meta.env.DEV && (
               <div className="rounded-lg border border-dashed border-primary/35 bg-primary/5 p-4 space-y-3">
                 <div>
@@ -323,7 +394,12 @@ export function CgiLeadStep({
               </div>
             )}
 
-            <Button type="submit" size="lg" className="w-full md:w-auto">
+            <Button
+              type="submit"
+              size="lg"
+              className="w-full md:w-auto"
+              disabled={isLeadSubmitting}
+            >
               {t.begin}
               <ArrowRight className="ml-2 h-4 w-4" />
             </Button>

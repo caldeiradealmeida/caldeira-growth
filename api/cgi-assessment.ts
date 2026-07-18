@@ -9,6 +9,16 @@ import {
   type CgiScoreResult,
 } from "./cgi-core.js";
 import { buildCgiReportPromptContext } from "./cgi-report-guide.js";
+import {
+  createEventId,
+  insertFunnelEvent,
+  upsertAnswers,
+  upsertAssessment,
+} from "./_cgi-supabase.js";
+import {
+  normalizeAnonymousSessionId,
+  normalizePublicAssessmentId,
+} from "./_cgi-validation.js";
 
 type CgiLead = {
   name?: string;
@@ -37,6 +47,9 @@ type CgiPayload = {
   aiStatus?: string;
   startedAt?: string;
   website?: string;
+  anonymous_session_id?: string;
+  public_assessment_id?: string;
+  completion_event_id?: string;
 };
 
 type AiResult = {
@@ -719,6 +732,80 @@ async function generateAiDiagnostic({
   }
 }
 
+function getDimensionScore(score: CgiScoreResult, dimensionId: string): number | null {
+  return score.dimensionScores.find((item) => item.dimensionId === dimensionId)?.score ?? null;
+}
+
+async function persistCompletedAssessmentBestEffort({
+  payload,
+  answers,
+  score,
+}: {
+  payload: CgiPayload;
+  answers: Record<string, number>;
+  score: CgiScoreResult;
+}): Promise<{ publicAssessmentId: string; completionEventId: string } | null> {
+  const publicAssessmentId = normalizePublicAssessmentId(payload.public_assessment_id);
+  const anonymousSessionId = normalizeAnonymousSessionId(payload.anonymous_session_id);
+  if (!publicAssessmentId || !anonymousSessionId) return null;
+
+  const startedAtMs = Number(payload.startedAt);
+  const completionTimeSeconds = Number.isFinite(startedAtMs)
+    ? Math.max(0, Math.round((Date.now() - startedAtMs) / 1000))
+    : null;
+  const lowest = [...score.dimensionScores].sort((a, b) => a.score - b.score)[0];
+  const highest = [...score.dimensionScores].sort((a, b) => b.score - a.score)[0];
+
+  const assessment = await upsertAssessment({
+    publicAssessmentId,
+    anonymousSessionId,
+    status: "completed",
+    currentQuestion: CGI_QUESTIONS.length,
+    progressPercent: 100,
+    completedAt: new Date().toISOString(),
+    completionTimeSeconds,
+    cgiScore: score.finalScore,
+    strategyScore: getDimensionScore(score, "strategy"),
+    marketCustomerScore: getDimensionScore(score, "market"),
+    growthEngineScore: getDimensionScore(score, "growthMachine"),
+    executionManagementScore: getDimensionScore(score, "execution"),
+    leadershipCultureScore: getDimensionScore(score, "leadership"),
+    cgiLevel: score.level.id,
+    lowestDimension: lowest?.dimensionId ?? null,
+    highestDimension: highest?.dimensionId ?? null,
+    methodologyVersion: "1.0.0",
+    scoringVersion: "1.0.0",
+  });
+
+  if (assessment?.id) {
+    await upsertAnswers(assessment.id, answers);
+  }
+
+  const completionEventId = String(payload.completion_event_id || createEventId());
+  await insertFunnelEvent({
+    eventId: completionEventId,
+    anonymousSessionId,
+    publicAssessmentId,
+    eventName: "cgi_assessment_completed",
+    source: "server",
+    pagePath: "/cgi",
+    metadata: {
+      cgi_score: score.finalScore,
+      cgi_level: score.level.id,
+      strategy_score: getDimensionScore(score, "strategy"),
+      market_customer_score: getDimensionScore(score, "market"),
+      growth_engine_score: getDimensionScore(score, "growthMachine"),
+      execution_management_score: getDimensionScore(score, "execution"),
+      leadership_culture_score: getDimensionScore(score, "leadership"),
+      lowest_dimension: lowest?.dimensionId ?? null,
+      highest_dimension: highest?.dimensionId ?? null,
+      completion_time_seconds: completionTimeSeconds,
+    },
+  });
+
+  return { publicAssessmentId, completionEventId };
+}
+
 export default async function handler(
   req: VercelRequest,
   res: VercelResponse
@@ -780,11 +867,28 @@ export default async function handler(
     requestContext,
     language,
   });
+  let supabaseCompletion: Awaited<ReturnType<typeof persistCompletedAssessmentBestEffort>> = null;
+  try {
+    supabaseCompletion = await persistCompletedAssessmentBestEffort({
+      payload,
+      answers,
+      score,
+    });
+  } catch (error) {
+    console.error("[CGI Supabase]", {
+      operation: "persist_completed_assessment",
+      status: 0,
+      public_assessment_id: normalizePublicAssessmentId(payload.public_assessment_id),
+      error: error instanceof Error ? error.message : String(error || ""),
+    });
+  }
 
   const url = getAppsScriptUrl();
   if (!url) {
     res.status(200).json({
       ok: true,
+      public_assessment_id: supabaseCompletion?.publicAssessmentId,
+      completion_event_id: supabaseCompletion?.completionEventId,
       save: { ok: false, error: "not_configured" },
       score,
       ai,
@@ -828,6 +932,8 @@ export default async function handler(
   } catch (error) {
     res.status(200).json({
       ok: true,
+      public_assessment_id: supabaseCompletion?.publicAssessmentId,
+      completion_event_id: supabaseCompletion?.completionEventId,
       save: {
         ok: false,
         error: "upstream_request_failed",
@@ -850,6 +956,8 @@ export default async function handler(
 
     res.status(200).json({
       ok: true,
+      public_assessment_id: supabaseCompletion?.publicAssessmentId,
+      completion_event_id: supabaseCompletion?.completionEventId,
       save: {
         ok: false,
         error,
@@ -867,6 +975,8 @@ export default async function handler(
 
   res.status(200).json({
     ok: true,
+    public_assessment_id: supabaseCompletion?.publicAssessmentId,
+    completion_event_id: supabaseCompletion?.completionEventId,
     save: { ok: true },
     score,
     ai,

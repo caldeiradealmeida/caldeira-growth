@@ -23,6 +23,7 @@ type CgiResultActionsProps = {
   downloadPdf: () => void;
   openEmailDraft: () => void;
   regenerateSavedAssessment: () => void;
+  onCtaClick: () => void;
 };
 
 export function CgiResultActions({
@@ -37,11 +38,12 @@ export function CgiResultActions({
   downloadPdf,
   openEmailDraft,
   regenerateSavedAssessment,
+  onCtaClick,
 }: CgiResultActionsProps) {
   return (
     <div className="mt-8 flex flex-col gap-3">
       <Button size="lg" asChild>
-        <a href={config.primaryCta.href}>
+        <a href={config.primaryCta.href} onClick={onCtaClick}>
           <CalendarDays className="mr-2 h-4 w-4" />
           {config.primaryCta.label}
         </a>
