@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import handler from "./cgi-assessment";
+import handler from "../../api/cgi-assessment";
 
 vi.mock("node:dns/promises", () => ({
   resolveMx: vi.fn(async () => [{ exchange: "mail.example.com", priority: 10 }]),
@@ -7,7 +7,7 @@ vi.mock("node:dns/promises", () => ({
   resolve6: vi.fn(async () => []),
 }));
 
-vi.mock("./_cgi-supabase.js", () => ({
+vi.mock("../../api/_cgi-supabase.js", () => ({
   createEventId: vi.fn(() => "completion_event_generated"),
   insertFunnelEvent: vi.fn(),
   upsertAnswers: vi.fn(),

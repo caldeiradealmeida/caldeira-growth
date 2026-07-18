@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import handler from "./start";
+import handler from "../../../api/cgi/start";
 
 const supabaseMocks = vi.hoisted(() => ({
   createPublicAssessmentId: vi.fn(() => "new_assessment_1"),
@@ -9,7 +9,7 @@ const supabaseMocks = vi.hoisted(() => ({
   upsertAttribution: vi.fn(),
 }));
 
-vi.mock("../_cgi-supabase.js", () => supabaseMocks);
+vi.mock("../../../api/_cgi-supabase.js", () => supabaseMocks);
 
 function createResponse() {
   return {

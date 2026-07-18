@@ -3,7 +3,7 @@ import {
   hasForbiddenMetadataKeys,
   isAllowedCgiEvent,
   sanitizeEventMetadata,
-} from "./_cgi-validation";
+} from "../../api/_cgi-validation";
 
 describe("CGI event validation", () => {
   it("rejects events outside the official Phase 1 taxonomy", () => {

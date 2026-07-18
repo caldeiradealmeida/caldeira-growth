@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   getActiveAssessmentByAnonymousSession,
   isReusableStartAssessment,
-} from "./_cgi-supabase";
+} from "../../api/_cgi-supabase";
 
 const originalEnv = { ...process.env };
 
