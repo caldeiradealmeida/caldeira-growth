@@ -3,7 +3,7 @@
     {
       "source": "/650",
       "destination": "/",
-      "permanent": true
+      "statusCode": 301
     },
     {
       "source": "/path-to-grow",
