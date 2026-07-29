@@ -6,15 +6,24 @@ import {
 } from "../_cgi-supabase.js";
 import {
   hasForbiddenMetadataKeys,
+  isAllowedCgiEvent,
   normalizeAnonymousSessionId,
   type CgiLeadInput,
   normalizeLead,
   normalizePublicAssessmentId,
+  validateProfessionalContent,
   validateEmailDomain,
   validateNormalizedLead,
+  validateNormalizedLeadContext,
+  validateNormalizedLeadIdentity,
 } from "../_cgi-validation.js";
 
 const PRIVACY_POLICY_VERSION = "2026-07-17";
+const LEAD_EVENT_ALLOWLIST = new Set([
+  "cgi_lead_submitted",
+  "cgi_company_context_submitted",
+  "cgi_phone_submitted",
+]);
 
 function readPayload(req: VercelRequest): Record<string, unknown> {
   if (typeof req.body === "string") return JSON.parse(req.body || "{}") as Record<string, unknown>;
@@ -38,7 +47,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const anonymousSessionId = normalizeAnonymousSessionId(payload.anonymous_session_id);
   const publicAssessmentId = normalizePublicAssessmentId(payload.public_assessment_id);
   const lead = normalizeLead(payload.lead as CgiLeadInput | undefined);
-  const validationError = validateNormalizedLead(lead);
+  const eventName = isAllowedCgiEvent(payload.event_name) &&
+    LEAD_EVENT_ALLOWLIST.has(payload.event_name)
+    ? payload.event_name
+    : "cgi_lead_submitted";
+  const validationError =
+    eventName === "cgi_lead_submitted"
+      ? validateNormalizedLeadIdentity(lead)
+      : eventName === "cgi_company_context_submitted"
+        ? validateNormalizedLeadContext(lead)
+        : eventName === "cgi_phone_submitted"
+          ? validateNormalizedLeadIdentity(lead)
+          : validateNormalizedLead(lead);
   const consentPrivacy = payload.consent_privacy === true;
   const consentMarketing =
     typeof payload.consent_marketing === "boolean" ? payload.consent_marketing : null;
@@ -58,6 +78,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
   if (!lead) {
     res.status(400).json({ ok: false, error: "lead_required" });
+    return;
+  }
+  const professionalContentError = validateProfessionalContent({
+    strict: [
+      { field: "name", value: lead.name },
+      { field: "company", value: lead.company },
+      { field: "role", value: lead.role },
+    ],
+    contextual: [
+      { field: "sector", value: lead.sector },
+      { field: "commercial_relationship_model", value: lead.commercial_relationship_model },
+      { field: "current_challenge", value: lead.current_challenge },
+      { field: "growth_goal", value: lead.growth_goal },
+      { field: "comments", value: lead.comments || "", maxLength: 1000 },
+    ],
+  });
+  if (professionalContentError) {
+    res.status(422).json({ ok: false, error: "invalid_professional_content" });
     return;
   }
   if (hasForbiddenMetadataKeys(payload.metadata)) {
@@ -88,14 +126,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     eventId,
     anonymousSessionId,
     publicAssessmentId,
-    eventName: "cgi_lead_submitted",
+    eventName,
     source: "server",
     pagePath: "/cgi",
-    metadata: {
-      company_size: lead.employee_count,
-      industry: lead.sector,
-      investment_intent: lead.investment_intent,
-    },
+    metadata:
+      eventName === "cgi_phone_submitted"
+        ? { commercial_interest: payload.commercial_interest === true }
+        : {
+            company_size: lead.employee_count,
+            industry: lead.sector,
+            investment_intent: lead.investment_intent,
+          },
   });
 
   res.status(200).json({
@@ -104,6 +145,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     status: "lead_captured",
     public_assessment_id: publicAssessmentId,
     event_id: eventId,
+    event_name: eventName,
     emailValidation,
   });
 }

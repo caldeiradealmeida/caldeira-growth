@@ -51,6 +51,8 @@ export type EmailValidation = {
   error?: string;
 };
 
+export const CGI_COMMENTS_MAX_LENGTH = 1000;
+
 export type CgiAttribution = {
   utm_source: string | null;
   utm_medium: string | null;
@@ -69,6 +71,8 @@ export type CgiEventName =
   | "cgi_start_click"
   | "cgi_lead_form_view"
   | "cgi_lead_submitted"
+  | "cgi_company_context_submitted"
+  | "cgi_phone_submitted"
   | "cgi_assessment_started"
   | "cgi_progress"
   | "cgi_assessment_completed"
@@ -84,6 +88,8 @@ export const ALLOWED_CGI_EVENTS: CgiEventName[] = [
   "cgi_start_click",
   "cgi_lead_form_view",
   "cgi_lead_submitted",
+  "cgi_company_context_submitted",
+  "cgi_phone_submitted",
   "cgi_assessment_started",
   "cgi_progress",
   "cgi_assessment_completed",
@@ -100,6 +106,8 @@ const METADATA_ALLOWLIST: Record<CgiEventName, string[]> = {
   cgi_start_click: ["cta_location"],
   cgi_lead_form_view: [],
   cgi_lead_submitted: ["company_size", "industry", "investment_intent"],
+  cgi_company_context_submitted: ["company_size", "industry", "investment_intent"],
+  cgi_phone_submitted: ["commercial_interest"],
   cgi_assessment_started: [],
   cgi_progress: ["progress_percent"],
   cgi_assessment_completed: [
@@ -213,6 +221,95 @@ export function validateNormalizedLead(lead: NormalizedCgiLead | null): string |
   const missing = required.find((key) => !String(lead[key] ?? "").trim());
   if (missing) return `missing_${String(missing)}`;
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(lead.email)) return "invalid_email";
+  return null;
+}
+
+export function validateNormalizedLeadIdentity(lead: NormalizedCgiLead | null): string | null {
+  if (!lead) return "lead_required";
+  const required: Array<keyof NormalizedCgiLead> = [
+    "name",
+    "email",
+    "company",
+    "role",
+  ];
+  const missing = required.find((key) => !String(lead[key] ?? "").trim());
+  if (missing) return `missing_${String(missing)}`;
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(lead.email)) return "invalid_email";
+  return null;
+}
+
+export function validateNormalizedLeadContext(lead: NormalizedCgiLead | null): string | null {
+  if (!lead) return "lead_required";
+  const required: Array<keyof NormalizedCgiLead> = [
+    "name",
+    "email",
+    "company",
+    "role",
+    "sector",
+    "commercial_relationship_model",
+    "employee_count",
+    "annual_revenue_range",
+    "current_challenge",
+    "growth_goal",
+    "investment_intent",
+  ];
+  const missing = required.find((key) => !String(lead[key] ?? "").trim());
+  if (missing) return `missing_${String(missing)}`;
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(lead.email)) return "invalid_email";
+  return null;
+}
+
+function normalizeAbuseText(value: string) {
+  return cleanString(value, 5000)
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+    .replace(/[4@]/g, "a")
+    .replace(/[3]/g, "e")
+    .replace(/[1!|]/g, "i")
+    .replace(/[0]/g, "o")
+    .replace(/[5$]/g, "s")
+    .replace(/[7]/g, "t")
+    .replace(/(.)\1{2,}/g, "$1$1");
+}
+
+function compactAbuseText(value: string) {
+  return normalizeAbuseText(value).replace(/[^a-z0-9]+/g, "");
+}
+
+const ABUSE_PATTERNS = [
+  /(?:^|[^a-z])(?:puta|puto|merda|porra|caralho|cacete|foda|fodase|idiota|imbecil|burro|otario|arrombado|vagabundo|desgracado)(?:[^a-z]|$)/i,
+  /(?:^|[^a-z])(?:fuck|shit|bitch|asshole|idiot|moron)(?:[^a-z]|$)/i,
+  /(?:^|[^a-z])(?:mierda|puta|puto|idiota|imbecil|pendejo)(?:[^a-z]|$)/i,
+];
+
+const COMPACT_ABUSE_PATTERNS = [
+  /(?:puta|puto|merda|porra|caralho|cacete|fodase|idiota|imbecil|arrombado)/,
+  /(?:fuck|shit|bitch|asshole)/,
+  /(?:mierda|pendejo)/,
+];
+
+export function hasAbusiveProfessionalContent(value: string) {
+  const normalized = normalizeAbuseText(value);
+  if (ABUSE_PATTERNS.some((pattern) => pattern.test(` ${normalized} `))) return true;
+  const compact = compactAbuseText(value);
+  if (compact.length < 4) return false;
+  return COMPACT_ABUSE_PATTERNS.some((pattern) => pattern.test(compact));
+}
+
+export function validateProfessionalContent(input: {
+  strict?: Array<{ field: string; value: string }>;
+  contextual?: Array<{ field: string; value: string; maxLength?: number }>;
+}): string | null {
+  for (const item of input.strict || []) {
+    if (hasAbusiveProfessionalContent(item.value)) return `invalid_${item.field}`;
+  }
+  for (const item of input.contextual || []) {
+    if (item.maxLength && String(item.value || "").length > item.maxLength) {
+      return `invalid_${item.field}`;
+    }
+    if (hasAbusiveProfessionalContent(item.value)) return `invalid_${item.field}`;
+  }
   return null;
 }
 

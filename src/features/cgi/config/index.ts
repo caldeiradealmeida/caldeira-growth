@@ -45,8 +45,27 @@ export const cgiUi: Record<
     stats: [string, string][];
     trust: Array<{ title: string; body: string }>;
     step1: string;
+    step2: string;
+    step3: string;
+    step4: string;
     contextTitle: string;
     contextBody: string;
+    companyContextTitle: string;
+    companyContextBody: string;
+    assessmentTitle: string;
+    assessmentSubtitle: string;
+    phoneTitle: string;
+    phoneBody: string;
+    phonePrimary: string;
+    viewResult: string;
+    continue: string;
+    continueToDiagnosis: string;
+    remaining: (remaining: number) => string;
+    estimatedTime: string;
+    currentStep: (current: number, total: number) => string;
+    progressLabel: string;
+    currentStepLabel: string;
+    answeredLabel: string;
     methodIntroTitle: string;
     methodIntroBody: string[];
     labels: Record<keyof LeadForm, string>;
@@ -59,18 +78,25 @@ export const cgiUi: Record<
     selectPlaceholder: string;
     commentsPlaceholder: string;
     commentsHelp: string;
+    commentsCounter: (current: number, max: number) => string;
+    invalidProfessionalFieldBody: string;
+    primaryReportFailureTitle: string;
+    primaryReportFailureBody: string;
+    secondarySyncWarningTitle: string;
+    secondarySyncWarningBody: string;
     begin: string;
-    step2: string;
     answered: (answered: number, total: number) => string;
     back: string;
     nextDimension: string;
     generate: string;
-    step3: string;
     finalScore: string;
     openReport: string;
     printReport: string;
     emailReport: string;
     reportPending: string;
+    retryReport: string;
+    reportPollingBody: string;
+    reportStillProcessingBody: string;
     reportStages: string[];
     reportAlertTitle: string;
     reportAlertBody: string;
@@ -98,6 +124,9 @@ export const cgiUi: Record<
     strategicBetsTitle: string;
     renunciationsTitle: string;
     governanceTitle: string;
+    methodologyNoteTitle: string;
+    evidenceSummaryTitle: string;
+    hypothesesTitle: string;
     finalRecommendationsTitle: string;
     methodEyebrow: string;
     methodReportTitle: string;
@@ -139,15 +168,35 @@ export const cgiUi: Record<
       { title: "Estruturado", body: "Score calculado por dimensão, preservando o modelo proprietário da Caldeira Growth." },
       { title: "Executivo", body: "Relatório com leitura de gargalos, prioridades e hipóteses para decisão." },
     ],
-    step1: "Etapa 1 de 3",
-    contextTitle: "Antes do assessment, precisamos contextualizar sua empresa.",
+    step1: "Etapa 1 de 4",
+    step2: "Etapa 2 de 4",
+    step3: "Etapa 3 de 4",
+    step4: "Etapa final",
+    contextTitle: "Vamos começar pelo essencial.",
     contextBody:
-      "Esses dados ajudam a interpretar o resultado com mais precisão e a registrar o diagnóstico na base da Caldeira Growth.",
-    methodIntroTitle: "Um método proprietário de diagnóstico de crescimento",
+      "Informe seus dados para iniciar o diagnóstico e receber seu resultado ao final.",
+    companyContextTitle: "Agora, conte-nos sobre a empresa.",
+    companyContextBody:
+      "Essas informações ajudam a interpretar suas respostas e tornar o diagnóstico mais relevante para o contexto da organização.",
+    assessmentTitle: "Avalie as capacidades de crescimento da empresa.",
+    assessmentSubtitle:
+      "Responda com base na realidade atual da organização, e não na situação ideal.",
+    phoneTitle: "Quer aprofundar seu diagnóstico?",
+    phoneBody:
+      "Deixe seu telefone ou WhatsApp caso queira conversar sobre os resultados e as prioridades identificadas.",
+    phonePrimary: "Quero conversar sobre o diagnóstico",
+    viewResult: "Ver meu resultado",
+    continue: "Continuar",
+    continueToDiagnosis: "Continuar para o diagnóstico",
+    remaining: (remaining) => `${remaining} restantes`,
+    estimatedTime: "Tempo estimado: 8-10 min",
+    currentStep: (current, total) => `Etapa ${current} de ${total}`,
+    progressLabel: "Progresso",
+    currentStepLabel: "Etapa atual",
+    answeredLabel: "Respondidas",
+    methodIntroTitle: "Um diagnóstico estruturado das capacidades que sustentam o crescimento.",
     methodIntroBody: [
-      "O Caldeira Growth Index é um diagnóstico proprietário, desenvolvido para avaliar as capacidades que sustentam o crescimento de uma organização.",
-      "As 40 perguntas, as cinco dimensões e a lógica de interpretação foram estruturadas a partir da experiência da Caldeira Growth em projetos de consultoria, pareceres estratégicos, programas de desenvolvimento executivo, atuação com lideranças e dos princípios apresentados no livro Cresça ou Desapareça.",
-      "A inteligência artificial é utilizada para organizar as informações e personalizar o parecer. O método, os critérios e a lógica do diagnóstico são da Caldeira Growth.",
+      "O CGI avalia cinco dimensões organizacionais e transforma suas respostas em uma leitura personalizada de forças, gargalos e prioridades estratégicas.",
     ],
     labels: {
       name: "Nome",
@@ -165,7 +214,7 @@ export const cgiUi: Record<
       currentChallenge: "Principal desafio atual",
       growthGoal: "Meta de crescimento para os próximos 12 meses",
       investmentIntent: "Pretende investir em crescimento e desenvolvimento da organização nos próximos 12 meses?",
-      comments: "Comentários adicionais",
+      comments: "Há algo mais sobre a empresa ou sobre o momento atual que devemos considerar no diagnóstico?",
     },
     sectorHelp:
       "Selecione o setor econômico que melhor representa a atividade principal da empresa.",
@@ -207,20 +256,30 @@ export const cgiUi: Record<
     commercialRelationshipOtherLabel: "Qual é o modelo de relacionamento comercial?",
     selectPlaceholder: "Selecione",
     commentsPlaceholder:
-      "Adicione mais informações relevantes sobre o negócio ou aprofunde pontos das questões abordadas para enriquecer o diagnóstico.",
-    commentsHelp: "Campo opcional. Use apenas se houver contexto adicional que ajude a qualificar a leitura executiva.",
+      "Compartilhe algum contexto, preocupação ou oportunidade que não tenha sido contemplado nas perguntas anteriores.",
+    commentsHelp:
+      "Campo opcional. Compartilhe algum contexto, preocupação ou oportunidade que não tenha sido contemplado nas perguntas anteriores.",
+    commentsCounter: (current, max) => `${current}/${max} caracteres`,
+    invalidProfessionalFieldBody: "Revise este campo e informe dados profissionais válidos.",
+    primaryReportFailureTitle: "Não foi possível concluir o diagnóstico",
+    primaryReportFailureBody: "Tente novamente. A tentativa será feita com segurança, sem duplicar o lead.",
+    secondarySyncWarningTitle: "Seu relatório está pronto",
+    secondarySyncWarningBody:
+      "Tivemos uma dificuldade ao registrar uma informação complementar, mas isso não afeta o resultado.",
     begin: "Começar assessment",
-    step2: "Etapa 2 de 3",
     answered: (answered, total) => `${answered} de ${total}`,
     back: "Voltar",
     nextDimension: "Próxima dimensão",
     generate: "Gerar meu CGI",
-    step3: "Etapa 3 de 3",
     finalScore: "CGI final",
     openReport: "Abrir versão para impressão",
     printReport: "Baixar PDF",
     emailReport: "Abrir e-mail com relatório",
     reportPending: "O parecer completo será liberado quando a aplicação dos critérios do CGI terminar.",
+    retryReport: "Tentar novamente",
+    reportPollingBody: "Seu relatório está sendo preparado. Isso pode levar alguns instantes.",
+    reportStillProcessingBody:
+      "Seu relatório ainda está sendo preparado. Você poderá acessar novamente por este dispositivo.",
     reportStages: [
       "Consolidando as respostas.",
       "Aplicando os critérios do método Caldeira Growth.",
@@ -258,6 +317,9 @@ export const cgiUi: Record<
     strategicBetsTitle: "Apostas estratégicas recomendadas",
     renunciationsTitle: "Renúncias estratégicas",
     governanceTitle: "Sistema mínimo de governança",
+    methodologyNoteTitle: "Nota metodológica",
+    evidenceSummaryTitle: "Resumo de evidências",
+    hypothesesTitle: "Hipóteses a validar",
     finalRecommendationsTitle: "Recomendações finais",
     methodEyebrow: "Método proprietário Caldeira Growth",
     methodReportTitle: "Sobre este diagnóstico",
@@ -309,15 +371,35 @@ export const cgiUi: Record<
       { title: "Structured", body: "Score calculated by dimension, preserving Caldeira Growth's proprietary model." },
       { title: "Executive", body: "Report with bottlenecks, priorities and decision hypotheses." },
     ],
-    step1: "Step 1 of 3",
-    contextTitle: "Before the assessment, we need to understand your company context.",
+    step1: "Step 1 of 4",
+    step2: "Step 2 of 4",
+    step3: "Step 3 of 4",
+    step4: "Final step",
+    contextTitle: "Let's start with the essentials.",
     contextBody:
-      "These details help interpret the result more accurately and register the diagnosis in Caldeira Growth's base.",
-    methodIntroTitle: "A proprietary growth diagnosis methodology",
+      "Enter your details to begin the assessment and receive your result at the end.",
+    companyContextTitle: "Now, tell us about the company.",
+    companyContextBody:
+      "These details help interpret your answers and make the diagnosis more relevant to the organization's context.",
+    assessmentTitle: "Assess the company's growth capabilities.",
+    assessmentSubtitle:
+      "Answer based on the organization's current reality, not the ideal situation.",
+    phoneTitle: "Want to deepen your diagnosis?",
+    phoneBody:
+      "Leave your phone or WhatsApp if you want to discuss the results and identified priorities.",
+    phonePrimary: "I want to discuss the diagnosis",
+    viewResult: "See my result",
+    continue: "Continue",
+    continueToDiagnosis: "Continue to the diagnosis",
+    remaining: (remaining) => `${remaining} remaining`,
+    estimatedTime: "Estimated time: 8-10 min",
+    currentStep: (current, total) => `Step ${current} of ${total}`,
+    progressLabel: "Progress",
+    currentStepLabel: "Current step",
+    answeredLabel: "Answered",
+    methodIntroTitle: "A structured diagnosis of the capabilities that sustain growth.",
     methodIntroBody: [
-      "The Caldeira Growth Index is a proprietary assessment developed to evaluate the capabilities that sustain an organization's growth.",
-      "The 40 questions, five dimensions and interpretation logic were structured from Caldeira Growth's experience in consulting projects, strategic opinions, executive development programs, work with leaders and the principles presented in the book Cresça ou Desapareça.",
-      "Artificial intelligence is used to organize information and personalize the report. The methodology, criteria and diagnostic logic belong to Caldeira Growth.",
+      "CGI evaluates five organizational dimensions and turns your answers into a personalized reading of strengths, bottlenecks and strategic priorities.",
     ],
     labels: {
       name: "Name",
@@ -335,7 +417,7 @@ export const cgiUi: Record<
       currentChallenge: "Main current challenge",
       growthGoal: "Growth target for the next 12 months",
       investmentIntent: "Do you intend to invest in organizational growth and development in the next 12 months?",
-      comments: "Additional comments",
+      comments: "Is there anything else about the company or its current moment that we should consider in the diagnosis?",
     },
     sectorHelp:
       "Select the economic sector that best represents your company's primary activity.",
@@ -377,20 +459,30 @@ export const cgiUi: Record<
     commercialRelationshipOtherLabel: "What is the commercial relationship model?",
     selectPlaceholder: "Select",
     commentsPlaceholder:
-      "Add relevant information about the business or expand on points covered in the questions to enrich the diagnosis.",
-    commentsHelp: "Optional field. Use it only if there is additional context that helps qualify the executive reading.",
+      "Share any context, concern or opportunity that was not covered in the previous questions.",
+    commentsHelp:
+      "Optional field. Share any context, concern or opportunity that was not covered in the previous questions.",
+    commentsCounter: (current, max) => `${current}/${max} characters`,
+    invalidProfessionalFieldBody: "Review this field and enter valid professional information.",
+    primaryReportFailureTitle: "Could not complete the diagnosis",
+    primaryReportFailureBody: "Try again. The retry will be handled safely without duplicating the lead.",
+    secondarySyncWarningTitle: "Your report is ready",
+    secondarySyncWarningBody:
+      "We had trouble registering complementary information, but this does not affect your result.",
     begin: "Start assessment",
-    step2: "Step 2 of 3",
     answered: (answered, total) => `${answered} of ${total}`,
     back: "Back",
     nextDimension: "Next dimension",
     generate: "Generate my CGI",
-    step3: "Step 3 of 3",
     finalScore: "Final CGI",
     openReport: "Open print version",
     printReport: "Download PDF",
     emailReport: "Open email with report",
     reportPending: "The full report will be released when the CGI criteria have been applied.",
+    retryReport: "Try again",
+    reportPollingBody: "Your report is being prepared. This may take a few moments.",
+    reportStillProcessingBody:
+      "Your report is still being prepared. You will be able to access it again from this device.",
     reportStages: [
       "Consolidating the answers.",
       "Applying the Caldeira Growth methodology criteria.",
@@ -428,6 +520,9 @@ export const cgiUi: Record<
     strategicBetsTitle: "Recommended strategic bets",
     renunciationsTitle: "Strategic renunciations",
     governanceTitle: "Minimum governance system",
+    methodologyNoteTitle: "Methodological note",
+    evidenceSummaryTitle: "Evidence summary",
+    hypothesesTitle: "Hypotheses to validate",
     finalRecommendationsTitle: "Final recommendations",
     methodEyebrow: "Proprietary Caldeira Growth methodology",
     methodReportTitle: "About this assessment",
@@ -479,15 +574,35 @@ export const cgiUi: Record<
       { title: "Estructurado", body: "Score calculado por dimensión, preservando el modelo propietario de Caldeira Growth." },
       { title: "Ejecutivo", body: "Informe con cuellos de botella, prioridades e hipótesis para decisión." },
     ],
-    step1: "Etapa 1 de 3",
-    contextTitle: "Antes del diagnóstico, necesitamos contextualizar su empresa.",
+    step1: "Etapa 1 de 4",
+    step2: "Etapa 2 de 4",
+    step3: "Etapa 3 de 4",
+    step4: "Etapa final",
+    contextTitle: "Empecemos por lo esencial.",
     contextBody:
-      "Estos datos ayudan a interpretar el resultado con más precisión y registrar el diagnóstico en la base de Caldeira Growth.",
-    methodIntroTitle: "Un método propietario de diagnóstico de crecimiento",
+      "Informe sus datos para iniciar el diagnóstico y recibir su resultado al final.",
+    companyContextTitle: "Ahora, cuéntenos sobre la empresa.",
+    companyContextBody:
+      "Esta información ayuda a interpretar sus respuestas y hacer el diagnóstico más relevante para el contexto de la organización.",
+    assessmentTitle: "Evalúe las capacidades de crecimiento de la empresa.",
+    assessmentSubtitle:
+      "Responda con base en la realidad actual de la organización, no en la situación ideal.",
+    phoneTitle: "¿Quiere profundizar su diagnóstico?",
+    phoneBody:
+      "Deje su teléfono o WhatsApp si quiere conversar sobre los resultados y las prioridades identificadas.",
+    phonePrimary: "Quiero conversar sobre el diagnóstico",
+    viewResult: "Ver mi resultado",
+    continue: "Continuar",
+    continueToDiagnosis: "Continuar al diagnóstico",
+    remaining: (remaining) => `${remaining} restantes`,
+    estimatedTime: "Tiempo estimado: 8-10 min",
+    currentStep: (current, total) => `Etapa ${current} de ${total}`,
+    progressLabel: "Progreso",
+    currentStepLabel: "Etapa actual",
+    answeredLabel: "Respondidas",
+    methodIntroTitle: "Un diagnóstico estructurado de las capacidades que sostienen el crecimiento.",
     methodIntroBody: [
-      "El Caldeira Growth Index es un diagnóstico propietario, desarrollado para evaluar las capacidades que sostienen el crecimiento de una organización.",
-      "Las 40 preguntas, las cinco dimensiones y la lógica de interpretación fueron estructuradas a partir de la experiencia de Caldeira Growth en proyectos de consultoría, pareceres estratégicos, programas de desarrollo ejecutivo, trabajo con liderazgos y los principios presentados en el libro Cresça ou Desapareça.",
-      "La inteligencia artificial se utiliza para organizar la información y personalizar el informe. El método, los criterios y la lógica del diagnóstico son de Caldeira Growth.",
+      "El CGI evalúa cinco dimensiones organizacionales y transforma sus respuestas en una lectura personalizada de fortalezas, cuellos de botella y prioridades estratégicas.",
     ],
     labels: {
       name: "Nombre",
@@ -505,7 +620,7 @@ export const cgiUi: Record<
       currentChallenge: "Principal desafío actual",
       growthGoal: "Meta de crecimiento para los próximos 12 meses",
       investmentIntent: "¿Pretende invertir en crecimiento y desarrollo de la organización en los próximos 12 meses?",
-      comments: "Comentarios adicionales",
+      comments: "¿Hay algo más sobre la empresa o sobre el momento actual que debamos considerar en el diagnóstico?",
     },
     sectorHelp:
       "Seleccione el sector económico que mejor representa la actividad principal de su empresa.",
@@ -547,20 +662,30 @@ export const cgiUi: Record<
     commercialRelationshipOtherLabel: "¿Cuál es el modelo de relación comercial?",
     selectPlaceholder: "Seleccione",
     commentsPlaceholder:
-      "Agregue información relevante sobre el negocio o profundice puntos abordados en las preguntas para enriquecer el diagnóstico.",
-    commentsHelp: "Campo opcional. Úselo solo si hay contexto adicional que ayude a cualificar la lectura ejecutiva.",
+      "Comparta algún contexto, preocupación u oportunidad que no haya sido contemplado en las preguntas anteriores.",
+    commentsHelp:
+      "Campo opcional. Comparta algún contexto, preocupación u oportunidad que no haya sido contemplado en las preguntas anteriores.",
+    commentsCounter: (current, max) => `${current}/${max} caracteres`,
+    invalidProfessionalFieldBody: "Revise este campo e informe datos profesionales válidos.",
+    primaryReportFailureTitle: "No fue posible concluir el diagnóstico",
+    primaryReportFailureBody: "Inténtelo nuevamente. El reintento se hará de forma segura, sin duplicar el lead.",
+    secondarySyncWarningTitle: "Su informe está listo",
+    secondarySyncWarningBody:
+      "Tuvimos una dificultad al registrar información complementaria, pero esto no afecta el resultado.",
     begin: "Comenzar diagnóstico",
-    step2: "Etapa 2 de 3",
     answered: (answered, total) => `${answered} de ${total}`,
     back: "Volver",
     nextDimension: "Próxima dimensión",
     generate: "Generar mi CGI",
-    step3: "Etapa 3 de 3",
     finalScore: "CGI final",
     openReport: "Abrir versión para imprimir",
     printReport: "Descargar PDF",
     emailReport: "Abrir email con informe",
     reportPending: "El informe completo se liberará cuando termine la aplicación de los criterios del CGI.",
+    retryReport: "Intentar nuevamente",
+    reportPollingBody: "Su informe se está preparando. Esto puede tardar unos instantes.",
+    reportStillProcessingBody:
+      "Su informe aún se está preparando. Podrá acceder de nuevo desde este dispositivo.",
     reportStages: [
       "Consolidando las respuestas.",
       "Aplicando los criterios del método Caldeira Growth.",
@@ -598,6 +723,9 @@ export const cgiUi: Record<
     strategicBetsTitle: "Apuestas estratégicas recomendadas",
     renunciationsTitle: "Renuncias estratégicas",
     governanceTitle: "Sistema mínimo de gobernanza",
+    methodologyNoteTitle: "Nota metodológica",
+    evidenceSummaryTitle: "Resumen de evidencias",
+    hypothesesTitle: "Hipótesis a validar",
     finalRecommendationsTitle: "Recomendaciones finales",
     methodEyebrow: "Método propietario de Caldeira Growth",
     methodReportTitle: "Sobre este diagnóstico",

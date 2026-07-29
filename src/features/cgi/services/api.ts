@@ -4,6 +4,7 @@ import {
   CGI_START_ENDPOINT,
 } from "../config";
 import type { CgiAttribution, CgiConsentState, LeadForm, LeadPayload } from "../types";
+import type { CgiDataLayerEvent } from "./analytics";
 
 export async function startCgiAssessment({
   anonymousSessionId,
@@ -60,12 +61,19 @@ export async function submitCgiLead({
   lead,
   consent,
   eventId,
+  eventName = "cgi_lead_submitted",
+  commercialInterest = false,
 }: {
   anonymousSessionId: string;
   publicAssessmentId: string;
   lead: LeadPayload;
   consent: CgiConsentState;
   eventId: string;
+  eventName?: Extract<
+    CgiDataLayerEvent,
+    "cgi_lead_submitted" | "cgi_company_context_submitted" | "cgi_phone_submitted"
+  >;
+  commercialInterest?: boolean;
 }) {
   const response = await fetch(CGI_LEAD_ENDPOINT, {
     method: "POST",
@@ -74,9 +82,11 @@ export async function submitCgiLead({
       event_id: eventId,
       anonymous_session_id: anonymousSessionId,
       public_assessment_id: publicAssessmentId,
+      event_name: eventName,
       lead: toApiLeadPayload(lead),
       consent_privacy: consent.privacy,
       consent_marketing: consent.marketing,
+      commercial_interest: commercialInterest,
       privacy_policy_version: CGI_PRIVACY_POLICY_VERSION,
     }),
   });
@@ -90,6 +100,7 @@ export async function submitCgiLead({
     status: "lead_captured";
     public_assessment_id: string;
     event_id: string;
+    event_name: typeof eventName;
   };
 }
 

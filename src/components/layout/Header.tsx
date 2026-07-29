@@ -45,14 +45,14 @@ export default function Header() {
   return (
     <header className="fixed top-0 left-0 right-0 z-50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-b border-border">
       <div className="container mx-auto px-4">
-        <div className="flex h-16 md:h-20 items-center justify-between gap-8 pl-2">
+        <div className="flex h-16 items-center justify-between gap-3 pl-0 md:h-20 md:gap-8 md:pl-2">
           {/* Logo — SVG, autoridade de marca */}
           <Link
             to={localizedPath("home", lang)}
             className="shrink-0 flex items-center pl-1"
             aria-label="Caldeira Growth - Home"
           >
-            <img src={logo} alt="Caldeira Growth" className="h-11 md:h-14 w-auto" />
+            <img src={logo} alt="Caldeira Growth" className="h-9 w-auto sm:h-11 md:h-14" />
           </Link>
 
           {/* Desktop nav */}
@@ -106,7 +106,7 @@ export default function Header() {
           </nav>
 
           {/* Language + mobile toggle */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 md:gap-3">
             <div className="flex rounded-md border border-border overflow-hidden">
               {getPublicLanguages().map((language, index) => (
                 <Link
@@ -115,7 +115,7 @@ export default function Header() {
                   onClick={() => setLang(language)}
                   aria-label={`Change language to ${languageLabels[language]}`}
                   className={cn(
-                    "px-3 py-1.5 text-xs font-medium transition-colors",
+                    "px-2 py-1.5 text-xs font-medium transition-colors sm:px-3",
                     index > 0 && "border-l border-border",
                     lang === language
                       ? "bg-primary text-primary-foreground"

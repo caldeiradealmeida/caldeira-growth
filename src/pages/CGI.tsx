@@ -19,10 +19,12 @@ import {
   initialLead,
 } from "@/features/cgi/config";
 import type { LeadForm, Step } from "@/features/cgi/types";
-import type { CgiConsentState } from "@/features/cgi/types";
+import type { CgiConsentState, CgiReportStatus, CgiSecondarySyncStatus } from "@/features/cgi/types";
 import {
+  CGI_COMMENTS_MAX_LENGTH,
   isOtherOption,
   isValidPhone,
+  isValidProfessionalField,
   normalizeLeadForSubmit,
   parseAnswersJsonInput,
   questionsByDimension,
@@ -37,16 +39,18 @@ import {
   buildReportHtml,
   buildReportText,
   downloadReportPdf,
-  getSaveErrorMessage,
   getSubmitErrorMessage,
   parseAiReport,
   scrollToAssessment,
   writeReportDocument,
 } from "@/features/cgi/services/report";
+import { pollCgiReport } from "@/features/cgi/services/reportPolling";
 import { useCgiReportProgress } from "@/features/cgi/hooks/useCgiReportProgress";
 import { CgiAssessmentStep } from "@/features/cgi/components/CgiAssessmentStep";
+import { CgiContextStep } from "@/features/cgi/components/CgiContextStep";
 import { CgiLanding } from "@/features/cgi/components/CgiLanding";
 import { CgiLeadStep } from "@/features/cgi/components/CgiLeadStep";
+import { CgiPhoneStep } from "@/features/cgi/components/CgiPhoneStep";
 import { CgiResultStep } from "@/features/cgi/components/CgiResultStep";
 import {
   markEventSent,
@@ -68,6 +72,18 @@ declare global {
   interface Window {
     dataLayer?: Record<string, unknown>[];
   }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function createLocalAttemptId(prefix: string) {
+  const value =
+    typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  return `${prefix}_${value}`;
 }
 
 export default function CGI() {
@@ -93,6 +109,10 @@ export default function CGI() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [submitError, setSubmitError] = useState("");
+  const [secondarySyncMessage, setSecondarySyncMessage] = useState("");
+  const [reportStatus, setReportStatus] = useState<CgiReportStatus>("idle");
+  const [secondarySyncStatus, setSecondarySyncStatus] =
+    useState<CgiSecondarySyncStatus>("idle");
   const [serverAiReport, setServerAiReport] = useState("");
   const [aiStatus, setAiStatus] = useState("");
   const [result, setResult] = useState<CgiScoreResult | null>(null);
@@ -103,6 +123,9 @@ export default function CGI() {
   const startClickSentRef = useRef(false);
   const leadFormViewSentRef = useRef(false);
   const resultViewedSentRef = useRef(false);
+  const reportPollAbortRef = useRef<AbortController | null>(null);
+  const reportPollAssessmentRef = useRef("");
+  const assessmentSubmitStartedRef = useRef(false);
   const assessmentStartedSentRef = useRef(
     Boolean(readAssessmentState()?.sent_events.cgi_assessment_started)
   );
@@ -122,7 +145,14 @@ export default function CGI() {
   const reportText = result
     ? buildReportText({ lead, result, aiReport, t })
     : "";
-  const reportReady = aiStatus === "generated" && Boolean(serverAiReport) && Boolean(aiReport);
+  const reportReady =
+    reportStatus === "report_ready" &&
+    aiStatus === "generated" &&
+    Boolean(aiReport) &&
+    Boolean(result) &&
+    Boolean(reportText);
+  const visibleSecondarySyncMessage =
+    secondarySyncStatus === "secondary_sync_failed" ? secondarySyncMessage : "";
 
   useEffect(() => {
     const prevTitle = document.title;
@@ -156,14 +186,33 @@ export default function CGI() {
   }, [anonymousSessionId, lang, publicAssessmentId, t.metaDescription, t.metaTitle]);
 
   useEffect(() => {
-    setHasSavedAssessment(Boolean(readSavedCgiAssessment()));
-  }, []);
+    const saved = readSavedCgiAssessment();
+    setHasSavedAssessment(Boolean(saved));
+    if (saved?.reportStatus === "report_ready" && saved.answers) {
+      const normalizedAnswers = normalizeCgiAnswers(saved.answers);
+      if (areCgiAnswersComplete(normalizedAnswers)) {
+        setLead(saved.lead);
+        setAnswers(normalizedAnswers);
+        setResult(calculateCgiScore(normalizedAnswers, lang));
+        setServerAiReport(saved.aiReport || "");
+        setAiStatus(saved.aiStatus || "");
+        setReportStatus("report_ready");
+        setStep("result");
+      }
+    }
+  }, [lang]);
 
   useEffect(() => {
     const savedState = readAssessmentState();
     if (!savedState || savedState.status === "completed") return;
     if (savedState.public_assessment_id) {
       setPublicAssessmentId(savedState.public_assessment_id);
+    }
+    if (savedState.lead) {
+      setLead(savedState.lead);
+      if (savedState.status === "lead_captured" && Object.keys(savedState.answers).length === 0) {
+        setStep("context");
+      }
     }
     if (Object.keys(savedState.answers).length > 0) {
       setAnswers(savedState.answers);
@@ -173,6 +222,7 @@ export default function CGI() {
           dimensionOrder.length - 1
         )
       );
+      setStep("assessment");
       if (!savedState.sent_events.cgi_assessment_resumed) {
         void sendCgiClientEvent({
           eventName: "cgi_assessment_resumed",
@@ -219,6 +269,180 @@ export default function CGI() {
     },
     [anonymousSessionId, publicAssessmentId]
   );
+
+  const restoreReadyReport = useCallback(
+    ({
+      data,
+      fallbackLead,
+      fallbackAnswers,
+      fallbackResult,
+      assessmentId,
+    }: {
+      data: Record<string, unknown>;
+      fallbackLead: LeadForm;
+      fallbackAnswers: Record<string, number>;
+      fallbackResult?: CgiScoreResult | null;
+      assessmentId: string;
+    }) => {
+      const dataLead = isRecord(data.lead) ? data.lead : {};
+      const nextLead = {
+        ...initialLead,
+        ...fallbackLead,
+        ...dataLead,
+      } as LeadForm;
+      const dataAnswers = isRecord(data.answers)
+        ? normalizeCgiAnswers(data.answers)
+        : normalizeCgiAnswers(fallbackAnswers);
+      const nextAnswers = Object.keys(dataAnswers).length > 0
+        ? dataAnswers
+        : normalizeCgiAnswers(fallbackAnswers);
+      const dataScore = isRecord(data.score) && "finalScore" in data.score
+        ? (data.score as unknown as CgiScoreResult)
+        : null;
+      const nextResult =
+        dataScore ||
+        fallbackResult ||
+        (areCgiAnswersComplete(nextAnswers)
+          ? calculateCgiScore(nextAnswers, lang)
+          : null);
+      if (!nextResult) return false;
+
+      const nextAiReport = isRecord(data.ai) ? String(data.ai.text || "") : "";
+      const nextAiStatus = isRecord(data.ai) ? String(data.ai.status || "") : "";
+      setLead(nextLead);
+      setAnswers(nextAnswers);
+      setResult(nextResult);
+      setServerAiReport(nextAiReport);
+      setAiStatus(nextAiStatus);
+      setReportStatus("report_ready");
+      setReportProgress(100);
+      setStep("result");
+      setSubmitError("");
+      saveCgiAssessment(nextLead, nextAnswers, {
+        aiReport: nextAiReport,
+        aiStatus: nextAiStatus,
+        reportStatus: "report_ready",
+      });
+      setHasSavedAssessment(true);
+      patchAssessmentState({
+        public_assessment_id: assessmentId,
+        status: "completed",
+        current_question: CGI_QUESTIONS.length,
+        answers: nextAnswers,
+        lead: nextLead,
+      });
+      if (data.save && isRecord(data.save) && data.save.ok === false) {
+        setSecondarySyncStatus("secondary_sync_failed");
+        setSecondarySyncMessage(t.secondarySyncWarningBody);
+      } else {
+        setSecondarySyncStatus("secondary_sync_succeeded");
+        setSecondarySyncMessage("");
+      }
+      scrollToAssessment();
+      return true;
+    },
+    [lang, setReportProgress, t.secondarySyncWarningBody]
+  );
+
+  const beginReportPolling = useCallback(
+    async ({
+      assessmentId,
+      fallbackLead,
+      fallbackAnswers,
+      fallbackResult,
+    }: {
+      assessmentId: string;
+      fallbackLead: LeadForm;
+      fallbackAnswers: Record<string, number>;
+      fallbackResult?: CgiScoreResult | null;
+    }) => {
+      if (!assessmentId) return;
+      if (reportPollAssessmentRef.current === assessmentId) return;
+      reportPollAbortRef.current?.abort();
+      const controller = new AbortController();
+      reportPollAbortRef.current = controller;
+      reportPollAssessmentRef.current = assessmentId;
+      setIsSubmitting(true);
+      setReportStatus("report_generating");
+      setSecondarySyncStatus("secondary_sync_pending");
+      setSubmitError("");
+      toast({
+        title: t.reportAlertTitle,
+        description: t.reportPollingBody,
+      });
+
+      const pollResult = await pollCgiReport({
+        publicAssessmentId: assessmentId,
+        signal: controller.signal,
+      });
+
+      if (pollResult.status === "ready") {
+        restoreReadyReport({
+          data: pollResult.data,
+          fallbackLead,
+          fallbackAnswers,
+          fallbackResult,
+          assessmentId,
+        });
+      } else if (pollResult.status === "failed") {
+        setReportStatus("report_failed");
+        setSubmitError(t.primaryReportFailureBody);
+        assessmentSubmitStartedRef.current = false;
+      } else if (pollResult.status === "timeout") {
+        toast({
+          title: t.reportAlertTitle,
+          description: t.reportStillProcessingBody,
+        });
+      }
+
+      if (reportPollAbortRef.current === controller) {
+        reportPollAbortRef.current = null;
+        reportPollAssessmentRef.current = "";
+      }
+      setIsSubmitting(false);
+    },
+    [
+      restoreReadyReport,
+      t.primaryReportFailureBody,
+      t.reportAlertTitle,
+      t.reportPollingBody,
+      t.reportStillProcessingBody,
+      toast,
+    ]
+  );
+
+  useEffect(() => {
+    return () => {
+      reportPollAbortRef.current?.abort();
+    };
+  }, []);
+
+  useEffect(() => {
+    const savedState = readAssessmentState();
+    const saved = readSavedCgiAssessment();
+    const assessmentId = savedState?.public_assessment_id || publicAssessmentId;
+    if (
+      !assessmentId ||
+      reportStatus === "report_ready" ||
+      saved?.reportStatus !== "report_generating" ||
+      !saved.answers
+    ) {
+      return;
+    }
+    const normalizedAnswers = normalizeCgiAnswers(saved.answers);
+    if (!areCgiAnswersComplete(normalizedAnswers)) return;
+    const localScore = calculateCgiScore(normalizedAnswers, lang);
+    setLead(saved.lead);
+    setAnswers(normalizedAnswers);
+    setResult(localScore);
+    setStep("result");
+    void beginReportPolling({
+      assessmentId,
+      fallbackLead: saved.lead,
+      fallbackAnswers: normalizedAnswers,
+      fallbackResult: localScore,
+    });
+  }, [beginReportPolling, lang, publicAssessmentId, reportStatus]);
 
   const ensurePublicAssessment = useCallback(async () => {
     if (publicAssessmentId) return publicAssessmentId;
@@ -276,21 +500,7 @@ export default function CGI() {
     setLead((current) => ({ ...current, [key]: value }));
   };
 
-  const validateLead = (): boolean => {
-    const required: Array<keyof LeadForm> = [
-      "name",
-      "email",
-      "phone",
-      "company",
-      "role",
-      "sector",
-      "commercialRelationshipModel",
-      "employeeCount",
-      "annualRevenue",
-      "currentChallenge",
-      "growthGoal",
-      "investmentIntent",
-    ];
+  const validateRequiredFields = (required: Array<keyof LeadForm>): boolean => {
     const missing = required.find((key) => !lead[key].trim());
     if (missing) {
       trackInternalError("cgi_validation_error", `missing_${String(missing)}`);
@@ -299,6 +509,31 @@ export default function CGI() {
         description: t.invalidRequiredBody,
         variant: "destructive",
       });
+      return false;
+    }
+    return true;
+  };
+
+  const validateProfessionalFields = (fields: Array<keyof LeadForm>): boolean => {
+    const invalid = fields.find((key) => {
+      const maxLength = key === "comments" ? CGI_COMMENTS_MAX_LENGTH : undefined;
+      return !isValidProfessionalField(lead[key], { maxLength });
+    });
+    if (!invalid) return true;
+    trackInternalError("cgi_validation_error", `invalid_professional_${String(invalid)}`);
+    toast({
+      title: t.invalidRequiredTitle,
+      description: t.invalidProfessionalFieldBody,
+      variant: "destructive",
+    });
+    return false;
+  };
+
+  const validateIdentification = (): boolean => {
+    if (!validateRequiredFields(["name", "email", "company", "role"])) {
+      return false;
+    }
+    if (!validateProfessionalFields(["name", "company", "role"])) {
       return false;
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(lead.email)) {
@@ -310,13 +545,30 @@ export default function CGI() {
       });
       return false;
     }
-    if (!isValidPhone(lead.phone)) {
-      trackInternalError("cgi_validation_error", "invalid_phone");
+    if (!consent.privacy) {
+      trackInternalError("cgi_validation_error", "privacy_consent_required");
       toast({
         title: t.invalidRequiredTitle,
-        description: t.invalidPhoneBody,
+        description: t.invalidRequiredBody,
         variant: "destructive",
       });
+      return false;
+    }
+    return true;
+  };
+
+  const validateCompanyContext = (): boolean => {
+    if (
+      !validateRequiredFields([
+        "sector",
+        "commercialRelationshipModel",
+        "employeeCount",
+        "annualRevenue",
+        "currentChallenge",
+        "growthGoal",
+        "investmentIntent",
+      ])
+    ) {
       return false;
     }
     if (isOtherOption(lead.sector) && !lead.sectorOther.trim()) {
@@ -340,11 +592,39 @@ export default function CGI() {
       });
       return false;
     }
-    if (!consent.privacy) {
-      trackInternalError("cgi_validation_error", "privacy_consent_required");
+    if (
+      !validateProfessionalFields([
+        "sectorOther",
+        "commercialRelationshipOther",
+        "currentChallenge",
+        "growthGoal",
+        "comments",
+      ])
+    ) {
+      return false;
+    }
+    return true;
+  };
+
+  const validateAssessmentContext = (): boolean => {
+    return validateProfessionalFields(["comments"]);
+  };
+
+  const validatePhoneIfPresent = (): boolean => {
+    if (!lead.phone.trim()) {
+      trackInternalError("cgi_validation_error", "missing_phone_interest");
       toast({
         title: t.invalidRequiredTitle,
-        description: t.invalidRequiredBody,
+        description: t.invalidPhoneBody,
+        variant: "destructive",
+      });
+      return false;
+    }
+    if (!isValidPhone(lead.phone)) {
+      trackInternalError("cgi_validation_error", "invalid_phone");
+      toast({
+        title: t.invalidRequiredTitle,
+        description: t.invalidPhoneBody,
         variant: "destructive",
       });
       return false;
@@ -352,40 +632,66 @@ export default function CGI() {
     return true;
   };
 
-  const startAssessment = async (event: React.FormEvent<HTMLFormElement>) => {
+  const persistLead = async ({
+    normalizedLead,
+    eventName,
+    commercialInterest = false,
+  }: {
+    normalizedLead: LeadForm;
+    eventName: "cgi_lead_submitted" | "cgi_company_context_submitted" | "cgi_phone_submitted";
+    commercialInterest?: boolean;
+  }) => {
+    const payloadLead = toLeadPayload(normalizedLead);
+    const assessmentId = await ensurePublicAssessment();
+    if (!assessmentId) return "";
+
+    const eventId = getOrCreateEventId(eventName);
+    const response = await submitCgiLead({
+      anonymousSessionId,
+      publicAssessmentId: assessmentId,
+      lead: payloadLead,
+      consent,
+      eventId,
+      eventName,
+      commercialInterest,
+    });
+
+    if (eventName === "cgi_phone_submitted") {
+      pushCgiDataLayerEvent(eventName, {
+        event_id: response.event_id || eventId,
+        anonymous_session_id: anonymousSessionId,
+        public_assessment_id: assessmentId,
+        commercial_interest: true,
+      });
+    } else {
+      pushCgiDataLayerEvent(eventName, {
+        event_id: response.event_id || eventId,
+        anonymous_session_id: anonymousSessionId,
+        public_assessment_id: assessmentId,
+        company_size: normalizedLead.employeeCount || null,
+        industry: normalizedLead.sector || null,
+        investment_intent: normalizedLead.investmentIntent || null,
+      });
+    }
+
+    markEventSent(eventName, response.event_id || eventId);
+    patchAssessmentState({
+      public_assessment_id: assessmentId,
+      status: "lead_captured",
+      current_question: 0,
+      lead: normalizedLead,
+    });
+    return assessmentId;
+  };
+
+  const submitIdentification = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!validateLead()) return;
+    if (!validateIdentification()) return;
 
     setIsLeadSubmitting(true);
     const normalizedLead = normalizeLeadForSubmit(lead);
-    const payloadLead = toLeadPayload(normalizedLead);
-    let assessmentId = publicAssessmentId || "";
     try {
-      assessmentId = await ensurePublicAssessment();
-      if (assessmentId) {
-        const leadEventId = getOrCreateEventId("cgi_lead_submitted");
-        const response = await submitCgiLead({
-          anonymousSessionId,
-          publicAssessmentId: assessmentId,
-          lead: payloadLead,
-          consent,
-          eventId: leadEventId,
-        });
-        pushCgiDataLayerEvent("cgi_lead_submitted", {
-          event_id: response.event_id || leadEventId,
-          anonymous_session_id: anonymousSessionId,
-          public_assessment_id: assessmentId,
-          company_size: normalizedLead.employeeCount,
-          industry: normalizedLead.sector,
-          investment_intent: normalizedLead.investmentIntent,
-        });
-        markEventSent("cgi_lead_submitted", response.event_id || leadEventId);
-        patchAssessmentState({
-          public_assessment_id: assessmentId,
-          status: "lead_captured",
-          current_question: 0,
-        });
-      }
+      await persistLead({ normalizedLead, eventName: "cgi_lead_submitted" });
     } catch (error) {
       const errorCode = error instanceof Error ? error.message : "lead_submit_failed";
       if (errorCode.includes("invalid_email_domain")) {
@@ -398,10 +704,56 @@ export default function CGI() {
         setIsLeadSubmitting(false);
         return;
       }
+      if (errorCode.includes("invalid_professional_content")) {
+        trackInternalError("cgi_validation_error", "invalid_professional_content");
+        toast({
+          title: t.invalidRequiredTitle,
+          description: t.invalidProfessionalFieldBody,
+          variant: "destructive",
+        });
+        setIsLeadSubmitting(false);
+        return;
+      }
       if (import.meta.env.DEV) {
         console.error("[CGI] lead submit error", error);
       }
       trackInternalError("cgi_system_error", "lead_submit_failed");
+    } finally {
+      setIsLeadSubmitting(false);
+    }
+
+    setLead(normalizedLead);
+    setStep("context");
+    scrollToAssessment();
+  };
+
+  const submitCompanyContext = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!validateCompanyContext()) return;
+
+    setIsLeadSubmitting(true);
+    const normalizedLead = normalizeLeadForSubmit(lead);
+    try {
+      await persistLead({
+        normalizedLead,
+        eventName: "cgi_company_context_submitted",
+      });
+    } catch (error) {
+      const errorCode = error instanceof Error ? error.message : "context_submit_failed";
+      if (errorCode.includes("invalid_professional_content")) {
+        trackInternalError("cgi_validation_error", "invalid_professional_content");
+        toast({
+          title: t.invalidRequiredTitle,
+          description: t.invalidProfessionalFieldBody,
+          variant: "destructive",
+        });
+        setIsLeadSubmitting(false);
+        return;
+      }
+      if (import.meta.env.DEV) {
+        console.error("[CGI] context submit error", error);
+      }
+      trackInternalError("cgi_system_error", "context_submit_failed");
     } finally {
       setIsLeadSubmitting(false);
     }
@@ -539,8 +891,19 @@ export default function CGI() {
   const submitAssessmentWithData = async (
     assessmentLead: LeadForm,
     assessmentAnswers: Record<string, number>,
-    options?: { isRegeneration?: boolean }
+    options?: { isRegeneration?: boolean; forceNewAttempt?: boolean }
   ) => {
+    if (!options?.isRegeneration && assessmentSubmitStartedRef.current && isSubmitting) {
+      setStep(result ? "phone" : "assessment");
+      scrollToAssessment();
+      return;
+    }
+    if (!options?.isRegeneration && reportStatus === "report_ready") {
+      setStep("result");
+      scrollToAssessment();
+      return;
+    }
+    if (!options?.isRegeneration && !validateAssessmentContext()) return;
     const normalizedAnswers = normalizeCgiAnswers(assessmentAnswers);
     if (!areCgiAnswersComplete(normalizedAnswers)) {
       toast({
@@ -554,19 +917,30 @@ export default function CGI() {
     const localScore = calculateCgiScore(normalizedAnswers, lang);
     const normalizedLead = normalizeLeadForSubmit(assessmentLead);
     const payloadLead = toLeadPayload(normalizedLead);
-    const assessmentId = publicAssessmentId || (await ensurePublicAssessment());
-    const completionEventId = getOrCreateEventId("cgi_assessment_completed");
+    const assessmentId = options?.forceNewAttempt
+      ? createLocalAttemptId("cgi")
+      : publicAssessmentId || (await ensurePublicAssessment());
+    const completionEventId = options?.forceNewAttempt
+      ? createLocalAttemptId("completion")
+      : getOrCreateEventId("cgi_assessment_completed");
+    if (!options?.isRegeneration) assessmentSubmitStartedRef.current = true;
+    if (options?.forceNewAttempt) setPublicAssessmentId(assessmentId);
 
     setLead(normalizedLead);
     setAnswers(normalizedAnswers);
     setResult(localScore);
-    setStep("result");
+    setStep(options?.isRegeneration ? "result" : "phone");
     setIsSubmitting(true);
+    setReportStatus("report_generating");
+    setSecondarySyncStatus("secondary_sync_pending");
     setReportProgress(8);
     setSubmitError("");
+    setSecondarySyncMessage("");
     setServerAiReport("");
     setAiStatus("");
-    saveCgiAssessment(normalizedLead, normalizedAnswers);
+    saveCgiAssessment(normalizedLead, normalizedAnswers, {
+      reportStatus: "report_generating",
+    });
     setHasSavedAssessment(true);
     patchAssessmentState({
       public_assessment_id: assessmentId,
@@ -595,9 +969,23 @@ export default function CGI() {
           anonymous_session_id: anonymousSessionId,
           public_assessment_id: assessmentId,
           completion_event_id: completionEventId,
+          attribution: getAttributionForStart(),
         }),
       });
       const data = await response.json();
+
+      if (response.status === 202 && data.report_status === "report_generating") {
+        setReportStatus("report_generating");
+        setSecondarySyncStatus("secondary_sync_pending");
+        setReportProgress((current) => Math.max(current, 55));
+        void beginReportPolling({
+          assessmentId,
+          fallbackLead: normalizedLead,
+          fallbackAnswers: normalizedAnswers,
+          fallbackResult: localScore,
+        });
+        return;
+      }
 
       if (!response.ok || data.ok !== true) {
         throw new Error(getSubmitErrorMessage(data, t));
@@ -605,9 +993,17 @@ export default function CGI() {
 
       // Keep the client-side score because it carries localized dimension and level labels.
       setResult(localScore);
-      setServerAiReport(data.ai?.text ?? "");
-      setAiStatus(data.ai?.status ?? "");
+      const nextAiReport = data.ai?.text ?? "";
+      const nextAiStatus = data.ai?.status ?? "";
+      setServerAiReport(nextAiReport);
+      setAiStatus(nextAiStatus);
+      setReportStatus("report_ready");
       setReportProgress(100);
+      saveCgiAssessment(normalizedLead, normalizedAnswers, {
+        aiReport: nextAiReport,
+        aiStatus: nextAiStatus,
+        reportStatus: "report_ready",
+      });
       pushCgiDataLayerEvent("cgi_assessment_completed", {
         event_id: data.completion_event_id || completionEventId,
         anonymous_session_id: anonymousSessionId,
@@ -641,20 +1037,27 @@ export default function CGI() {
         answers: normalizedAnswers,
       });
       if (data.save?.ok === false) {
-        setSubmitError(getSaveErrorMessage(data.save, t));
+        setSecondarySyncStatus("secondary_sync_failed");
+        setSecondarySyncMessage(t.secondarySyncWarningBody);
+      } else {
+        setSecondarySyncStatus("secondary_sync_succeeded");
       }
     } catch (error) {
+      setReportStatus("report_failed");
+      assessmentSubmitStartedRef.current = false;
       setSubmitError(
         error instanceof Error
           ? error.message
-          : t.savedBody
+          : t.primaryReportFailureBody
       );
       if (import.meta.env.DEV) {
         console.error("[CGI] submit error", error);
       }
       trackInternalError("cgi_system_error", "assessment_submit_failed");
     } finally {
-      window.setTimeout(() => setIsSubmitting(false), 350);
+      window.setTimeout(() => {
+        if (!reportPollAssessmentRef.current) setIsSubmitting(false);
+      }, 350);
     }
   };
 
@@ -671,8 +1074,52 @@ export default function CGI() {
     });
   };
 
+  const viewResult = () => {
+    setStep("result");
+    scrollToAssessment();
+  };
+
+  const submitPhoneInterest = async () => {
+    if (!validatePhoneIfPresent()) return;
+    setIsLeadSubmitting(true);
+    const normalizedLead = normalizeLeadForSubmit(lead);
+    try {
+      await persistLead({
+        normalizedLead,
+        eventName: "cgi_phone_submitted",
+        commercialInterest: true,
+      });
+      void sendCgiClientEvent({
+        eventName: "cgi_cta_clicked",
+        anonymousSessionId,
+        publicAssessmentId: publicAssessmentId || null,
+        metadata: {
+          cta_name: "diagnostic_conversation_phone",
+          cta_location: "phone_step",
+          destination_type: "lead_follow_up",
+        },
+      });
+    } catch (error) {
+      if (import.meta.env.DEV) {
+        console.error("[CGI] phone submit error", error);
+      }
+      trackInternalError("cgi_system_error", "phone_submit_failed");
+    } finally {
+      setIsLeadSubmitting(false);
+      setLead(normalizedLead);
+      viewResult();
+    }
+  };
+
   const submitAssessment = () => {
     void submitAssessmentWithData(lead, answers);
+  };
+
+  const retryReport = () => {
+    void submitAssessmentWithData(lead, answers, {
+      isRegeneration: true,
+      forceNewAttempt: true,
+    });
   };
 
   const regenerateSavedAssessment = () => {
@@ -689,6 +1136,7 @@ export default function CGI() {
 
     void submitAssessmentWithData(saved.lead, saved.answers, {
       isRegeneration: true,
+      forceNewAttempt: true,
     });
   };
 
@@ -706,11 +1154,12 @@ export default function CGI() {
 
     void submitAssessmentWithData(withDevLeadFallback(lead), parsedAnswers, {
       isRegeneration: true,
+      forceNewAttempt: true,
     });
   };
 
   return (
-    <main className="min-h-screen bg-background">
+    <main className="min-h-screen overflow-x-hidden bg-background">
       <Header />
       <SEO routeKey="cgi" title={t.metaTitle} description={t.metaDescription} noIndex />
 
@@ -721,7 +1170,6 @@ export default function CGI() {
           {step === "lead" && (
             <CgiLeadStep
               t={t}
-              config={config}
               lead={lead}
               website={website}
               devAnswersJson={devAnswersJson}
@@ -729,15 +1177,30 @@ export default function CGI() {
               hasSavedAssessment={hasSavedAssessment}
               isLeadSubmitting={isLeadSubmitting}
               consent={consent}
-              startAssessment={startAssessment}
+              submitIdentification={submitIdentification}
               updateLead={updateLead}
-              setLead={setLead}
               setConsent={setConsent}
               setWebsite={setWebsite}
               setDevAnswersJson={setDevAnswersJson}
               generateFromAnswersJson={generateFromAnswersJson}
               regenerateSavedAssessment={regenerateSavedAssessment}
               onLeadFormView={handleLeadFormView}
+            />
+          )}
+
+          {step === "context" && (
+            <CgiContextStep
+              t={t}
+              config={config}
+              lead={lead}
+              isLeadSubmitting={isLeadSubmitting}
+              submitCompanyContext={submitCompanyContext}
+              updateLead={updateLead}
+              setLead={setLead}
+              onBack={() => {
+                setStep("lead");
+                scrollToAssessment();
+              }}
             />
           )}
 
@@ -761,6 +1224,18 @@ export default function CGI() {
             />
           )}
 
+          {step === "phone" && result && (
+            <CgiPhoneStep
+              t={t}
+              lead={lead}
+              isSubmitting={isSubmitting}
+              isLeadSubmitting={isLeadSubmitting}
+              updateLead={updateLead}
+              submitPhoneInterest={submitPhoneInterest}
+              viewResult={viewResult}
+            />
+          )}
+
           {step === "result" && result && (
             <CgiResultStep
               t={t}
@@ -769,6 +1244,7 @@ export default function CGI() {
               aiReport={aiReport}
               aiStatus={aiStatus}
               submitError={submitError}
+              secondarySyncMessage={visibleSecondarySyncMessage}
               reportReady={reportReady}
               isSubmitting={isSubmitting}
               isGeneratingPdf={isGeneratingPdf}
@@ -777,6 +1253,7 @@ export default function CGI() {
               openReport={openReport}
               downloadPdf={downloadPdf}
               openEmailDraft={openEmailDraft}
+              retryReport={retryReport}
               regenerateSavedAssessment={regenerateSavedAssessment}
               onCtaClick={trackCtaClick}
             />

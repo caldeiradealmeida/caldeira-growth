@@ -10,6 +10,8 @@ export function parseAiReport(value: string): {
   report_title?: string;
   report_subtitle?: string;
   executive_summary?: string;
+  methodology_note?: string;
+  evidence_summary?: string[] | string;
   strategic_diagnosis?: string;
   priority_diagnosis?: string;
   dimension_reading?: Array<{
@@ -22,6 +24,7 @@ export function parseAiReport(value: string): {
   strategic_bets?: string[];
   renunciations?: string[];
   governance_system?: string[];
+  hypotheses_to_validate?: string[];
   final_recommendations?: string[];
   attention_points?: string[];
   recommended_next_steps?: string[];
@@ -52,6 +55,22 @@ export function getSubmitErrorMessage(data: unknown, t = cgiUi.pt): string {
 
   if (error === "invalid_email_domain") {
     return t.invalidEmailBody;
+  }
+
+  if (error === "invalid_professional_content") {
+    return t.invalidProfessionalFieldBody;
+  }
+
+  if (error === "report_persistence_unavailable") {
+    return "Não foi possível iniciar a geração do relatório neste momento. Tente novamente em alguns instantes.";
+  }
+
+  if (error === "report_generation_failed") {
+    return "Não foi possível gerar o relatório neste momento. Tente novamente em alguns instantes.";
+  }
+
+  if (error === "report_failed") {
+    return t.primaryReportFailureBody;
   }
 
   if (error === "upstream_request_failed") {
@@ -104,6 +123,10 @@ export function formatAiReportText(
 
   const list = (items?: string[]) =>
     Array.isArray(items) ? items.map((item) => `- ${item}`).join("\n") : "";
+  const textOrList = (value?: string[] | string) => {
+    if (Array.isArray(value)) return list(value);
+    return typeof value === "string" ? value.trim() : "";
+  };
   const dimensionReading = Array.isArray(aiReport.dimension_reading)
     ? aiReport.dimension_reading
         .map((item, index) => {
@@ -133,6 +156,12 @@ export function formatAiReportText(
   return [
     aiReport.report_title,
     aiReport.report_subtitle,
+    aiReport.methodology_note
+      ? `${t.methodologyNoteTitle}:\n${aiReport.methodology_note}`
+      : "",
+    textOrList(aiReport.evidence_summary)
+      ? `${t.evidenceSummaryTitle}:\n${textOrList(aiReport.evidence_summary)}`
+      : "",
     aiReport.executive_summary,
     aiReport.strategic_diagnosis || aiReport.priority_diagnosis,
     dimensionReading ? `${t.dimensionReadingTitle}:\n${dimensionReading}` : "",
@@ -147,6 +176,9 @@ export function formatAiReportText(
       : "",
     list(aiReport.governance_system)
       ? `${t.governanceTitle}:\n${list(aiReport.governance_system)}`
+      : "",
+    list(aiReport.hypotheses_to_validate)
+      ? `${t.hypothesesTitle}:\n${list(aiReport.hypotheses_to_validate)}`
       : "",
     list(aiReport.final_recommendations || aiReport.recommended_next_steps)
       ? `${t.finalRecommendationsTitle}:\n${list(
@@ -236,6 +268,15 @@ export function formatReportBodyHtml(reportText: string) {
     "Apostas estratégicas recomendadas",
     "Renúncias estratégicas",
     "Sistema mínimo de governança",
+    "Nota metodológica",
+    "Resumo de evidências",
+    "Hipóteses a validar",
+    "Methodological note",
+    "Evidence summary",
+    "Hypotheses to validate",
+    "Nota metodológica",
+    "Resumen de evidencias",
+    "Hipótesis a validar",
     "Recomendações finais",
     "Contato",
   ]);

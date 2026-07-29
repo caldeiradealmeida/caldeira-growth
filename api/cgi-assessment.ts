@@ -11,13 +11,22 @@ import {
 import { buildCgiReportPromptContext } from "./cgi-report-guide.js";
 import {
   createEventId,
+  getCgiReportState,
+  getReadyCgiReport,
   insertFunnelEvent,
+  markCgiReportFailed,
+  saveCompletedCgiReport,
+  tryCreateCgiReportGenerationLock,
+  updateCgiReportSecondarySyncStatus,
   upsertAnswers,
   upsertAssessment,
+  type StoredCgiReport,
 } from "./_cgi-supabase.js";
 import {
+  CGI_COMMENTS_MAX_LENGTH,
   normalizeAnonymousSessionId,
   normalizePublicAssessmentId,
+  validateProfessionalContent,
 } from "./_cgi-validation.js";
 
 type CgiLead = {
@@ -27,6 +36,10 @@ type CgiLead = {
   company?: string;
   companyWebsite?: string;
   role?: string;
+  region?: string;
+  businessUnit?: string;
+  companyId?: string;
+  respondentId?: string;
   sector?: string;
   commercialRelationshipModel?: string;
   employeeCount?: string;
@@ -50,12 +63,23 @@ type CgiPayload = {
   anonymous_session_id?: string;
   public_assessment_id?: string;
   completion_event_id?: string;
+  attribution?: Record<string, unknown>;
 };
 
 type AiResult = {
   status: "generated" | "not_configured" | "error";
   text: string;
   plainText: string;
+};
+
+type OpenAiResponseMeta = {
+  status: string;
+  finishReason: string;
+  incompleteDetails: unknown;
+  outputTokens: number | null;
+  outputCharCount: number;
+  maxOutputTokens: number;
+  isTruncated: boolean;
 };
 
 type WebsiteEnrichment = {
@@ -87,6 +111,25 @@ type EmailValidation = {
   error?: string;
 };
 
+type DimensionTranslations = Record<"pt" | "en" | "es", Record<string, string>>;
+
+const REPORT_METHODOLOGY_VERSION = "1.1.0";
+const SCORING_VERSION = "1.0.0";
+const CGI_OPENAI_ENDPOINT = "https://api.openai.com/v1/responses";
+const CGI_OPENAI_MODEL_ENV = "OPENAI_MODEL";
+const CGI_OPENAI_TIMEOUT_MS = 120000;
+const CGI_REPORT_MAX_OUTPUT_TOKENS = 10000;
+const CGI_REPORT_PREFERRED_MIN_CHARS = 11000;
+const CGI_REPORT_PREFERRED_MAX_CHARS = 15000;
+const CGI_REPORT_MAX_CHARS = 16500;
+const CGI_REPORT_MAX_ATTEMPTS = 3;
+
+const CGI_PRESENTATION =
+  "O CGI é um diagnóstico executivo desenvolvido pela Caldeira Growth para avaliar a capacidade de uma organização transformar ambição de crescimento em direção estratégica, leitura de mercado, máquina comercial, disciplina de execução e liderança. O instrumento não avalia perfil comportamental; ele identifica padrões, tensões e prioridades que podem influenciar a qualidade e a sustentabilidade do crescimento.";
+
+const CGI_METHODOLOGY_NOTE =
+  "Este parecer foi produzido a partir das respostas fornecidas ao CGI — Crescimento, Gestão e Implementação —, combinadas, quando indicado, com informações públicas sobre a empresa e seu contexto de atuação. As conclusões representam uma leitura executiva orientada por padrões de resposta e não substituem um diagnóstico organizacional completo. Hipóteses estratégicas, causas e prioridades devem ser validadas em discussão com a liderança e, quando aplicável, com dados operacionais adicionais.";
+
 function snippet(value: string, maxLength = 700): string {
   return value.replace(/\s+/g, " ").trim().slice(0, maxLength);
 }
@@ -97,6 +140,90 @@ function getAppsScriptUrl(): string {
     process.env.VITE_CONTACT_FORM_URL?.trim() ||
     ""
   );
+}
+
+function getConfiguredOpenAiModel(): string {
+  return process.env[CGI_OPENAI_MODEL_ENV]?.trim() || "";
+}
+
+function getOpenAiConfig(): { apiKey: string; model: string } | null {
+  const apiKey = process.env.OPENAI_API_KEY?.trim();
+  const model = getConfiguredOpenAiModel();
+  if (!apiKey || !model) return null;
+  return { apiKey, model };
+}
+
+async function fetchOpenAiResponse(
+  apiKey: string,
+  body: Record<string, unknown>
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), CGI_OPENAI_TIMEOUT_MS);
+  try {
+    return await fetch(CGI_OPENAI_ENDPOINT, {
+      method: "POST",
+      signal: controller.signal,
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function logCgiOperation(input: {
+  correlationId: string;
+  publicAssessmentId?: string | null;
+  operation: string;
+  success: boolean;
+  errorCode?: string;
+  durationMs: number;
+  retryCount?: number;
+  reportId?: string | null;
+}) {
+  console.info("[CGI Flow]", {
+    correlation_id: input.correlationId,
+    public_assessment_id: input.publicAssessmentId || undefined,
+    report_id: input.reportId || undefined,
+    operation: input.operation,
+    success: input.success,
+    error_code: input.errorCode || undefined,
+    duration_ms: input.durationMs,
+    retry_count: input.retryCount ?? 0,
+  });
+}
+
+function respondWithStoredReport(
+  res: VercelResponse,
+  report: StoredCgiReport
+): void {
+  const secondarySyncFailed = report.secondarySyncStatus === "secondary_sync_failed";
+  res.status(200).json({
+    ok: true,
+    public_assessment_id: report.publicAssessmentId,
+    completion_event_id: report.completionEventId,
+    report_status: "report_ready",
+    secondary_sync_status: report.secondarySyncStatus,
+    save: secondarySyncFailed
+      ? { ok: false, error: "secondary_sync_failed" }
+      : { ok: true },
+    score: report.score,
+    ai: {
+      status: report.aiStatus,
+      generation_status: report.aiGenerationStatus,
+      text: report.aiReport,
+      plainText: report.aiReportText,
+    },
+    ai_generation_status: report.aiGenerationStatus,
+    lead: report.lead,
+    answers: report.answers,
+    websiteEnrichment: report.websiteEnrichment,
+    requestContext: report.requestContext,
+    reused: true,
+  });
 }
 
 function firstHeaderValue(value: string | string[] | undefined): string {
@@ -142,6 +269,18 @@ function readPayload(req: VercelRequest): CgiPayload {
 
 function getEmailDomain(email: string): string {
   return email.trim().toLowerCase().split("@")[1] || "";
+}
+
+function getWebsiteDomain(rawUrl: string | undefined): string {
+  const value = String(rawUrl || "").trim();
+  if (!value) return "";
+  try {
+    return new URL(/^https?:\/\//i.test(value) ? value : `https://${value}`).hostname
+      .replace(/^www\./, "")
+      .toLowerCase();
+  } catch {
+    return "";
+  }
 }
 
 async function validateEmailDomain(email: string): Promise<EmailValidation> {
@@ -202,10 +341,10 @@ async function validateLead(lead: CgiLead | undefined): Promise<{
   const required: Array<keyof CgiLead> = [
     "name",
     "email",
-    "phone",
     "company",
     "role",
     "sector",
+    "commercialRelationshipModel",
     "employeeCount",
     "annualRevenue",
     "currentChallenge",
@@ -419,6 +558,73 @@ function extractOutputText(response: unknown): string {
     .trim();
 }
 
+function findNestedString(value: unknown, key: string): string {
+  if (!value || typeof value !== "object") return "";
+  const record = value as Record<string, unknown>;
+  if (typeof record[key] === "string") return record[key];
+  for (const nested of Object.values(record)) {
+    if (Array.isArray(nested)) {
+      for (const item of nested) {
+        const found = findNestedString(item, key);
+        if (found) return found;
+      }
+      continue;
+    }
+    const found = findNestedString(nested, key);
+    if (found) return found;
+  }
+  return "";
+}
+
+function getUsageOutputTokens(response: unknown): number | null {
+  if (!response || typeof response !== "object") return null;
+  const usage = (response as { usage?: unknown }).usage;
+  if (!usage || typeof usage !== "object") return null;
+  const record = usage as Record<string, unknown>;
+  const outputTokens = record.output_tokens ?? record.completion_tokens;
+  return typeof outputTokens === "number" ? outputTokens : null;
+}
+
+function isOpenAiOutputTruncated(meta: Pick<
+  OpenAiResponseMeta,
+  "status" | "finishReason" | "incompleteDetails"
+>): boolean {
+  const reasonText = JSON.stringify(meta.incompleteDetails || "").toLowerCase();
+  const finishReason = meta.finishReason.toLowerCase();
+  const status = meta.status.toLowerCase();
+  return (
+    status === "incomplete" ||
+    finishReason === "length" ||
+    finishReason.includes("max_output") ||
+    reasonText.includes("max_output") ||
+    reasonText.includes("length")
+  );
+}
+
+function extractOpenAiResponseMeta(
+  response: unknown,
+  outputText: string,
+  maxOutputTokens: number
+): OpenAiResponseMeta {
+  const record =
+    response && typeof response === "object"
+      ? (response as Record<string, unknown>)
+      : {};
+  const meta = {
+    status: typeof record.status === "string" ? record.status : "",
+    finishReason: findNestedString(response, "finish_reason"),
+    incompleteDetails: record.incomplete_details ?? null,
+    outputTokens: getUsageOutputTokens(response),
+    outputCharCount: outputText.length,
+    maxOutputTokens,
+    isTruncated: false,
+  };
+  return {
+    ...meta,
+    isTruncated: isOpenAiOutputTruncated(meta),
+  };
+}
+
 function formatAiReportForEmail(value: string, language: "pt" | "en" | "es" = "pt"): string {
   if (!value) return "";
   try {
@@ -427,32 +633,41 @@ function formatAiReportForEmail(value: string, language: "pt" | "en" | "es" = "p
     const labels = {
       pt: {
         executiveSummary: "Sumário Executivo",
+        methodology: "Nota metodológica",
+        evidence: "Resumo de evidências",
         diagnosis: "Contexto e diagnóstico",
         dimensionReading: "Leitura por dimensão",
         bottlenecks: "Gargalos críticos",
         bets: "Apostas estratégicas recomendadas",
         renunciations: "Renúncias estratégicas",
         governance: "Sistema mínimo de governança",
+        hypotheses: "Hipóteses a validar",
         recommendations: "Recomendações finais",
       },
       en: {
         executiveSummary: "Executive Summary",
+        methodology: "Methodological note",
+        evidence: "Evidence summary",
         diagnosis: "Context and diagnosis",
         dimensionReading: "Reading by dimension",
         bottlenecks: "Critical bottlenecks",
         bets: "Recommended strategic bets",
         renunciations: "Strategic renunciations",
         governance: "Minimum governance system",
+        hypotheses: "Hypotheses to validate",
         recommendations: "Final recommendations",
       },
       es: {
         executiveSummary: "Resumen ejecutivo",
+        methodology: "Nota metodológica",
+        evidence: "Resumen de evidencias",
         diagnosis: "Contexto y diagnóstico",
         dimensionReading: "Lectura por dimensión",
         bottlenecks: "Cuellos de botella críticos",
         bets: "Apuestas estratégicas recomendadas",
         renunciations: "Renuncias estratégicas",
         governance: "Sistema mínimo de gobernanza",
+        hypotheses: "Hipótesis a validar",
         recommendations: "Recomendaciones finales",
       },
     }[language];
@@ -465,6 +680,10 @@ function formatAiReportForEmail(value: string, language: "pt" | "en" | "es" = "p
     };
     const addList = (title: string, field: string) => {
       const list = parsed[field];
+      if (typeof list === "string" && list.trim()) {
+        lines.push(title, list.trim(), "");
+        return;
+      }
       if (Array.isArray(list) && list.length > 0) {
         lines.push(title);
         list.forEach((item) => {
@@ -484,6 +703,8 @@ function formatAiReportForEmail(value: string, language: "pt" | "en" | "es" = "p
       }
     };
 
+    addText(labels.methodology, "methodology_note");
+    addList(labels.evidence, "evidence_summary");
     addText(labels.executiveSummary, "executive_summary");
     addText(labels.diagnosis, "strategic_diagnosis");
     addList(labels.dimensionReading, "dimension_reading");
@@ -491,6 +712,7 @@ function formatAiReportForEmail(value: string, language: "pt" | "en" | "es" = "p
     addList(labels.bets, "strategic_bets");
     addList(labels.renunciations, "renunciations");
     addList(labels.governance, "governance_system");
+    addList(labels.hypotheses, "hypotheses_to_validate");
     addList(labels.recommendations, "final_recommendations");
 
     return lines.join("\n").trim();
@@ -523,6 +745,723 @@ function hasPortugueseLeak(value: string): boolean {
   return markers.filter((marker) => normalized.includes(marker)).length >= 3;
 }
 
+function answerLabel(value: number, language: "pt" | "en" | "es"): string {
+  const labels = {
+    pt: {
+      1: "discordo totalmente",
+      2: "discordo parcialmente",
+      3: "neutro",
+      4: "concordo parcialmente",
+      5: "concordo totalmente",
+    },
+    en: {
+      1: "strongly disagree",
+      2: "partially disagree",
+      3: "neutral",
+      4: "partially agree",
+      5: "strongly agree",
+    },
+    es: {
+      1: "totalmente en desacuerdo",
+      2: "parcialmente en desacuerdo",
+      3: "neutral",
+      4: "parcialmente de acuerdo",
+      5: "totalmente de acuerdo",
+    },
+  }[language] as Record<number, string>;
+  return labels[value] || String(value);
+}
+
+function getQuestionReference(
+  question: (typeof CGI_QUESTIONS)[number],
+  language: "pt" | "en" | "es"
+) {
+  if (language === "pt") return question.text;
+  return `assessment item ${question.id}`;
+}
+
+export function buildCgiReportEvidence({
+  answers,
+  score,
+  language,
+  dimensionTranslations,
+  respondentComment,
+}: {
+  answers: Record<string, number>;
+  score: CgiScoreResult;
+  language: "pt" | "en" | "es";
+  dimensionTranslations: DimensionTranslations;
+  respondentComment?: string;
+}) {
+  const dimensions = CGI_DIMENSIONS.map((dimension) => {
+    const dimensionScore = score.dimensionScores.find(
+      (item) => item.dimensionId === dimension.id
+    );
+    const items = CGI_QUESTIONS.filter((question) => question.dimensionId === dimension.id)
+      .map((question) => ({
+        id: question.id,
+        answer: answers[question.id],
+        answer_label: answerLabel(answers[question.id], language),
+        evidence_reference: getQuestionReference(question, language),
+      }))
+      .filter((item) => Number.isFinite(item.answer));
+
+    const strongestItems = [...items]
+      .sort((a, b) => b.answer - a.answer || a.id.localeCompare(b.id))
+      .slice(0, 3);
+    const weakestItems = [...items]
+      .sort((a, b) => a.answer - b.answer || a.id.localeCompare(b.id))
+      .slice(0, 2);
+    const maxAnswer = Math.max(...items.map((item) => item.answer));
+    const minAnswer = Math.min(...items.map((item) => item.answer));
+
+    return {
+      dimension_id: dimension.id,
+      dimension:
+        dimensionTranslations[language][dimension.id] || dimension.title,
+      score: dimensionScore?.score ?? null,
+      average: dimensionScore?.average ?? null,
+      strongest_items: strongestItems,
+      weakest_items: weakestItems,
+      answer_spread: maxAnswer - minAnswer,
+      has_internal_contrast: maxAnswer - minAnswer >= 2,
+    };
+  });
+
+  return {
+    methodology_version: REPORT_METHODOLOGY_VERSION,
+    scoring_version: SCORING_VERSION,
+    overall: {
+      final_score: score.finalScore,
+      maturity_level: score.level.title,
+      maturity_level_id: score.level.id,
+      strongest_dimensions: [...score.dimensionScores]
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 2)
+        .map((item) => ({
+          dimension_id: item.dimensionId,
+          dimension:
+            dimensionTranslations[language][item.dimensionId] || item.title,
+          score: item.score,
+        })),
+      weakest_dimensions: [...score.dimensionScores]
+        .sort((a, b) => a.score - b.score)
+        .slice(0, 2)
+        .map((item) => ({
+          dimension_id: item.dimensionId,
+          dimension:
+            dimensionTranslations[language][item.dimensionId] || item.title,
+          score: item.score,
+        })),
+    },
+    by_dimension: dimensions,
+    respondent_statement: String(respondentComment || "").trim()
+      ? {
+          source: "respondent_free_text",
+          text: snippet(String(respondentComment || ""), 1000),
+          interpretation_note:
+            "Declaração aberta do respondente; deve ser tratada como perspectiva individual e hipótese qualitativa, não como fato organizacional comprovado.",
+        }
+      : null,
+  };
+}
+
+export function buildCgiReportSystemPrompt(languageInstruction: string): string {
+  return `${languageInstruction}
+
+Você é um consultor sênior da Caldeira Growth. Gere um relatório executivo no formato de parecer estratégico, usando o guia de estilo e conteúdo fornecido.
+
+Princípio central da versão 1.1: o relatório deve parecer a aplicação disciplinada da metodologia Caldeira Growth às respostas específicas do respondente. Toda conclusão relevante deve estar sustentada por evidência do CGI, comentário textual do participante, contexto público validado ou aparecer explicitamente como hipótese a validar.
+
+Apresentação metodológica obrigatória: ${CGI_PRESENTATION}
+
+Nota metodológica obrigatória: ${CGI_METHODOLOGY_NOTE}
+
+Use três camadas com origem clara:
+1. Evidência do CGI: respostas, pontuações, forças, fragilidades e contrastes do assessment.
+2. Contexto complementar: apenas informações públicas presentes em public_website_context com status ok.
+3. Hipótese executiva: inferências estratégicas que precisam ser validadas em conversa posterior.
+
+Regras de credibilidade:
+- Não invente dados, fatos sobre a empresa, clientes, canais, produtos, resultados, nomes, estrutura, números ou metas não informadas.
+- Não presuma causa a partir de uma nota.
+- Não presuma que baixa pontuação significa ausência total.
+- Não presuma que alta pontuação significa maturidade comprovada.
+- Não cite informações públicas sem que estejam em public_website_context.
+- Não invente frases do respondente nem use aspas se estiver apenas resumindo comentários.
+- Quando a evidência for insuficiente, diga isso de forma explícita.
+- Evite afirmações categóricas como "o principal gargalo é", "a empresa precisa", "a causa é", "a empresa não possui" ou "a liderança falha em", exceto quando houver evidência direta e inequívoca nas respostas.
+- Como o CGI parte de um questionário individual, enquadre conclusões como perspectiva do respondente. Use formulações como "As respostas deste executivo indicam", "A partir da perspectiva do respondente", "O diagnóstico sugere", "Há sinais de que" e "Esta hipótese deve ser validada com outras lideranças e dados internos".
+- Prefira formulações como "as respostas sugerem", "o padrão indica", "há sinais de que", "uma hipótese relevante é", "este resultado pode indicar", "o tema merece validação adicional" e "a leitura do CGI sugere".
+- Evite transformar uma percepção individual em verdade objetiva sobre a organização. Em executive_summary, strategic_diagnosis, critical_bottlenecks, dimension_reading e final_recommendations, diferencie evidência observada, hipótese provável e validação necessária.
+
+Regras de personalização:
+- Use response_evidence.by_dimension para citar naturalmente as respostas que sustentam cada conclusão, sem expor códigos internos quando houver texto da pergunta disponível.
+- Em cada dimensão, destaque dois ou três itens fortes, um ou dois itens frágeis e alguma tensão quando answer_spread indicar contraste relevante.
+- Use lead.comments de forma explícita quando existir; se resumir o comentário, não coloque aspas.
+- Considere meta de crescimento, estágio/tamanho, modelo comercial, cargo do respondente, setor e site público quando disponíveis.
+- Varie a construção argumentativa entre dimensões e entre relatórios. Não reutilize automaticamente as mesmas expressões em todas as seções.
+
+Formato e tamanho:
+- Retorne apenas JSON válido, sem markdown decorativo.
+- Mantenha o conteúdo total preferencialmente entre ${CGI_REPORT_PREFERRED_MIN_CHARS.toLocaleString("pt-BR")} e ${CGI_REPORT_PREFERRED_MAX_CHARS.toLocaleString("pt-BR")} caracteres, e nunca acima de ${CGI_REPORT_MAX_CHARS.toLocaleString("pt-BR")} caracteres, incluindo espaços.
+- Use exatamente estas chaves: report_title, report_subtitle, email_subject, methodology_note, evidence_summary, executive_summary, strategic_diagnosis, dimension_reading, critical_bottlenecks, strategic_bets, renunciations, governance_system, hypotheses_to_validate, final_recommendations.
+- methodology_note deve preservar o significado da nota metodológica obrigatória, no idioma solicitado.
+- evidence_summary deve ser um array com 3 a 5 itens curtos, mostrando as principais evidências usadas.
+- executive_summary deve mencionar pontuação geral, faixa de maturidade, duas forças reais e uma tensão central; deve ter de 700 a 1.100 caracteres.
+- strategic_diagnosis deve ter 4 a 5 parágrafos discursivos, 2.200 a 3.300 caracteres no total, conectar dimensões, distinguir evidências de hipóteses e não repetir o executive_summary.
+- dimension_reading deve ter exatamente 5 objetos com dimension, score, analysis e implication. Cada dimensão deve ter 400 a 650 caracteres no total; cada analysis deve indicar as fontes principais da pontuação; cada implication deve explicar risco ou oportunidade sem excesso prescritivo.
+- critical_bottlenecks deve ter exatamente 3 strings. Cada string deve usar este contrato e estes rótulos, nesta ordem: "Título: ... Sinal observado: ... Causa provável: ... Impacto estratégico: ...". Cada item deve ter 450 a 700 caracteres.
+- strategic_bets deve ter exatamente 3 strings. Cada string deve usar este contrato e estes rótulos, nesta ordem: "Título: ... Ação prioritária: ... Resultado esperado: ... Horizonte: ...". Cada item deve ter 400 a 650 caracteres.
+- renunciations deve ter exatamente 3 strings. Cada string deve usar este contrato e estes rótulos, nesta ordem: "Escolha: ... O que deixar de fazer: ... Recurso ou capacidade protegida: ... Racional estratégico: ...". Cada item deve ter 250 a 450 caracteres.
+- governance_system deve ter exatamente 3 strings. Cada string deve usar este contrato e estes rótulos, nesta ordem: "Ritual: ... Frequência: ... Participantes: ... Indicadores: ... Decisão esperada: ...". Cada item deve ter 300 a 500 caracteres.
+- hypotheses_to_validate deve ter 3 a 5 hipóteses executivas curtas, claramente marcadas como hipóteses.
+- final_recommendations deve ter exatamente 3 strings. Cada string deve usar este contrato e estes rótulos, nesta ordem: "Recomendação: ... Prioridade: ... Próximo passo: ... Condição de validação: ...". Cada item deve ter 300 a 500 caracteres.
+
+Proporcionalidade por nível de score:
+- Scores baixos: recomende poucas iniciativas simultâneas, com foco em capacidade de execução e validação básica.
+- Scores médios: priorize sequenciamento, escolha e redução de dispersão.
+- Scores altos: evite elogios genéricos; trate tensões de escala, governança, renúncia e qualidade de crescimento.
+- Empresas frágeis devem receber próximos passos proporcionais à capacidade de execução; empresas maduras devem receber tensões mais sofisticadas de escala e escolha.
+
+Fronteira da versão gratuita:
+- O relatório deve gerar clareza estratégica, apontar prioridades, mostrar tensões, formular hipóteses e sugerir próximos passos.
+- Não entregue plano operacional completo, cronograma detalhado, matriz de responsáveis, playbook de implantação, desenho acabado de processos nem solução exaustiva para cada gargalo.
+- O relatório deve gerar clareza estratégica e apontar prioridades, mas não substituir uma etapa de diagnóstico aprofundado, alinhamento executivo ou desenho de implementação.
+
+O relatório deve ser discursivo, analítico e útil, mas enxuto para uma versão gratuita. Não escreva um comentário curto sobre o índice, mas também não produza um relatório longo de consultoria completa.`;
+}
+
+const EXACT_THREE_REPORT_LIST_FIELDS = [
+  "critical_bottlenecks",
+  "strategic_bets",
+  "renunciations",
+  "governance_system",
+  "final_recommendations",
+] as const;
+
+const REQUIRED_REPORT_KEYS = [
+  "report_title",
+  "report_subtitle",
+  "email_subject",
+  "methodology_note",
+  "evidence_summary",
+  "executive_summary",
+  "strategic_diagnosis",
+  "dimension_reading",
+  ...EXACT_THREE_REPORT_LIST_FIELDS,
+  "hypotheses_to_validate",
+];
+
+type ReportListField = (typeof EXACT_THREE_REPORT_LIST_FIELDS)[number];
+
+type ReportItemContractField = {
+  label: string;
+  keys: string[];
+};
+
+const REPORT_ITEM_CONTRACTS: Record<ReportListField, ReportItemContractField[]> = {
+  critical_bottlenecks: [
+    { label: "Título", keys: ["title", "titulo", "name", "tema"] },
+    { label: "Sinal observado", keys: ["observed_signal", "signal", "sinal_observado", "sinal", "evidence", "evidencia"] },
+    { label: "Causa provável", keys: ["probable_cause", "possible_cause", "cause", "causa_provavel", "causa"] },
+    { label: "Impacto estratégico", keys: ["strategic_impact", "impact", "impacto_estrategico", "impacto"] },
+  ],
+  strategic_bets: [
+    { label: "Título", keys: ["title", "titulo", "name", "tema"] },
+    { label: "Ação prioritária", keys: ["priority_action", "action", "acao_prioritaria", "acao", "decision", "decisao"] },
+    { label: "Resultado esperado", keys: ["expected_result", "resultado_esperado", "outcome"] },
+    { label: "Horizonte", keys: ["horizon", "horizonte", "deadline", "prazo"] },
+  ],
+  renunciations: [
+    { label: "Escolha", keys: ["choice", "escolha", "title", "titulo"] },
+    { label: "O que deixar de fazer", keys: ["what_to_stop", "stop_doing", "o_que_deixar_de_fazer", "renunciation", "renuncia"] },
+    { label: "Recurso ou capacidade protegida", keys: ["protected_resource", "resource_protected", "protected_capability", "recurso_protegido", "capacidade_protegida"] },
+    { label: "Racional estratégico", keys: ["strategic_rationale", "rationale", "racional_estrategico", "racional"] },
+  ],
+  governance_system: [
+    { label: "Ritual", keys: ["ritual", "title", "titulo", "name"] },
+    { label: "Frequência", keys: ["frequency", "frequencia", "cadence", "cadencia"] },
+    { label: "Participantes", keys: ["participants", "participantes"] },
+    { label: "Indicadores", keys: ["indicators", "indicadores", "metrics", "metricas"] },
+    { label: "Decisão esperada", keys: ["expected_decision", "decision", "decisao_esperada", "decisao"] },
+  ],
+  final_recommendations: [
+    { label: "Recomendação", keys: ["recommendation", "recomendacao", "title", "titulo"] },
+    { label: "Prioridade", keys: ["priority", "prioridade"] },
+    { label: "Próximo passo", keys: ["next_step", "proximo_passo", "action", "acao"] },
+    { label: "Condição de validação", keys: ["validation_condition", "condicao_de_validacao", "condition", "hypothesis_to_validate", "hipotese_a_validar"] },
+  ],
+};
+
+const REPORT_ITEM_LABELS: Record<string, string> = {
+  signal: "Sinal",
+  sinal: "Sinal",
+  evidence: "Evidencia",
+  evidencia: "Evidencia",
+  cause: "Possivel causa",
+  possible_cause: "Possivel causa",
+  causa: "Possivel causa",
+  impact: "Impacto",
+  impacto: "Impacto",
+  action: "Acao",
+  acao: "Acao",
+  decision: "Decisao",
+  decisao: "Decisao",
+  expected_result: "Resultado esperado",
+  resultado_esperado: "Resultado esperado",
+  deadline: "Prazo",
+  prazo: "Prazo",
+  cadence: "Cadencia",
+  cadencia: "Cadencia",
+  participants: "Participantes",
+  participantes: "Participantes",
+  indicators: "Indicadores",
+  indicadores: "Indicadores",
+  resource_protected: "Recurso protegido",
+  recurso_protegido: "Recurso protegido",
+  rationale: "Racional",
+  recommendation: "Recomendacao",
+  title: "Tema",
+  name: "Tema",
+  description: "Descricao",
+};
+
+function withProtectedUrls(value: string, transform: (input: string) => string): string {
+  const urls: string[] = [];
+  const protectedText = value.replace(/\b(?:https?:\/\/|www\.)[^\s)]+/gi, (match) => {
+    const token = `__CGI_URL_${urls.length}__`;
+    urls.push(match);
+    return token;
+  });
+  const transformed = transform(protectedText);
+  return urls.reduce(
+    (text, url, index) => text.replace(`__CGI_URL_${index}__`, url),
+    transformed
+  );
+}
+
+export function sanitizeReportText(value: string): string {
+  return withProtectedUrls(value, (input) =>
+    input
+      .replace(/\u00a0/g, " ")
+      .replace(/[ \t]+/g, " ")
+      .replace(/[ \t]+([,.;:!?])/g, "$1")
+      .replace(/,\s*\./g, ".")
+      .replace(/;\s*;/g, ";")
+      .replace(/,{2,}/g, ",")
+      .replace(/;{2,}/g, ";")
+      .replace(/(?<!\d)\.{2,}(?!\d)/g, ".")
+      .replace(/[ \t]+$/gm, "")
+      .trim()
+  );
+}
+
+function normalizeReportValue(value: unknown): string {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "string") return sanitizeReportText(value.replace(/\s+/g, " "));
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => normalizeReportValue(item))
+      .filter(Boolean)
+      .join("; ");
+  }
+  if (typeof value === "object") {
+    return Object.values(value as Record<string, unknown>)
+      .map((item) => normalizeReportValue(item))
+      .filter(Boolean)
+      .join("; ");
+  }
+  return "";
+}
+
+function valueFromContract(record: Record<string, unknown>, field: ReportItemContractField): string {
+  for (const key of field.keys) {
+    const direct = normalizeReportValue(record[key]);
+    if (direct) return direct;
+  }
+  return "";
+}
+
+function stripExistingContractLabels(value: string, contract: ReportItemContractField[]): string {
+  let next = value;
+  for (const field of contract) {
+    const escaped = field.label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    next = next.replace(new RegExp(`\\b${escaped}\\s*:`, "gi"), `${field.label}:`);
+  }
+  return sanitizeReportText(next);
+}
+
+export function normalizeReportListItem(
+  item: unknown,
+  field?: ReportListField
+): string {
+  if (typeof item === "string") {
+    return field
+      ? stripExistingContractLabels(item, REPORT_ITEM_CONTRACTS[field])
+      : sanitizeReportText(item);
+  }
+  if (item === null || item === undefined) return "";
+  if (Array.isArray(item)) {
+    const text = item
+      .map((value) => normalizeReportValue(value))
+      .filter(Boolean)
+      .join("; ")
+      .trim();
+    return sanitizeReportText(text);
+  }
+  if (typeof item !== "object") return normalizeReportValue(item);
+
+  const record = item as Record<string, unknown>;
+  if (field) {
+    const contract = REPORT_ITEM_CONTRACTS[field];
+    const entries = contract
+      .map((contractField) => {
+        const text = valueFromContract(record, contractField);
+        return text ? `${contractField.label}: ${text}` : "";
+      })
+      .filter(Boolean);
+
+    if (entries.length > 0) return sanitizeReportText(entries.join(". "));
+  }
+
+  const entries = Object.entries(record)
+    .map(([key, value]) => {
+      const text = normalizeReportValue(value);
+      if (!text) return "";
+      const label = REPORT_ITEM_LABELS[key] || "";
+      return label ? `${label}: ${text}` : text;
+    })
+    .filter(Boolean);
+
+  return sanitizeReportText(entries.join(". "));
+}
+
+function normalizeStringArray(
+  value: unknown,
+  maxItems?: number,
+  field?: ReportListField
+): string[] {
+  if (!Array.isArray(value)) return [];
+  const items = value
+    .map((item) => normalizeReportListItem(item, field))
+    .filter(Boolean);
+  return typeof maxItems === "number" ? items.slice(0, maxItems) : items;
+}
+
+function hasInvalidReportListText(value: string): boolean {
+  const normalized = value.trim().toLowerCase();
+  return (
+    !normalized ||
+    normalized === "[object object]" ||
+    normalized === "undefined" ||
+    normalized === "null"
+  );
+}
+
+function strategicDiagnosisParagraphs(value: unknown): string[] {
+  if (typeof value !== "string") return [];
+  return value
+    .split(/\n\s*\n/)
+    .map((paragraph) => paragraph.replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+}
+
+function isSubstantialParagraph(value: string): boolean {
+  const words = value.split(/\s+/).filter(Boolean);
+  return value.length >= 80 && words.length >= 12;
+}
+
+function reportSerializedLength(value: Record<string, unknown>): number {
+  return JSON.stringify(value).length;
+}
+
+function walkStrings(value: unknown): string[] {
+  if (typeof value === "string") return [value];
+  if (Array.isArray(value)) return value.flatMap((item) => walkStrings(item));
+  if (value && typeof value === "object") {
+    return Object.values(value as Record<string, unknown>).flatMap((item) => walkStrings(item));
+  }
+  return [];
+}
+
+function hasUnsafeDuplicatePunctuation(value: string): boolean {
+  const sanitized = sanitizeReportText(value);
+  return sanitized !== value.trim();
+}
+
+function hasReportPunctuationArtifacts(value: Record<string, unknown>): boolean {
+  return walkStrings(value).some(hasUnsafeDuplicatePunctuation);
+}
+
+function getSectionText(value: unknown): string {
+  return walkStrings(value).join(" ");
+}
+
+function itemHasContractLabels(value: string, field: ReportListField): boolean {
+  let cursor = -1;
+  return REPORT_ITEM_CONTRACTS[field].every((contractField) => {
+    const index = value.indexOf(`${contractField.label}:`);
+    if (index <= cursor) return false;
+    cursor = index;
+    return true;
+  });
+}
+
+function hasRespondentPerspectiveLanguage(parsed: Record<string, unknown>): boolean {
+  const dimensionReading = Array.isArray(parsed.dimension_reading)
+    ? parsed.dimension_reading
+        .map((item) => {
+          if (!item || typeof item !== "object") return "";
+          const record = item as Record<string, unknown>;
+          return [record.analysis, record.implication].map((value) => String(value || "")).join(" ");
+        })
+        .join(" ")
+    : "";
+  const source = [
+    parsed.executive_summary,
+    parsed.strategic_diagnosis,
+    parsed.critical_bottlenecks,
+    dimensionReading,
+    parsed.final_recommendations,
+  ]
+    .map((value) => getSectionText(value))
+    .join(" ")
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase();
+
+  const markers = [
+    "respostas deste executivo",
+    "perspectiva do respondente",
+    "diagnostico sugere",
+    "ha sinais de que",
+    "hipotese deve ser validada",
+    "as respostas indicam",
+    "as respostas sugerem",
+    "a leitura do cgi sugere",
+    "from the respondent's perspective",
+    "the diagnosis suggests",
+    "there are signs that",
+    "this hypothesis should be validated",
+    "desde la perspectiva del respondente",
+    "el diagnostico sugiere",
+    "hay senales de que",
+    "esta hipotesis debe validarse",
+  ];
+  return markers.some((marker) => source.includes(marker));
+}
+
+function buildReportRetryInstruction(errors: unknown[], attempt: number): string {
+  if (attempt <= 1) return "";
+  const serializedErrors = JSON.stringify(errors).toLowerCase();
+  const needsCondensation =
+    serializedErrors.includes("serialized characters") ||
+    serializedErrors.includes("output_truncated");
+  const condensationInstruction = needsCondensation
+    ? `\n- O relatório anterior ficou longo demais ou truncou. Condense o texto para ${CGI_REPORT_PREFERRED_MIN_CHARS}-${CGI_REPORT_PREFERRED_MAX_CHARS} caracteres e no máximo ${CGI_REPORT_MAX_CHARS}, preservando todas as chaves obrigatórias, 4-5 parágrafos em strategic_diagnosis e os números exigidos de itens. Não corte JSON nem remova seções.`
+    : "";
+
+  return `\n\nA tentativa anterior falhou na validação de contrato. Corrija obrigatoriamente:
+- Use arrays com exatamente 3 strings legíveis nos campos critical_bottlenecks, strategic_bets, renunciations, governance_system e final_recommendations.
+- Cada item desses arrays deve seguir exatamente os rótulos e a ordem definidos no prompt.
+- Não retorne objetos nesses arrays e nunca produza "[object Object]".
+- Remova artefatos de pontuação como "..", ",.", ";;" e espaços antes de pontuação.
+- Enquadre conclusões pela perspectiva do respondente e valide hipóteses com outras lideranças e dados internos.
+- strategic_diagnosis deve ter 4 a 5 parágrafos substanciais separados por linha em branco.${condensationInstruction}`;
+}
+
+export function validateGeneratedReportJson(value: string | Record<string, unknown>): {
+  ok: boolean;
+  errors: Array<{ field: string; index?: number; value?: unknown; message: string }>;
+  parsed: Record<string, unknown> | null;
+} {
+  let parsed: Record<string, unknown>;
+  if (typeof value === "string") {
+    try {
+      parsed = JSON.parse(value) as Record<string, unknown>;
+    } catch (error) {
+      return {
+        ok: false,
+        parsed: null,
+        errors: [
+          {
+            field: "$",
+            message: `parse_error: ${error instanceof Error ? error.message : String(error)}`,
+          },
+        ],
+      };
+    }
+  } else {
+    parsed = value;
+  }
+
+  const errors: Array<{ field: string; index?: number; value?: unknown; message: string }> = [];
+  for (const key of REQUIRED_REPORT_KEYS) {
+    if (!(key in parsed)) {
+      errors.push({ field: key, message: "missing_key" });
+    }
+  }
+
+  if (reportSerializedLength(parsed) > CGI_REPORT_MAX_CHARS) {
+    errors.push({
+      field: "$",
+      value: reportSerializedLength(parsed),
+      message: `must not exceed ${CGI_REPORT_MAX_CHARS} serialized characters`,
+    });
+  }
+
+  if (hasReportPunctuationArtifacts(parsed)) {
+    errors.push({
+      field: "$",
+      message: "contains duplicated punctuation or unsafe spacing artifacts",
+    });
+  }
+
+  if (!hasRespondentPerspectiveLanguage(parsed)) {
+    errors.push({
+      field: "$",
+      message: "must frame conclusions from the respondent perspective",
+    });
+  }
+
+  const dimensionReading = parsed.dimension_reading;
+  if (!Array.isArray(dimensionReading) || dimensionReading.length !== 5) {
+    errors.push({
+      field: "dimension_reading",
+      value: dimensionReading,
+      message: "must contain exactly 5 items",
+    });
+  } else {
+    dimensionReading.forEach((item, index) => {
+      if (!item || typeof item !== "object") {
+        errors.push({ field: "dimension_reading", index, value: item, message: "item must be an object" });
+        return;
+      }
+      const record = item as Record<string, unknown>;
+      for (const key of ["dimension", "score", "analysis", "implication"]) {
+        if (record[key] === undefined || record[key] === null || String(record[key]).trim() === "") {
+          errors.push({
+            field: "dimension_reading",
+            index,
+            value: item,
+            message: `missing_${key}`,
+          });
+        }
+      }
+    });
+  }
+
+  const evidenceSummary = parsed.evidence_summary;
+  if (!Array.isArray(evidenceSummary) || evidenceSummary.length < 3 || evidenceSummary.length > 5) {
+    errors.push({
+      field: "evidence_summary",
+      value: evidenceSummary,
+      message: "must contain 3 to 5 items",
+    });
+  }
+
+  const hypotheses = parsed.hypotheses_to_validate;
+  if (!Array.isArray(hypotheses) || hypotheses.length < 3 || hypotheses.length > 5) {
+    errors.push({
+      field: "hypotheses_to_validate",
+      value: hypotheses,
+      message: "must contain 3 to 5 items",
+    });
+  }
+
+  for (const field of EXACT_THREE_REPORT_LIST_FIELDS) {
+    const list = parsed[field];
+    if (!Array.isArray(list) || list.length !== 3) {
+      errors.push({
+        field,
+        value: list,
+        message: "must contain exactly 3 items",
+      });
+      continue;
+    }
+    list.forEach((item, index) => {
+      if (typeof item !== "string") {
+        errors.push({ field, index, value: item, message: "item must be a string" });
+        return;
+      }
+      if (hasInvalidReportListText(item)) {
+        errors.push({ field, index, value: item, message: "invalid list item text" });
+      }
+      if (!itemHasContractLabels(item, field)) {
+        errors.push({
+          field,
+          index,
+          value: item,
+          message: "item does not follow the required labeled structure",
+        });
+      }
+    });
+  }
+
+  const paragraphs = strategicDiagnosisParagraphs(parsed.strategic_diagnosis);
+  if (
+    paragraphs.length < 4 ||
+    paragraphs.length > 5 ||
+    paragraphs.some((paragraph) => !isSubstantialParagraph(paragraph))
+  ) {
+    errors.push({
+      field: "strategic_diagnosis",
+      value: parsed.strategic_diagnosis,
+      message: "must contain 4 to 5 substantial paragraphs separated by blank lines",
+    });
+  }
+
+  return { ok: errors.length === 0, errors, parsed };
+}
+
+export function normalizeGeneratedReportJson(value: string): string {
+  if (!value) return "";
+  try {
+    const parsed = JSON.parse(value) as Record<string, unknown>;
+    const strategicDiagnosis = typeof parsed.strategic_diagnosis === "string"
+      ? parsed.strategic_diagnosis
+          .split(/\n\s*\n/)
+          .map((paragraph) => sanitizeReportText(paragraph))
+          .filter(Boolean)
+          .join("\n\n")
+      : parsed.strategic_diagnosis;
+    const dimensionReading = Array.isArray(parsed.dimension_reading)
+      ? parsed.dimension_reading.map((item) => {
+          if (!item || typeof item !== "object") return item;
+          const record = item as Record<string, unknown>;
+          return {
+            ...record,
+            dimension: normalizeReportValue(record.dimension),
+            analysis: normalizeReportValue(record.analysis),
+            implication: normalizeReportValue(record.implication),
+          };
+        })
+      : parsed.dimension_reading;
+    const normalized = {
+      ...parsed,
+      report_title: normalizeReportValue(parsed.report_title),
+      report_subtitle: normalizeReportValue(parsed.report_subtitle),
+      email_subject: normalizeReportValue(parsed.email_subject),
+      methodology_note: normalizeReportValue(parsed.methodology_note),
+      executive_summary: normalizeReportValue(parsed.executive_summary),
+      strategic_diagnosis: strategicDiagnosis,
+      dimension_reading: dimensionReading,
+      evidence_summary: normalizeStringArray(parsed.evidence_summary, 5),
+      critical_bottlenecks: normalizeStringArray(parsed.critical_bottlenecks, undefined, "critical_bottlenecks"),
+      strategic_bets: normalizeStringArray(parsed.strategic_bets, undefined, "strategic_bets"),
+      renunciations: normalizeStringArray(parsed.renunciations, undefined, "renunciations"),
+      governance_system: normalizeStringArray(parsed.governance_system, undefined, "governance_system"),
+      hypotheses_to_validate: normalizeStringArray(parsed.hypotheses_to_validate, 5),
+      final_recommendations: normalizeStringArray(parsed.final_recommendations, undefined, "final_recommendations"),
+    };
+    return JSON.stringify(normalized);
+  } catch {
+    return value;
+  }
+}
+
 async function rewriteAiReportLanguage({
   apiKey,
   model,
@@ -539,13 +1478,7 @@ async function rewriteAiReportLanguage({
       ? "Reescriba TODO el contenido textual de este JSON en español latinoamericano neutro, adecuado para Panamá y América Latina. Mantenga exactamente las mismas claves, estructura, números, marcas, URLs y nombres propios. No deje ninguna frase en portugués. Devuelva solo JSON válido."
       : "Rewrite ALL textual content in this JSON in natural executive English. Keep exactly the same keys, structure, numbers, brands, URLs and proper names. Do not leave any Portuguese or Spanish sentences. Return only valid JSON.";
 
-  const response = await fetch("https://api.openai.com/v1/responses", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
+  const response = await fetchOpenAiResponse(apiKey, {
       model,
       store: false,
       input: [
@@ -559,8 +1492,7 @@ async function rewriteAiReportLanguage({
         },
       ],
       text: { format: { type: "json_object" } },
-      max_output_tokens: 5200,
-    }),
+      max_output_tokens: CGI_REPORT_MAX_OUTPUT_TOKENS,
   });
 
   if (!response.ok) {
@@ -570,7 +1502,17 @@ async function rewriteAiReportLanguage({
   }
 
   const data = await response.json();
-  return extractOutputText(data) || text;
+  const outputText = extractOutputText(data);
+  const meta = extractOpenAiResponseMeta(
+    data,
+    outputText,
+    CGI_REPORT_MAX_OUTPUT_TOKENS
+  );
+  if (meta.isTruncated) {
+    console.error("[CGI OpenAI] rewrite_output_truncated", meta);
+    return text;
+  }
+  return outputText || text;
 }
 
 async function generateAiDiagnostic({
@@ -588,14 +1530,11 @@ async function generateAiDiagnostic({
   requestContext: RequestContext;
   language: "pt" | "en" | "es";
 }): Promise<AiResult> {
-  const apiKey = process.env.OPENAI_API_KEY?.trim();
-  if (!apiKey) return { status: "not_configured", text: "", plainText: "" };
+  const openAiConfig = getOpenAiConfig();
+  if (!openAiConfig) return { status: "not_configured", text: "", plainText: "" };
 
-  const model = process.env.OPENAI_MODEL?.trim() || "gpt-5.5";
-  const dimensionTranslations: Record<
-    "pt" | "en" | "es",
-    Record<string, string>
-  > = {
+  const { apiKey, model } = openAiConfig;
+  const dimensionTranslations: DimensionTranslations = {
     pt: {
       strategy: "Estratégia",
       market: "Mercado e Cliente",
@@ -651,81 +1590,129 @@ async function generateAiDiagnostic({
       ? "CRITICAL LANGUAGE RULE: write every title, paragraph, bullet and recommendation in natural executive English. Do not write Portuguese or Spanish words, except proper names, brands, URLs and literal user-provided values."
       : language === "es"
         ? "REGLA CRÍTICA DE IDIOMA: escriba todos los títulos, párrafos, bullets y recomendaciones en español latinoamericano neutro, adecuado para Panamá y América Latina. No escriba palabras en portugués o inglés, excepto nombres propios, marcas, URLs y valores literales informados por el usuario. Use los nombres de dimensión en español."
-        : "REGRA CRÍTICA DE IDIOMA: escreva todos os títulos, parágrafos, bullets e recomendações em português executivo do Brasil. Não misture inglês ou espanhol, exceto nomes próprios, marcas, URLs e valores literais informados pelo usuário.";
+      : "REGRA CRÍTICA DE IDIOMA: escreva todos os títulos, parágrafos, bullets e recomendações em português executivo do Brasil. Não misture inglês ou espanhol, exceto nomes próprios, marcas, URLs e valores literais informados pelo usuário.";
+  const responseEvidence = buildCgiReportEvidence({
+    answers,
+    score,
+    language,
+    dimensionTranslations,
+    respondentComment: lead.comments || "",
+  });
+  const promptPayload = {
+    report_guide: buildCgiReportPromptContext(),
+    lead,
+    respondent_context: {
+      company: lead.company || "",
+      company_domain: getWebsiteDomain(lead.companyWebsite),
+      respondent_name: lead.name || "",
+      role: lead.role || "",
+      region: lead.region || "",
+      business_unit: lead.businessUnit || "",
+      company_id: lead.companyId || "",
+      respondent_id: lead.respondentId || "",
+      sector: lead.sector || "",
+      commercial_relationship_model:
+        lead.commercialRelationshipModel || "",
+      employee_count: lead.employeeCount || "",
+      annual_revenue_range: lead.annualRevenue || "",
+      current_challenge: lead.currentChallenge || "",
+      growth_goal: lead.growthGoal || "",
+      investment_intent: lead.investmentIntent || "",
+      comments_available: Boolean(String(lead.comments || "").trim()),
+    },
+    request_context: requestContext,
+    public_website_context: websiteEnrichment,
+    language,
+    cgi: localizedScore,
+    dimensions: localizedDimensions,
+    answers: compactAnswers,
+    response_evidence: responseEvidence,
+  };
 
   try {
-    const response = await fetch("https://api.openai.com/v1/responses", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model,
-        store: false,
-        input: [
-          {
-            role: "system",
-            content: [
-              {
-                type: "input_text",
-                text:
-                  `${languageInstruction}\n\nVocê é um consultor sênior da Caldeira Growth. Gere um relatório executivo no formato de parecer estratégico, usando o guia de estilo e conteúdo fornecido. O relatório deve ser discursivo, analítico e útil, mas enxuto para uma versão gratuita: limite o conteúdo total a aproximadamente 10.000 a 13.000 caracteres, incluindo espaços, para resultar em cerca de 6 a 8 páginas quando diagramado com capa, gráficos e rodapé. Não escreva um comentário curto sobre o índice, mas também não produza um relatório longo de consultoria completa. Use o CGI como evidência inicial para construir hipóteses executivas sobre qualidade do crescimento, foco, disciplina de gestão, mercado, máquina comercial, execução, liderança e cultura. Se houver public_website_context com status ok, use título, descrição, headings e texto observado do site como contexto público sobre posicionamento, oferta, linguagem comercial e possíveis segmentos atendidos. O conteúdo do site pode estar em idioma diferente do idioma solicitado; nesse caso, use apenas o significado como contexto e escreva tudo no idioma solicitado. Não copie frases do site em outro idioma. Use lead.comments, quando existir, para calibrar hipóteses, prioridades e linguagem do diagnóstico. Trate esses sinais como observações externas a validar, não como fatos definitivos. Não invente dados financeiros, nomes, fatos ou números fora do assessment, do comentário livre e do site observado. Quando faltar informação, explicite como hipótese qualificada. Retorne apenas JSON válido com as chaves: report_title, report_subtitle, email_subject, executive_summary, strategic_diagnosis, dimension_reading, critical_bottlenecks, strategic_bets, renunciations, governance_system, final_recommendations. executive_summary deve ter 2 parágrafos. strategic_diagnosis deve ter 4 a 5 parágrafos discursivos. dimension_reading deve ser array de objetos com dimension, score, analysis, implication; cada analysis deve ter 1 parágrafo curto e cada implication deve explicar a consequência estratégica em 1 parágrafo curto. critical_bottlenecks, strategic_bets, renunciations, governance_system e final_recommendations devem ser arrays com 2 a 3 itens; cada item deve ser um texto completo de 50 a 85 palavras. Sem markdown decorativo.`,
-              },
-            ],
+    const validationErrors: unknown[] = [];
+    for (let attempt = 1; attempt <= CGI_REPORT_MAX_ATTEMPTS; attempt += 1) {
+      const retryInstruction = buildReportRetryInstruction(validationErrors, attempt);
+      const response = await fetchOpenAiResponse(apiKey, {
+          model,
+          store: false,
+          input: [
+            {
+              role: "system",
+              content: [
+                {
+                  type: "input_text",
+                  text: `${buildCgiReportSystemPrompt(languageInstruction)}${retryInstruction}`,
+                },
+              ],
+            },
+            {
+              role: "user",
+              content: [
+                {
+                  type: "input_text",
+                  text: JSON.stringify(promptPayload),
+                },
+              ],
+            },
+          ],
+          text: {
+            format: {
+              type: "json_object",
+            },
           },
-          {
-            role: "user",
-            content: [
-              {
-                type: "input_text",
-                text: JSON.stringify({
-                  report_guide: buildCgiReportPromptContext(),
-                  lead,
-                  request_context: requestContext,
-                  public_website_context: websiteEnrichment,
-                  language,
-                  cgi: localizedScore,
-                  dimensions: localizedDimensions,
-                  answers: compactAnswers,
-                }),
-              },
-            ],
-          },
-        ],
-        text: {
-          format: {
-            type: "json_object",
-          },
-        },
-        max_output_tokens: 5200,
-      }),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("[CGI OpenAI] request_failed", response.status, errorText);
-      return { status: "error", text: "", plainText: "" };
-    }
-
-    const data = await response.json();
-    let text = extractOutputText(data);
-    if (language !== "pt") {
-      if (hasPortugueseLeak(text)) {
-        console.warn("[CGI OpenAI] portuguese_leak_detected", { language });
-      }
-      text = await rewriteAiReportLanguage({
-        apiKey,
-        model,
-        text,
-        language,
+          max_output_tokens: CGI_REPORT_MAX_OUTPUT_TOKENS,
       });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("[CGI OpenAI] request_failed", response.status, errorText);
+        return { status: "error", text: "", plainText: "" };
+      }
+
+      const data = await response.json();
+      const rawText = extractOutputText(data);
+      const responseMeta = extractOpenAiResponseMeta(
+        data,
+        rawText,
+        CGI_REPORT_MAX_OUTPUT_TOKENS
+      );
+      if (responseMeta.isTruncated) {
+        validationErrors.push({
+          attempt,
+          type: "output_truncated",
+          meta: responseMeta,
+        });
+        continue;
+      }
+
+      let text = normalizeGeneratedReportJson(rawText);
+      if (language !== "pt") {
+        if (hasPortugueseLeak(text)) {
+          console.warn("[CGI OpenAI] portuguese_leak_detected", { language });
+        }
+        text = await rewriteAiReportLanguage({
+          apiKey,
+          model,
+          text,
+          language,
+        });
+        text = normalizeGeneratedReportJson(text);
+      }
+
+      const validation = validateGeneratedReportJson(text);
+      if (validation.ok) {
+        return {
+          status: "generated",
+          text,
+          plainText: formatAiReportForEmail(text, language),
+        };
+      }
+      validationErrors.push({ attempt, errors: validation.errors });
     }
-    return {
-      status: "generated",
-      text,
-      plainText: formatAiReportForEmail(text, language),
-    };
+
+    console.error("[CGI OpenAI] invalid_report_json", validationErrors);
+    return { status: "error", text: "", plainText: "" };
   } catch (error) {
     console.error("[CGI OpenAI] error", error);
     return { status: "error", text: "", plainText: "" };
@@ -773,8 +1760,8 @@ async function persistCompletedAssessmentBestEffort({
     cgiLevel: score.level.id,
     lowestDimension: lowest?.dimensionId ?? null,
     highestDimension: highest?.dimensionId ?? null,
-    methodologyVersion: "1.0.0",
-    scoringVersion: "1.0.0",
+    methodologyVersion: REPORT_METHODOLOGY_VERSION,
+    scoringVersion: SCORING_VERSION,
   });
 
   if (assessment?.id) {
@@ -811,10 +1798,43 @@ export default async function handler(
   res: VercelResponse
 ): Promise<void> {
   if (req.method === "GET") {
+    const publicAssessmentId = normalizePublicAssessmentId(req.query.public_assessment_id);
+    if (publicAssessmentId) {
+      const reportState = await getCgiReportState({ publicAssessmentId });
+      if (reportState?.status === "ready") {
+        respondWithStoredReport(res, reportState.report);
+        return;
+      }
+      if (reportState?.status === "generating") {
+        res.status(202).json({
+          ok: true,
+          public_assessment_id: reportState.publicAssessmentId,
+          completion_event_id: reportState.completionEventId,
+          report_status: "report_generating",
+          secondary_sync_status: "secondary_sync_pending",
+        });
+        return;
+      }
+      if (reportState?.status === "failed") {
+        res.status(503).json({
+          ok: false,
+          public_assessment_id: reportState.publicAssessmentId,
+          completion_event_id: reportState.completionEventId,
+          error: "report_failed",
+          report_status: "report_failed",
+          message: "Não foi possível concluir a geração do relatório neste momento.",
+        });
+        return;
+      }
+      res.status(404).json({ ok: false, error: "report_not_found" });
+      return;
+    }
+
     res.status(200).json({
       ok: true,
       configured: getAppsScriptUrl().length > 0,
-      openaiConfigured: Boolean(process.env.OPENAI_API_KEY?.trim()),
+      openaiConfigured: Boolean(getOpenAiConfig()),
+      openaiModelConfigured: Boolean(getConfiguredOpenAiModel()),
     });
     return;
   }
@@ -831,6 +1851,12 @@ export default async function handler(
     res.status(400).json({ ok: false, error: "invalid_json" });
     return;
   }
+  const handlerStartedAt = Date.now();
+  const correlationId = String(
+    payload.completion_event_id ||
+      payload.public_assessment_id ||
+      createEventId()
+  );
 
   const spamError = validateSpam(payload);
   if (spamError) {
@@ -848,6 +1874,32 @@ export default async function handler(
     return;
   }
 
+  const professionalContentError = validateProfessionalContent({
+    strict: [
+      { field: "name", value: payload.lead?.name || "" },
+      { field: "company", value: payload.lead?.company || "" },
+      { field: "role", value: payload.lead?.role || "" },
+    ],
+    contextual: [
+      { field: "sector", value: payload.lead?.sector || "" },
+      {
+        field: "commercial_relationship_model",
+        value: payload.lead?.commercialRelationshipModel || "",
+      },
+      { field: "current_challenge", value: payload.lead?.currentChallenge || "" },
+      { field: "growth_goal", value: payload.lead?.growthGoal || "" },
+      {
+        field: "comments",
+        value: payload.lead?.comments || "",
+        maxLength: CGI_COMMENTS_MAX_LENGTH,
+      },
+    ],
+  });
+  if (professionalContentError) {
+    res.status(422).json({ ok: false, error: "invalid_professional_content" });
+    return;
+  }
+
   const answers = normalizeCgiAnswers(payload.answers ?? {});
   if (!areCgiAnswersComplete(answers)) {
     res.status(400).json({ ok: false, error: "incomplete_answers" });
@@ -857,8 +1909,100 @@ export default async function handler(
   const language: "pt" | "en" | "es" =
     payload.language === "en" || payload.language === "es" ? payload.language : "pt";
   const score = calculateCgiScore(answers);
+  const normalizedPublicAssessmentId = normalizePublicAssessmentId(payload.public_assessment_id);
+  const normalizedCompletionEventId = String(payload.completion_event_id || "");
+
+  const existingReport = await getReadyCgiReport({
+    publicAssessmentId: normalizedPublicAssessmentId,
+    completionEventId: normalizedCompletionEventId,
+  });
+  if (existingReport) {
+    logCgiOperation({
+      correlationId,
+      publicAssessmentId: existingReport.publicAssessmentId,
+      operation: "report_idempotency_lookup",
+      success: true,
+      durationMs: Date.now() - handlerStartedAt,
+    });
+    respondWithStoredReport(res, existingReport);
+    return;
+  }
+
+  const reportLock = await tryCreateCgiReportGenerationLock({
+    publicAssessmentId: normalizedPublicAssessmentId,
+    anonymousSessionId: normalizeAnonymousSessionId(payload.anonymous_session_id),
+    completionEventId: normalizedCompletionEventId,
+    language,
+  });
+  if (reportLock.status === "existing_ready") {
+    logCgiOperation({
+      correlationId,
+      publicAssessmentId: reportLock.report.publicAssessmentId,
+      operation: "report_idempotency_lock",
+      success: true,
+      durationMs: Date.now() - handlerStartedAt,
+    });
+    respondWithStoredReport(res, reportLock.report);
+    return;
+  }
+  if (reportLock.status === "in_progress") {
+    logCgiOperation({
+      correlationId,
+      publicAssessmentId: normalizedPublicAssessmentId,
+      operation: "report_idempotency_lock",
+      success: true,
+      errorCode: "report_generation_in_progress",
+      durationMs: Date.now() - handlerStartedAt,
+    });
+    res.status(202).json({
+      ok: true,
+      public_assessment_id: normalizedPublicAssessmentId,
+      completion_event_id: normalizedCompletionEventId,
+      report_status: "report_generating",
+      secondary_sync_status: "secondary_sync_pending",
+    });
+    return;
+  }
+  if (reportLock.status === "failed") {
+    logCgiOperation({
+      correlationId,
+      publicAssessmentId: normalizedPublicAssessmentId,
+      operation: "report_idempotency_lock",
+      success: false,
+      errorCode: reportLock.errorCode || "report_failed",
+      durationMs: Date.now() - handlerStartedAt,
+    });
+    res.status(503).json({
+      ok: false,
+      error: "report_failed",
+      report_status: "report_failed",
+      message: "Não foi possível concluir a geração do relatório neste momento.",
+    });
+    return;
+  }
+  if (reportLock.status === "unavailable") {
+    logCgiOperation({
+      correlationId,
+      publicAssessmentId: normalizedPublicAssessmentId,
+      operation: "report_idempotency_lock",
+      success: false,
+      errorCode: "report_persistence_unavailable",
+      durationMs: Date.now() - handlerStartedAt,
+    });
+    res.status(503).json({
+      ok: false,
+      error: "report_persistence_unavailable",
+      report_status: "report_failed",
+      message:
+        "Não foi possível iniciar a geração do relatório neste momento. Tente novamente em alguns instantes.",
+    });
+    return;
+  }
+
   const requestContext = getRequestContext(req);
   const websiteEnrichment = await enrichCompanyWebsite(payload.lead?.companyWebsite);
+  const aiModel = getConfiguredOpenAiModel();
+  const aiStartedAt = Date.now();
   const ai = await generateAiDiagnostic({
     lead: payload.lead as CgiLead,
     answers,
@@ -867,12 +2011,90 @@ export default async function handler(
     requestContext,
     language,
   });
+  if (ai.status === "error" || (ai.status === "generated" && !ai.text.trim())) {
+    logCgiOperation({
+      correlationId,
+      publicAssessmentId: normalizedPublicAssessmentId,
+      operation: "report_generation",
+      success: false,
+      errorCode: "ai_generation_failed",
+      durationMs: Date.now() - aiStartedAt,
+    });
+    await markCgiReportFailed({
+      publicAssessmentId: normalizedPublicAssessmentId,
+      errorCode: "ai_generation_failed",
+      errorMessage: "AI report generation did not produce a valid report.",
+    });
+    res.status(503).json({
+      ok: false,
+      error: "report_generation_failed",
+      report_status: "report_failed",
+      message: "Não foi possível gerar o relatório neste momento. Tente novamente em alguns instantes.",
+      ai_generation_status: ai.status,
+    });
+    return;
+  }
+  const reportStatus = "report_ready" as const;
+  logCgiOperation({
+    correlationId,
+    publicAssessmentId: normalizedPublicAssessmentId,
+    operation: "report_generation",
+    success: true,
+    durationMs: Date.now() - aiStartedAt,
+  });
+  const reportSaved = await saveCompletedCgiReport({
+    publicAssessmentId: normalizedPublicAssessmentId,
+    anonymousSessionId: normalizeAnonymousSessionId(payload.anonymous_session_id),
+    completionEventId: normalizedCompletionEventId,
+    language,
+    aiStatus: ai.status,
+    aiReport: ai.text,
+    aiReportText: ai.plainText,
+    model: ai.status === "generated" ? aiModel : null,
+    lead: payload.lead,
+    answers,
+    score,
+    websiteEnrichment,
+    requestContext,
+  });
+  logCgiOperation({
+    correlationId,
+    publicAssessmentId: normalizedPublicAssessmentId,
+    operation: "report_persistence",
+    success: reportSaved,
+    errorCode: reportSaved ? undefined : "report_persistence_unavailable",
+    durationMs: Date.now() - aiStartedAt,
+  });
+  if (!reportSaved) {
+    await markCgiReportFailed({
+      publicAssessmentId: normalizedPublicAssessmentId,
+      errorCode: "report_persistence_unavailable",
+      errorMessage: "The report was generated but could not be persisted.",
+    });
+    res.status(503).json({
+      ok: false,
+      error: "report_persistence_unavailable",
+      report_status: "report_failed",
+      message: "Não foi possível salvar o relatório neste momento.",
+      ai_generation_status: ai.status,
+    });
+    return;
+  }
   let supabaseCompletion: Awaited<ReturnType<typeof persistCompletedAssessmentBestEffort>> = null;
   try {
+    const persistenceStartedAt = Date.now();
     supabaseCompletion = await persistCompletedAssessmentBestEffort({
       payload,
       answers,
       score,
+    });
+    logCgiOperation({
+      correlationId,
+      publicAssessmentId: normalizedPublicAssessmentId,
+      operation: "assessment_persistence",
+      success: Boolean(supabaseCompletion),
+      errorCode: supabaseCompletion ? undefined : "assessment_persistence_unavailable",
+      durationMs: Date.now() - persistenceStartedAt,
     });
   } catch (error) {
     console.error("[CGI Supabase]", {
@@ -881,19 +2103,49 @@ export default async function handler(
       public_assessment_id: normalizePublicAssessmentId(payload.public_assessment_id),
       error: error instanceof Error ? error.message : String(error || ""),
     });
+    logCgiOperation({
+      correlationId,
+      publicAssessmentId: normalizedPublicAssessmentId,
+      operation: "assessment_persistence",
+      success: false,
+      errorCode: "assessment_persistence_exception",
+      durationMs: Date.now() - handlerStartedAt,
+    });
   }
+
+  const responsePublicAssessmentId =
+    supabaseCompletion?.publicAssessmentId ||
+    normalizePublicAssessmentId(payload.public_assessment_id);
+  const responseCompletionEventId =
+    supabaseCompletion?.completionEventId ||
+    String(payload.completion_event_id || "");
 
   const url = getAppsScriptUrl();
   if (!url) {
+    await updateCgiReportSecondarySyncStatus({
+      publicAssessmentId: responsePublicAssessmentId,
+      secondarySyncStatus: "secondary_sync_failed",
+    });
     res.status(200).json({
       ok: true,
-      public_assessment_id: supabaseCompletion?.publicAssessmentId,
-      completion_event_id: supabaseCompletion?.completionEventId,
+      public_assessment_id: responsePublicAssessmentId,
+      completion_event_id: responseCompletionEventId,
+      report_status: reportStatus,
+      secondary_sync_status: "secondary_sync_failed",
       save: { ok: false, error: "not_configured" },
       score,
       ai,
+      ai_generation_status: ai.status,
       websiteEnrichment,
       requestContext,
+    });
+    logCgiOperation({
+      correlationId,
+      publicAssessmentId: responsePublicAssessmentId,
+      operation: "status_response",
+      success: true,
+      errorCode: "secondary_sync_not_configured",
+      durationMs: Date.now() - handlerStartedAt,
     });
     return;
   }
@@ -912,12 +2164,19 @@ export default async function handler(
     aiStatus: ai.status,
     userAgent: req.headers["user-agent"] ?? "",
     referrer: req.headers.referer ?? req.headers.referrer ?? "",
+    publicAssessmentId: responsePublicAssessmentId,
+    anonymousSessionId: normalizeAnonymousSessionId(payload.anonymous_session_id),
+    completionEventId: responseCompletionEventId,
+    reportStatus,
+    secondarySyncStatus: "secondary_sync_pending",
+    attribution: payload.attribution || {},
   };
 
   let upstream: Response;
   let text = "";
   let data: unknown = {};
   try {
+    const sheetsStartedAt = Date.now();
     upstream = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "text/plain;charset=utf-8" },
@@ -929,11 +2188,28 @@ export default async function handler(
     } catch {
       data = { raw: snippet(text), contentType: upstream.headers.get("content-type") };
     }
+    logCgiOperation({
+      correlationId,
+      publicAssessmentId: responsePublicAssessmentId,
+      operation: "sheets_sync",
+      success: upstream.ok && (data as { ok?: boolean }).ok === true,
+      errorCode:
+        upstream.ok && (data as { ok?: boolean }).ok === true
+          ? undefined
+          : "sheets_sync_failed",
+      durationMs: Date.now() - sheetsStartedAt,
+    });
   } catch (error) {
+    await updateCgiReportSecondarySyncStatus({
+      publicAssessmentId: responsePublicAssessmentId,
+      secondarySyncStatus: "secondary_sync_failed",
+    });
     res.status(200).json({
       ok: true,
-      public_assessment_id: supabaseCompletion?.publicAssessmentId,
-      completion_event_id: supabaseCompletion?.completionEventId,
+      public_assessment_id: responsePublicAssessmentId,
+      completion_event_id: responseCompletionEventId,
+      report_status: reportStatus,
+      secondary_sync_status: "secondary_sync_failed",
       save: {
         ok: false,
         error: "upstream_request_failed",
@@ -941,8 +2217,17 @@ export default async function handler(
       },
       score,
       ai,
+      ai_generation_status: ai.status,
       websiteEnrichment,
       requestContext,
+    });
+    logCgiOperation({
+      correlationId,
+      publicAssessmentId: responsePublicAssessmentId,
+      operation: "status_response",
+      success: true,
+      errorCode: "secondary_sync_request_failed",
+      durationMs: Date.now() - handlerStartedAt,
     });
     return;
   }
@@ -954,10 +2239,16 @@ export default async function handler(
         ? "apps_script_outdated_or_wrong_deployment"
         : "upstream_failed";
 
+    await updateCgiReportSecondarySyncStatus({
+      publicAssessmentId: responsePublicAssessmentId,
+      secondarySyncStatus: "secondary_sync_failed",
+    });
     res.status(200).json({
       ok: true,
-      public_assessment_id: supabaseCompletion?.publicAssessmentId,
-      completion_event_id: supabaseCompletion?.completionEventId,
+      public_assessment_id: responsePublicAssessmentId,
+      completion_event_id: responseCompletionEventId,
+      report_status: reportStatus,
+      secondary_sync_status: "secondary_sync_failed",
       save: {
         ok: false,
         error,
@@ -967,20 +2258,43 @@ export default async function handler(
       },
       score,
       ai,
+      ai_generation_status: ai.status,
       websiteEnrichment,
       requestContext,
+    });
+    logCgiOperation({
+      correlationId,
+      publicAssessmentId: responsePublicAssessmentId,
+      operation: "status_response",
+      success: true,
+      errorCode: "secondary_sync_failed",
+      durationMs: Date.now() - handlerStartedAt,
     });
     return;
   }
 
+  await updateCgiReportSecondarySyncStatus({
+    publicAssessmentId: responsePublicAssessmentId,
+    secondarySyncStatus: "secondary_sync_succeeded",
+  });
   res.status(200).json({
     ok: true,
-    public_assessment_id: supabaseCompletion?.publicAssessmentId,
-    completion_event_id: supabaseCompletion?.completionEventId,
+    public_assessment_id: responsePublicAssessmentId,
+    completion_event_id: responseCompletionEventId,
+    report_status: reportStatus,
+    secondary_sync_status: "secondary_sync_succeeded",
     save: { ok: true },
     score,
     ai,
+    ai_generation_status: ai.status,
     websiteEnrichment,
     requestContext,
+  });
+  logCgiOperation({
+    correlationId,
+    publicAssessmentId: responsePublicAssessmentId,
+    operation: "status_response",
+    success: true,
+    durationMs: Date.now() - handlerStartedAt,
   });
 }

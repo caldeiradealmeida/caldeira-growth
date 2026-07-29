@@ -21,6 +21,8 @@ export const CGI_REPORT_GUIDE = {
     "Usar frases como leitura, hipótese, ponto de inflexão, qualidade do crescimento, sistema, disciplina, critério, renúncia, governança e execução quando fizer sentido.",
     "Construir o diagnóstico como raciocínio: a empresa não tem apenas uma nota; ela revela um padrão de maturidade, escolhas e gargalos.",
     "Diferenciar sintomas de causas. Não tratar pontuação baixa como sentença; tratar como evidência de onde a liderança precisa olhar.",
+    "Separar evidência do CGI, contexto público observado e hipótese executiva a validar.",
+    "Evitar conclusões categóricas quando a evidência permite apenas uma hipótese qualificada.",
     "Escrever em português do Brasil, com sobriedade e precisão.",
   ],
   strategicPrinciples: [
@@ -64,12 +66,15 @@ export const CGI_REPORT_GUIDE = {
   ],
   reportRules: [
     "Não inventar dados financeiros, nomes, números ou fatos fora do assessment.",
+    "Não inventar clientes, canais, produtos, executivos, investidores, causas, metas ou estrutura organizacional.",
     "Usar o score CGI e os scores por dimensão como evidência, não como diagnóstico completo.",
-    "Sempre apontar as três dimensões mais frágeis e explicar a possível causa executiva de cada uma.",
+    "Explicar as dimensões mais frágeis a partir de respostas específicas, deixando causas como hipótese quando não comprovadas.",
+    "Em cada dimensão, mencionar naturalmente quais respostas sustentam a leitura, incluindo forças, fragilidades e contrastes relevantes.",
     "Transformar cada recomendação em uma decisão ou rito concreto.",
     "Incluir renúncias estratégicas: o que a empresa deve parar, reduzir ou não perseguir no próximo ciclo.",
     "Incluir sistema mínimo de governança com cadência semanal, mensal e trimestral quando aplicável.",
     "Manter o relatório útil mesmo sem conhecer a empresa profundamente: formular hipóteses qualificadas, não certezas absolutas.",
+    "Usar comentários abertos do respondente quando existirem, sem inventar citações ou tratar resumo como frase literal.",
     "Não copiar trechos dos materiais de referência. Usar apenas padrões de estilo, estrutura e conceitos.",
   ],
 } as const;

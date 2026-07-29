@@ -1,5 +1,5 @@
 import { CGI_LAST_ASSESSMENT_KEY } from "../config";
-import type { LeadForm, SavedCgiAssessment } from "../types";
+import type { CgiReportStatus, LeadForm, SavedCgiAssessment } from "../types";
 
 export function readSavedCgiAssessment(): SavedCgiAssessment | null {
   if (typeof window === "undefined") return null;
@@ -15,13 +15,22 @@ export function readSavedCgiAssessment(): SavedCgiAssessment | null {
   }
 }
 
-export function saveCgiAssessment(lead: LeadForm, answers: Record<string, number>) {
+export function saveCgiAssessment(
+  lead: LeadForm,
+  answers: Record<string, number>,
+  report?: {
+    aiReport?: string;
+    aiStatus?: string;
+    reportStatus?: CgiReportStatus;
+  }
+) {
   if (typeof window === "undefined") return;
 
   const payload: SavedCgiAssessment = {
     lead,
     answers,
     savedAt: new Date().toISOString(),
+    ...(report || {}),
   };
   window.localStorage.setItem(CGI_LAST_ASSESSMENT_KEY, JSON.stringify(payload));
 }
