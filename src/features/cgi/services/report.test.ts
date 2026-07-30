@@ -32,9 +32,7 @@ describe("getSubmitErrorMessage", () => {
       cgiUi.pt
     );
 
-    expect(message).toBe(
-      "Não foi possível gerar o relatório neste momento. Tente novamente em alguns instantes."
-    );
+    expect(message).toBe("Não foi possível concluir o parecer neste momento. Tente novamente.");
     expect(message).not.toContain("relatório foi preparado");
   });
 });

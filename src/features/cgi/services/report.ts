@@ -66,11 +66,11 @@ export function getSubmitErrorMessage(data: unknown, t = cgiUi.pt): string {
   }
 
   if (error === "report_generation_failed") {
-    return "Não foi possível gerar o relatório neste momento. Tente novamente em alguns instantes.";
+    return "Não foi possível concluir o parecer neste momento. Tente novamente.";
   }
 
   if (error === "report_failed") {
-    return t.primaryReportFailureBody;
+    return "Não foi possível concluir o parecer neste momento. Tente novamente.";
   }
 
   if (error === "upstream_request_failed") {

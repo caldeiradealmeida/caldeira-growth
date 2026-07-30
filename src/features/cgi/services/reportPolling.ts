@@ -58,7 +58,11 @@ export async function pollCgiReport({
     );
     const data = (await response.json().catch(() => ({}))) as Record<string, unknown>;
 
-    if (response.ok && data.report_status === "report_ready") {
+    if (
+      response.ok &&
+      (data.report_status === "report_ready" ||
+        data.report_status === "report_ready_with_warnings")
+    ) {
       return { status: "ready", data };
     }
     if (data.report_status === "report_failed" || response.status === 503) {

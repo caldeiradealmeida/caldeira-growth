@@ -78,6 +78,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
+function isReportReadyStatus(status: string): status is "report_ready" | "report_ready_with_warnings" {
+  return status === "report_ready" || status === "report_ready_with_warnings";
+}
+
 function createLocalAttemptId(prefix: string) {
   const value =
     typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -146,7 +150,7 @@ export default function CGI() {
     ? buildReportText({ lead, result, aiReport, t })
     : "";
   const reportReady =
-    reportStatus === "report_ready" &&
+    isReportReadyStatus(reportStatus) &&
     aiStatus === "generated" &&
     Boolean(aiReport) &&
     Boolean(result) &&
@@ -188,7 +192,7 @@ export default function CGI() {
   useEffect(() => {
     const saved = readSavedCgiAssessment();
     setHasSavedAssessment(Boolean(saved));
-    if (saved?.reportStatus === "report_ready" && saved.answers) {
+    if (saved?.reportStatus && isReportReadyStatus(saved.reportStatus) && saved.answers) {
       const normalizedAnswers = normalizeCgiAnswers(saved.answers);
       if (areCgiAnswersComplete(normalizedAnswers)) {
         setLead(saved.lead);
@@ -196,7 +200,7 @@ export default function CGI() {
         setResult(calculateCgiScore(normalizedAnswers, lang));
         setServerAiReport(saved.aiReport || "");
         setAiStatus(saved.aiStatus || "");
-        setReportStatus("report_ready");
+        setReportStatus(saved.reportStatus);
         setStep("result");
       }
     }
@@ -314,14 +318,17 @@ export default function CGI() {
       setResult(nextResult);
       setServerAiReport(nextAiReport);
       setAiStatus(nextAiStatus);
-      setReportStatus("report_ready");
+      const restoredReportStatus = isReportReadyStatus(String(data.report_status || ""))
+        ? (String(data.report_status) as "report_ready" | "report_ready_with_warnings")
+        : "report_ready";
+      setReportStatus(restoredReportStatus);
       setReportProgress(100);
       setStep("result");
       setSubmitError("");
       saveCgiAssessment(nextLead, nextAnswers, {
         aiReport: nextAiReport,
         aiStatus: nextAiStatus,
-        reportStatus: "report_ready",
+        reportStatus: restoredReportStatus,
       });
       setHasSavedAssessment(true);
       patchAssessmentState({
@@ -423,7 +430,7 @@ export default function CGI() {
     const assessmentId = savedState?.public_assessment_id || publicAssessmentId;
     if (
       !assessmentId ||
-      reportStatus === "report_ready" ||
+      isReportReadyStatus(reportStatus) ||
       saved?.reportStatus !== "report_generating" ||
       !saved.answers
     ) {
@@ -898,7 +905,7 @@ export default function CGI() {
       scrollToAssessment();
       return;
     }
-    if (!options?.isRegeneration && reportStatus === "report_ready") {
+    if (!options?.isRegeneration && isReportReadyStatus(reportStatus)) {
       setStep("result");
       scrollToAssessment();
       return;
@@ -997,12 +1004,15 @@ export default function CGI() {
       const nextAiStatus = data.ai?.status ?? "";
       setServerAiReport(nextAiReport);
       setAiStatus(nextAiStatus);
-      setReportStatus("report_ready");
+      const nextReportStatus = isReportReadyStatus(String(data.report_status || ""))
+        ? (String(data.report_status) as "report_ready" | "report_ready_with_warnings")
+        : "report_ready";
+      setReportStatus(nextReportStatus);
       setReportProgress(100);
       saveCgiAssessment(normalizedLead, normalizedAnswers, {
         aiReport: nextAiReport,
         aiStatus: nextAiStatus,
-        reportStatus: "report_ready",
+        reportStatus: nextReportStatus,
       });
       pushCgiDataLayerEvent("cgi_assessment_completed", {
         event_id: data.completion_event_id || completionEventId,

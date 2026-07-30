@@ -45,7 +45,7 @@ type CgiReportRow = {
 export type StoredCgiReport = {
   publicAssessmentId: string;
   completionEventId: string;
-  reportStatus: "report_ready";
+  reportStatus: "report_ready" | "report_ready_with_warnings";
   secondarySyncStatus: "secondary_sync_pending" | "secondary_sync_failed" | "secondary_sync_succeeded";
   aiStatus: "generated" | "not_configured" | "error";
   aiGenerationStatus: "generated" | "not_configured" | "error";
@@ -204,10 +204,11 @@ const CGI_REPORT_SELECT = [
   "error_message",
 ].join(",");
 
-function reportStatusFromRow(row: CgiReportRow): "report_generating" | "report_ready" | "report_failed" {
+function reportStatusFromRow(row: CgiReportRow): "report_generating" | "report_ready" | "report_ready_with_warnings" | "report_failed" {
   if (
     row.report_status === "report_generating" ||
     row.report_status === "report_ready" ||
+    row.report_status === "report_ready_with_warnings" ||
     row.report_status === "report_failed"
   ) {
     return row.report_status;
@@ -227,7 +228,13 @@ function parseReportJson(value: string): unknown {
 }
 
 function mapStoredCgiReport(row: CgiReportRow | null | undefined): StoredCgiReport | null {
-  if (!row?.public_assessment_id || reportStatusFromRow(row) !== "report_ready") return null;
+  const reportStatus = row ? reportStatusFromRow(row) : "report_generating";
+  if (
+    !row?.public_assessment_id ||
+    (reportStatus !== "report_ready" && reportStatus !== "report_ready_with_warnings")
+  ) {
+    return null;
+  }
   const secondarySyncStatus = String(row.secondary_sync_status || "secondary_sync_pending");
   const aiStatus = String(row.ai_status || "not_configured");
   const aiGenerationStatus = String(row.ai_generation_status || aiStatus);
@@ -236,7 +243,7 @@ function mapStoredCgiReport(row: CgiReportRow | null | undefined): StoredCgiRepo
   return {
     publicAssessmentId: row.public_assessment_id,
     completionEventId: String(row.completion_event_id || ""),
-    reportStatus: "report_ready",
+    reportStatus,
     secondarySyncStatus:
       secondarySyncStatus === "secondary_sync_failed" ||
       secondarySyncStatus === "secondary_sync_succeeded"
@@ -265,7 +272,7 @@ function mapCgiReportState(row: CgiReportRow | null | undefined): CgiReportState
   const ready = mapStoredCgiReport(row);
   if (ready) return { status: "ready", report: ready };
   const reportStatus = reportStatusFromRow(row);
-  if (reportStatus === "report_ready") {
+  if (reportStatus === "report_ready" || reportStatus === "report_ready_with_warnings") {
     return {
       status: "failed",
       publicAssessmentId: row.public_assessment_id,
@@ -302,7 +309,7 @@ async function getCgiReportStateByFilter(filter: string): Promise<CgiReportState
 
 async function getReadyCgiReportByFilter(filter: string): Promise<StoredCgiReport | null> {
   const result = await supabaseRequest<CgiReportRow[]>(
-    `cgi_reports?${filter}&report_status=eq.report_ready&select=${CGI_REPORT_SELECT}&limit=1`,
+    `cgi_reports?${filter}&report_status=in.(report_ready,report_ready_with_warnings)&select=${CGI_REPORT_SELECT}&limit=1`,
     { method: "GET" }
   );
   if (!result.ok) {

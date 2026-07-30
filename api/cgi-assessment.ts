@@ -70,9 +70,14 @@ type AiResult = {
   status: "generated" | "not_configured" | "error";
   text: string;
   plainText: string;
+  reportStatus?: "report_ready" | "report_ready_with_warnings";
+  warnings?: GeneratedReportValidationError[];
+  metrics?: GeneratedReportMetrics;
 };
 
 type OpenAiResponseMeta = {
+  id: string;
+  model: string;
   status: string;
   finishReason: string;
   incompleteDetails: unknown;
@@ -117,12 +122,62 @@ const REPORT_METHODOLOGY_VERSION = "1.1.0";
 const SCORING_VERSION = "1.0.0";
 const CGI_OPENAI_ENDPOINT = "https://api.openai.com/v1/responses";
 const CGI_OPENAI_MODEL_ENV = "OPENAI_MODEL";
-const CGI_OPENAI_TIMEOUT_MS = 120000;
+const CGI_OPENAI_TIMEOUT_MS = 85000;
 const CGI_REPORT_MAX_OUTPUT_TOKENS = 10000;
-const CGI_REPORT_PREFERRED_MIN_CHARS = 11000;
-const CGI_REPORT_PREFERRED_MAX_CHARS = 15000;
-const CGI_REPORT_MAX_CHARS = 16500;
-const CGI_REPORT_MAX_ATTEMPTS = 3;
+const CGI_REPORT_PREFERRED_MIN_CHARS = 8500;
+const CGI_REPORT_PREFERRED_MAX_CHARS = 10500;
+const CGI_REPORT_WARNING_CHARS = 10800;
+const CGI_REPORT_MAX_CHARS = 11200;
+const CGI_REPORT_MAX_CONTENT_PAGES = 7;
+const CGI_REPORT_ESTIMATED_CHARS_PER_CONTENT_PAGE = 1600;
+const CGI_REPORT_TRANSIENT_MAX_FULL_ATTEMPTS = 3;
+const CGI_REPORT_CRITICAL_MAX_FULL_ATTEMPTS = 2;
+const CGI_OPENAI_TOTAL_TIMEOUT_BUDGET_MS = CGI_OPENAI_TIMEOUT_MS * CGI_REPORT_TRANSIENT_MAX_FULL_ATTEMPTS;
+const CGI_NON_OPENAI_RUNTIME_BUDGET_MS = 20000;
+const VERCEL_FUNCTION_TIMEOUT_MS = 300000;
+
+type ValidationIssueCategory =
+  | "transient"
+  | "critical_structural"
+  | "correctable_structural"
+  | "editorial"
+  | "quality";
+
+type GeneratedReportMetrics = {
+  chars: number;
+  words: number;
+  estimatedContentPages: number;
+  pageLimit: number;
+  preferredMaxChars: number;
+  maxChars: number;
+};
+
+type GeneratedReportValidationError = {
+  field: string;
+  index?: number;
+  message: string;
+  code: string;
+  category: ValidationIssueCategory;
+  blocksGeneration: boolean;
+  retryType: "full" | "none";
+  path: string;
+  expected?: string;
+  received_type: string;
+  received_summary?: string;
+  section: string;
+};
+
+export function getCgiReportTimeoutBudget() {
+  return {
+    openAiAttemptTimeoutMs: CGI_OPENAI_TIMEOUT_MS,
+    maxTransientFullAttempts: CGI_REPORT_TRANSIENT_MAX_FULL_ATTEMPTS,
+    maxCriticalFullAttempts: CGI_REPORT_CRITICAL_MAX_FULL_ATTEMPTS,
+    openAiWorstCaseMs: CGI_OPENAI_TOTAL_TIMEOUT_BUDGET_MS,
+    nonOpenAiRuntimeBudgetMs: CGI_NON_OPENAI_RUNTIME_BUDGET_MS,
+    theoreticalWorstCaseMs: CGI_OPENAI_TOTAL_TIMEOUT_BUDGET_MS + CGI_NON_OPENAI_RUNTIME_BUDGET_MS,
+    vercelFunctionTimeoutMs: VERCEL_FUNCTION_TIMEOUT_MS,
+  };
+}
 
 const CGI_PRESENTATION =
   "O CGI é um diagnóstico executivo desenvolvido pela Caldeira Growth para avaliar a capacidade de uma organização transformar ambição de crescimento em direção estratégica, leitura de mercado, máquina comercial, disciplina de execução e liderança. O instrumento não avalia perfil comportamental; ele identifica padrões, tensões e prioridades que podem influenciar a qualidade e a sustentabilidade do crescimento.";
@@ -155,10 +210,11 @@ function getOpenAiConfig(): { apiKey: string; model: string } | null {
 
 async function fetchOpenAiResponse(
   apiKey: string,
-  body: Record<string, unknown>
+  body: Record<string, unknown>,
+  timeoutMs = CGI_OPENAI_TIMEOUT_MS
 ): Promise<Response> {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), CGI_OPENAI_TIMEOUT_MS);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
     return await fetch(CGI_OPENAI_ENDPOINT, {
       method: "POST",
@@ -205,7 +261,7 @@ function respondWithStoredReport(
     ok: true,
     public_assessment_id: report.publicAssessmentId,
     completion_event_id: report.completionEventId,
-    report_status: "report_ready",
+    report_status: report.reportStatus,
     secondary_sync_status: report.secondarySyncStatus,
     save: secondarySyncFailed
       ? { ok: false, error: "secondary_sync_failed" }
@@ -611,6 +667,8 @@ function extractOpenAiResponseMeta(
       ? (response as Record<string, unknown>)
       : {};
   const meta = {
+    id: typeof record.id === "string" ? record.id : "",
+    model: typeof record.model === "string" ? record.model : "",
     status: typeof record.status === "string" ? record.status : "",
     finishReason: findNestedString(response, "finish_reason"),
     incompleteDetails: record.incomplete_details ?? null,
@@ -622,6 +680,21 @@ function extractOpenAiResponseMeta(
   return {
     ...meta,
     isTruncated: isOpenAiOutputTruncated(meta),
+  };
+}
+
+function sanitizeOpenAiResponseMeta(meta?: OpenAiResponseMeta) {
+  if (!meta) return undefined;
+  return {
+    id: meta.id || undefined,
+    model: meta.model || undefined,
+    status: meta.status || undefined,
+    finish_reason: meta.finishReason || undefined,
+    incomplete_details: meta.incompleteDetails || undefined,
+    output_tokens: meta.outputTokens,
+    output_char_count: meta.outputCharCount,
+    max_output_tokens: meta.maxOutputTokens,
+    is_truncated: meta.isTruncated,
   };
 }
 
@@ -905,18 +978,19 @@ Regras de personalização:
 Formato e tamanho:
 - Retorne apenas JSON válido, sem markdown decorativo.
 - Mantenha o conteúdo total preferencialmente entre ${CGI_REPORT_PREFERRED_MIN_CHARS.toLocaleString("pt-BR")} e ${CGI_REPORT_PREFERRED_MAX_CHARS.toLocaleString("pt-BR")} caracteres, e nunca acima de ${CGI_REPORT_MAX_CHARS.toLocaleString("pt-BR")} caracteres, incluindo espaços.
+- O conteúdo analítico deve caber em no máximo ${CGI_REPORT_MAX_CONTENT_PAGES} páginas úteis do PDF, excluindo capa, índice e assinatura. Priorize densidade analítica e não expanda texto apenas para atingir tamanho.
 - Use exatamente estas chaves: report_title, report_subtitle, email_subject, methodology_note, evidence_summary, executive_summary, strategic_diagnosis, dimension_reading, critical_bottlenecks, strategic_bets, renunciations, governance_system, hypotheses_to_validate, final_recommendations.
 - methodology_note deve preservar o significado da nota metodológica obrigatória, no idioma solicitado.
-- evidence_summary deve ser um array com 3 a 5 itens curtos, mostrando as principais evidências usadas.
-- executive_summary deve mencionar pontuação geral, faixa de maturidade, duas forças reais e uma tensão central; deve ter de 700 a 1.100 caracteres.
-- strategic_diagnosis deve ter 4 a 5 parágrafos discursivos, 2.200 a 3.300 caracteres no total, conectar dimensões, distinguir evidências de hipóteses e não repetir o executive_summary.
-- dimension_reading deve ter exatamente 5 objetos com dimension, score, analysis e implication. Cada dimensão deve ter 400 a 650 caracteres no total; cada analysis deve indicar as fontes principais da pontuação; cada implication deve explicar risco ou oportunidade sem excesso prescritivo.
-- critical_bottlenecks deve ter exatamente 3 strings. Cada string deve usar este contrato e estes rótulos, nesta ordem: "Título: ... Sinal observado: ... Causa provável: ... Impacto estratégico: ...". Cada item deve ter 450 a 700 caracteres.
-- strategic_bets deve ter exatamente 3 strings. Cada string deve usar este contrato e estes rótulos, nesta ordem: "Título: ... Ação prioritária: ... Resultado esperado: ... Horizonte: ...". Cada item deve ter 400 a 650 caracteres.
-- renunciations deve ter exatamente 3 strings. Cada string deve usar este contrato e estes rótulos, nesta ordem: "Escolha: ... O que deixar de fazer: ... Recurso ou capacidade protegida: ... Racional estratégico: ...". Cada item deve ter 250 a 450 caracteres.
-- governance_system deve ter exatamente 3 strings. Cada string deve usar este contrato e estes rótulos, nesta ordem: "Ritual: ... Frequência: ... Participantes: ... Indicadores: ... Decisão esperada: ...". Cada item deve ter 300 a 500 caracteres.
-- hypotheses_to_validate deve ter 3 a 5 hipóteses executivas curtas, claramente marcadas como hipóteses.
-- final_recommendations deve ter exatamente 3 strings. Cada string deve usar este contrato e estes rótulos, nesta ordem: "Recomendação: ... Prioridade: ... Próximo passo: ... Condição de validação: ...". Cada item deve ter 300 a 500 caracteres.
+- evidence_summary deve ser um array com 2 a 4 itens curtos, mostrando as principais evidências usadas.
+- executive_summary deve mencionar pontuação geral, faixa de maturidade, duas forças reais e uma tensão central; deve ter de 600 a 900 caracteres.
+- strategic_diagnosis deve ter 3 a 4 parágrafos discursivos, 1.600 a 2.400 caracteres no total, conectar dimensões, distinguir evidências de hipóteses e não repetir o executive_summary.
+- dimension_reading deve ter exatamente 5 objetos com dimension, score, analysis e implication. Cada dimensão deve ter 280 a 480 caracteres no total; cada analysis deve indicar as fontes principais da pontuação; cada implication deve explicar risco ou oportunidade sem excesso prescritivo.
+- critical_bottlenecks deve ter 2 a 3 strings. Cada string deve usar preferencialmente este contrato e estes rótulos, nesta ordem: "Título: ... Sinal observado: ... Causa provável: ... Impacto estratégico: ...". Cada item deve ter 280 a 480 caracteres.
+- strategic_bets deve ter 2 a 3 strings. Cada string deve usar preferencialmente este contrato e estes rótulos, nesta ordem: "Título: ... Ação prioritária: ... Resultado esperado: ... Horizonte: ...". Cada item deve ter 260 a 440 caracteres.
+- renunciations deve ter 2 a 3 strings. Cada string deve usar preferencialmente este contrato e estes rótulos, nesta ordem: "Escolha: ... O que deixar de fazer: ... Recurso ou capacidade protegida: ... Racional estratégico: ...". Cada item deve ter 200 a 360 caracteres.
+- governance_system deve ter 2 a 3 strings. Cada string deve usar preferencialmente este contrato e estes rótulos, nesta ordem: "Ritual: ... Frequência: ... Participantes: ... Indicadores: ... Decisão esperada: ...". Cada item deve ter 220 a 380 caracteres.
+- hypotheses_to_validate deve ter 2 a 4 hipóteses executivas curtas, claramente marcadas como hipóteses.
+- final_recommendations deve ter 2 a 3 strings. Cada string deve usar preferencialmente este contrato e estes rótulos, nesta ordem: "Recomendação: ... Prioridade: ... Próximo passo: ... Condição de validação: ...". Cada item deve ter 220 a 380 caracteres.
 
 Proporcionalidade por nível de score:
 - Scores baixos: recomende poucas iniciativas simultâneas, com foco em capacidade de execução e validação básica.
@@ -1143,11 +1217,21 @@ function normalizeStringArray(
   maxItems?: number,
   field?: ReportListField
 ): string[] {
-  if (!Array.isArray(value)) return [];
-  const items = value
+  const source = Array.isArray(value)
+    ? value
+    : value && typeof value === "object"
+      ? Object.values(value as Record<string, unknown>)
+      : [];
+  const items = source
     .map((item) => normalizeReportListItem(item, field))
     .filter(Boolean);
   return typeof maxItems === "number" ? items.slice(0, maxItems) : items;
+}
+
+function stripJsonCodeFence(value: string): string {
+  const trimmed = value.trim();
+  const fenced = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+  return fenced ? fenced[1].trim() : trimmed;
 }
 
 function hasInvalidReportListText(value: string): boolean {
@@ -1177,6 +1261,25 @@ function reportSerializedLength(value: Record<string, unknown>): number {
   return JSON.stringify(value).length;
 }
 
+function getReportContentStrings(value: Record<string, unknown>): string[] {
+  return REQUIRED_REPORT_KEYS.flatMap((key) => walkStrings(value[key]));
+}
+
+export function estimateGeneratedReportMetrics(value: Record<string, unknown>): GeneratedReportMetrics {
+  const text = getReportContentStrings(value).join(" ").replace(/\s+/g, " ").trim();
+  const chars = text.length;
+  return {
+    chars,
+    words: text ? text.split(/\s+/).filter(Boolean).length : 0,
+    estimatedContentPages: Number(
+      (chars / CGI_REPORT_ESTIMATED_CHARS_PER_CONTENT_PAGE).toFixed(2)
+    ),
+    pageLimit: CGI_REPORT_MAX_CONTENT_PAGES,
+    preferredMaxChars: CGI_REPORT_PREFERRED_MAX_CHARS,
+    maxChars: CGI_REPORT_MAX_CHARS,
+  };
+}
+
 function walkStrings(value: unknown): string[] {
   if (typeof value === "string") return [value];
   if (Array.isArray(value)) return value.flatMap((item) => walkStrings(item));
@@ -1197,6 +1300,199 @@ function hasReportPunctuationArtifacts(value: Record<string, unknown>): boolean 
 
 function getSectionText(value: unknown): string {
   return walkStrings(value).join(" ");
+}
+
+function validationPath(field: string, index?: number): string {
+  return typeof index === "number" ? `${field}.${index}` : field;
+}
+
+function receivedType(value: unknown): string {
+  if (value === null) return "null";
+  if (Array.isArray(value)) return "array";
+  return typeof value;
+}
+
+function receivedSummary(value: unknown): string | undefined {
+  if (value === undefined) return undefined;
+  if (value === null) return "null";
+  if (typeof value === "string") {
+    return `string(length=${value.length}, empty=${String(value.trim().length === 0)})`;
+  }
+  if (typeof value === "number" || typeof value === "boolean") {
+    return `${typeof value}(${String(value)})`;
+  }
+  if (Array.isArray(value)) {
+    const itemTypes = Array.from(new Set(value.slice(0, 5).map(receivedType))).join(",");
+    return `array(length=${value.length}${itemTypes ? `, item_types=${itemTypes}` : ""})`;
+  }
+  if (typeof value === "object") {
+    const keys = Object.keys(value as Record<string, unknown>).slice(0, 10);
+    return `object(keys=${keys.join(",")})`;
+  }
+  return receivedType(value);
+}
+
+function expectedForValidationMessage(message: string, field: string): string | undefined {
+  if (message === "missing_key") return "required key";
+  if (message.startsWith("missing_")) return "non-empty value";
+  if (message === "must contain exactly 5 items") return "array with exactly 5 items";
+  if (message === "must contain 3 to 5 items") return "array with 3 to 5 items";
+  if (message === "must contain 2 to 4 items") return "array with 2 to 4 items";
+  if (message === "must contain 2 to 3 items") return "array with 2 to 3 items";
+  if (message === "must contain exactly 3 items") return "array with exactly 3 items";
+  if (message === "item must be an object") return "object";
+  if (message === "item must be a string") return "string";
+  if (message === "invalid list item text") return "non-empty executive text";
+  if (message === "item does not follow the required labeled structure") {
+    return "string with required labels in order";
+  }
+  if (message.includes("substantial paragraphs")) return "3 to 5 substantial paragraphs separated by blank lines";
+  if (message.includes("serialized characters")) return `serialized report <= ${CGI_REPORT_MAX_CHARS} characters`;
+  if (message.includes("respondent perspective")) return "respondent-perspective framing";
+  if (message.includes("punctuation")) return "sanitized punctuation";
+  if (field === "$" && message.startsWith("parse_error")) return "valid JSON object";
+  return undefined;
+}
+
+function codeForValidationMessage(message: string): string {
+  if (message === "missing_key" || message.startsWith("missing_")) return "missing_required";
+  if (message.startsWith("parse_error")) return "invalid_json";
+  if (message.includes("must contain")) return "invalid_array_length";
+  if (message.includes("must be")) return "invalid_type";
+  if (message.includes("does not follow")) return "invalid_structure";
+  if (message.includes("invalid list item")) return "invalid_value";
+  if (message.includes("serialized characters")) return "too_large";
+  if (message.includes("punctuation")) return "unsafe_text";
+  if (message.includes("respondent perspective")) return "missing_perspective";
+  return "validation_failed";
+}
+
+function classifyValidationIssue(
+  message: string,
+  field: string
+): Pick<GeneratedReportValidationError, "category" | "blocksGeneration" | "retryType"> {
+  if (message.startsWith("parse_error")) {
+    return { category: "critical_structural", blocksGeneration: true, retryType: "full" };
+  }
+  if (message === "missing_key") {
+    const critical = field === "executive_summary" || field === "strategic_diagnosis" || field === "dimension_reading";
+    return {
+      category: critical ? "critical_structural" : "correctable_structural",
+      blocksGeneration: critical,
+      retryType: critical ? "full" : "none",
+    };
+  }
+  if (field === "dimension_reading") {
+    return { category: "critical_structural", blocksGeneration: true, retryType: "full" };
+  }
+  if (message.includes("must not exceed") || message.includes("estimated content pages")) {
+    return { category: "critical_structural", blocksGeneration: true, retryType: "full" };
+  }
+  if (message.includes("must contain 2 to 4") || message.includes("must contain 2 to 3")) {
+    return { category: "correctable_structural", blocksGeneration: false, retryType: "none" };
+  }
+  if (message.includes("item must be a string") || message.includes("invalid list item text")) {
+    return { category: "correctable_structural", blocksGeneration: false, retryType: "none" };
+  }
+  if (
+    message.includes("does not follow the required labeled structure") ||
+    message.includes("respondent perspective") ||
+    message.includes("punctuation") ||
+    message.includes("substantial paragraphs") ||
+    message.includes("preferred")
+  ) {
+    return { category: "editorial", blocksGeneration: false, retryType: "none" };
+  }
+  return { category: "quality", blocksGeneration: false, retryType: "none" };
+}
+
+function enrichValidationError(input: {
+  field: string;
+  index?: number;
+  value?: unknown;
+  message: string;
+}): GeneratedReportValidationError {
+  const missingField = input.message.startsWith("missing_")
+    ? input.message.replace(/^missing_/, "")
+    : "";
+  const path =
+    input.field === "dimension_reading" && typeof input.index === "number" && missingField
+      ? `${input.field}.${input.index}.${missingField}`
+      : validationPath(input.field, input.index);
+  const classification = classifyValidationIssue(input.message, input.field);
+  return {
+    field: input.field,
+    index: input.index,
+    message: input.message,
+    code: codeForValidationMessage(input.message),
+    ...classification,
+    path,
+    expected: expectedForValidationMessage(input.message, input.field),
+    received_type: receivedType(input.value),
+    received_summary: receivedSummary(input.value),
+    section: input.field === "$" ? "root" : input.field,
+  };
+}
+
+function logCgiAiValidationFailure(input: {
+  attempt: number;
+  maxAttempts: number;
+  retryType: "full" | "none";
+  model: string;
+  durationMs: number;
+  errors: GeneratedReportValidationError[];
+  warnings?: GeneratedReportValidationError[];
+  metrics?: GeneratedReportMetrics;
+  responseMeta?: OpenAiResponseMeta;
+}) {
+  console.error(
+    "[CGI OpenAI] cgi_ai_validation_failed",
+    JSON.stringify({
+      event: "cgi_ai_validation_failed",
+      attempt: input.attempt,
+      max_attempts: input.maxAttempts,
+      retry_type: input.retryType,
+      model: input.model,
+      duration_ms: input.durationMs,
+      response: sanitizeOpenAiResponseMeta(input.responseMeta),
+      metrics: input.metrics,
+      errors: input.errors.map(({ path, code, message, expected, received_type, received_summary, section, category, retryType }) => ({
+        attempt: input.attempt,
+        model: input.model,
+        duration_ms: input.durationMs,
+        reason_category: category,
+        retry_type: retryType,
+        path,
+        code,
+        message,
+        expected,
+        received_type,
+        received_summary,
+        section,
+      })),
+      warnings: (input.warnings || []).map(({ path, code, message, section, category }) => ({
+        path,
+        code,
+        message,
+        section,
+        reason_category: category,
+      })),
+    })
+  );
+}
+
+function sanitizeValidationErrorsForOperationalUse(errors: GeneratedReportValidationError[]) {
+  return errors.map(({ path, code, message, expected, received_type, received_summary, section, category, retryType }) => ({
+    path,
+    code,
+    message,
+    reason_category: category,
+    retry_type: retryType,
+    expected,
+    received_type,
+    received_summary,
+    section,
+  }));
 }
 
 function itemHasContractLabels(value: string, field: ReportListField): boolean {
@@ -1253,28 +1549,71 @@ function hasRespondentPerspectiveLanguage(parsed: Record<string, unknown>): bool
   return markers.some((marker) => source.includes(marker));
 }
 
-function buildReportRetryInstruction(errors: unknown[], attempt: number): string {
+function hasStructurallyUsefulReport(parsed: Record<string, unknown> | null): boolean {
+  if (!parsed) return false;
+  const executiveSummary = getSectionText(parsed.executive_summary).trim();
+  const strategicDiagnosis = getSectionText(parsed.strategic_diagnosis).trim();
+  const dimensions = parsed.dimension_reading;
+  return (
+    executiveSummary.length >= 80 &&
+    strategicDiagnosis.length >= 160 &&
+    Array.isArray(dimensions) &&
+    dimensions.length === 5
+  );
+}
+
+function summarizeRetryErrors(errors: unknown[]): string {
+  return errors
+    .flatMap((entry) => {
+      if (!entry || typeof entry !== "object") return [];
+      const record = entry as { errors?: unknown };
+      if (!Array.isArray(record.errors)) return [];
+      return record.errors.slice(0, 6).map((error) => {
+        if (!error || typeof error !== "object") return "";
+        const errorRecord = error as Partial<GeneratedReportValidationError>;
+        return `${errorRecord.path || errorRecord.field || "$"}: ${
+          errorRecord.code || "validation_failed"
+        } (${errorRecord.message || "invalid"})`;
+      });
+    })
+    .filter(Boolean)
+    .slice(0, 8)
+    .join("\n- ");
+}
+
+export function buildReportRetryInstruction(errors: unknown[], attempt: number): string {
   if (attempt <= 1) return "";
   const serializedErrors = JSON.stringify(errors).toLowerCase();
   const needsCondensation =
     serializedErrors.includes("serialized characters") ||
     serializedErrors.includes("output_truncated");
+  const specificErrors = summarizeRetryErrors(errors);
   const condensationInstruction = needsCondensation
-    ? `\n- O relatório anterior ficou longo demais ou truncou. Condense o texto para ${CGI_REPORT_PREFERRED_MIN_CHARS}-${CGI_REPORT_PREFERRED_MAX_CHARS} caracteres e no máximo ${CGI_REPORT_MAX_CHARS}, preservando todas as chaves obrigatórias, 4-5 parágrafos em strategic_diagnosis e os números exigidos de itens. Não corte JSON nem remova seções.`
+    ? `\n- O relatório anterior ficou longo demais ou truncou. Condense o texto para ${CGI_REPORT_PREFERRED_MIN_CHARS}-${CGI_REPORT_PREFERRED_MAX_CHARS} caracteres e no máximo ${CGI_REPORT_MAX_CHARS}, preservando todas as chaves obrigatórias, 3-5 parágrafos em strategic_diagnosis e os números exigidos de itens. Não corte JSON nem remova seções.`
+    : "";
+  const specificInstruction = specificErrors
+    ? `\n\nErros específicos da validação anterior:\n- ${specificErrors}`
     : "";
 
   return `\n\nA tentativa anterior falhou na validação de contrato. Corrija obrigatoriamente:
-- Use arrays com exatamente 3 strings legíveis nos campos critical_bottlenecks, strategic_bets, renunciations, governance_system e final_recommendations.
-- Cada item desses arrays deve seguir exatamente os rótulos e a ordem definidos no prompt.
+- Use de 2 a 3 strings legíveis nos campos critical_bottlenecks, strategic_bets, renunciations, governance_system e final_recommendations; 3 é preferível, mas 2 é aceitável quando o relatório ficar mais consistente.
+- Cada item desses arrays deve seguir preferencialmente os rótulos e a ordem definidos no prompt.
 - Não retorne objetos nesses arrays e nunca produza "[object Object]".
 - Remova artefatos de pontuação como "..", ",.", ";;" e espaços antes de pontuação.
 - Enquadre conclusões pela perspectiva do respondente e valide hipóteses com outras lideranças e dados internos.
-- strategic_diagnosis deve ter 4 a 5 parágrafos substanciais separados por linha em branco.${condensationInstruction}`;
+- strategic_diagnosis deve ter 3 a 5 parágrafos substanciais separados por linha em branco.${condensationInstruction}${specificInstruction}`;
 }
 
 export function validateGeneratedReportJson(value: string | Record<string, unknown>): {
   ok: boolean;
-  errors: Array<{ field: string; index?: number; value?: unknown; message: string }>;
+  errors: GeneratedReportValidationError[];
+  structural_errors: GeneratedReportValidationError[];
+  correctable_errors: GeneratedReportValidationError[];
+  editorial_warnings: GeneratedReportValidationError[];
+  quality_warnings: GeneratedReportValidationError[];
+  warnings: GeneratedReportValidationError[];
+  reportStatus: "report_ready" | "report_ready_with_warnings" | "report_failed";
+  metrics: GeneratedReportMetrics | null;
   parsed: Record<string, unknown> | null;
 } {
   let parsed: Record<string, unknown>;
@@ -1282,45 +1621,86 @@ export function validateGeneratedReportJson(value: string | Record<string, unkno
     try {
       parsed = JSON.parse(value) as Record<string, unknown>;
     } catch (error) {
+      const parseIssue = enrichValidationError({
+        field: "$",
+        message: `parse_error: ${error instanceof Error ? error.message : String(error)}`,
+        value,
+      });
       return {
         ok: false,
         parsed: null,
-        errors: [
-          {
-            field: "$",
-            message: `parse_error: ${error instanceof Error ? error.message : String(error)}`,
-          },
-        ],
+        metrics: null,
+        reportStatus: "report_failed",
+        structural_errors: [parseIssue],
+        correctable_errors: [],
+        editorial_warnings: [],
+        quality_warnings: [],
+        warnings: [],
+        errors: [parseIssue],
       };
     }
   } else {
     parsed = value;
   }
 
-  const errors: Array<{ field: string; index?: number; value?: unknown; message: string }> = [];
+  const structuralErrors: GeneratedReportValidationError[] = [];
+  const correctableErrors: GeneratedReportValidationError[] = [];
+  const editorialWarnings: GeneratedReportValidationError[] = [];
+  const qualityWarnings: GeneratedReportValidationError[] = [];
+  const addIssue = (input: {
+    field: string;
+    index?: number;
+    value?: unknown;
+    message: string;
+  }) => {
+    const issue = enrichValidationError(input);
+    if (issue.blocksGeneration) {
+      structuralErrors.push(issue);
+    } else if (issue.category === "correctable_structural") {
+      correctableErrors.push(issue);
+    } else if (issue.category === "editorial") {
+      editorialWarnings.push(issue);
+    } else {
+      qualityWarnings.push(issue);
+    }
+  };
   for (const key of REQUIRED_REPORT_KEYS) {
     if (!(key in parsed)) {
-      errors.push({ field: key, message: "missing_key" });
+      addIssue({ field: key, value: undefined, message: "missing_key" });
     }
   }
 
-  if (reportSerializedLength(parsed) > CGI_REPORT_MAX_CHARS) {
-    errors.push({
+  const metrics = estimateGeneratedReportMetrics(parsed);
+  if (reportSerializedLength(parsed) > CGI_REPORT_MAX_CHARS || metrics.chars > CGI_REPORT_MAX_CHARS) {
+    addIssue({
       field: "$",
-      value: reportSerializedLength(parsed),
+      value: { serialized: reportSerializedLength(parsed), content_chars: metrics.chars },
       message: `must not exceed ${CGI_REPORT_MAX_CHARS} serialized characters`,
+    });
+  } else if (metrics.chars > CGI_REPORT_WARNING_CHARS) {
+    addIssue({
+      field: "$",
+      value: metrics.chars,
+      message: `preferred content length is at most ${CGI_REPORT_WARNING_CHARS} characters`,
+    });
+  }
+  if (metrics.estimatedContentPages > CGI_REPORT_MAX_CONTENT_PAGES) {
+    addIssue({
+      field: "$",
+      value: metrics.estimatedContentPages,
+      message: `estimated content pages must not exceed ${CGI_REPORT_MAX_CONTENT_PAGES}`,
     });
   }
 
   if (hasReportPunctuationArtifacts(parsed)) {
-    errors.push({
+    addIssue({
       field: "$",
       message: "contains duplicated punctuation or unsafe spacing artifacts",
     });
   }
 
   if (!hasRespondentPerspectiveLanguage(parsed)) {
-    errors.push({
+    addIssue({
       field: "$",
       message: "must frame conclusions from the respondent perspective",
     });
@@ -1328,7 +1708,7 @@ export function validateGeneratedReportJson(value: string | Record<string, unkno
 
   const dimensionReading = parsed.dimension_reading;
   if (!Array.isArray(dimensionReading) || dimensionReading.length !== 5) {
-    errors.push({
+    addIssue({
       field: "dimension_reading",
       value: dimensionReading,
       message: "must contain exactly 5 items",
@@ -1336,16 +1716,16 @@ export function validateGeneratedReportJson(value: string | Record<string, unkno
   } else {
     dimensionReading.forEach((item, index) => {
       if (!item || typeof item !== "object") {
-        errors.push({ field: "dimension_reading", index, value: item, message: "item must be an object" });
+        addIssue({ field: "dimension_reading", index, value: item, message: "item must be an object" });
         return;
       }
       const record = item as Record<string, unknown>;
       for (const key of ["dimension", "score", "analysis", "implication"]) {
         if (record[key] === undefined || record[key] === null || String(record[key]).trim() === "") {
-          errors.push({
+          addIssue({
             field: "dimension_reading",
             index,
-            value: item,
+            value: record[key],
             message: `missing_${key}`,
           });
         }
@@ -1354,43 +1734,50 @@ export function validateGeneratedReportJson(value: string | Record<string, unkno
   }
 
   const evidenceSummary = parsed.evidence_summary;
-  if (!Array.isArray(evidenceSummary) || evidenceSummary.length < 3 || evidenceSummary.length > 5) {
-    errors.push({
+  if (!Array.isArray(evidenceSummary) || evidenceSummary.length < 2 || evidenceSummary.length > 4) {
+    addIssue({
       field: "evidence_summary",
       value: evidenceSummary,
-      message: "must contain 3 to 5 items",
+      message: "must contain 2 to 4 items",
     });
   }
 
   const hypotheses = parsed.hypotheses_to_validate;
-  if (!Array.isArray(hypotheses) || hypotheses.length < 3 || hypotheses.length > 5) {
-    errors.push({
+  if (!Array.isArray(hypotheses) || hypotheses.length < 2 || hypotheses.length > 4) {
+    addIssue({
       field: "hypotheses_to_validate",
       value: hypotheses,
-      message: "must contain 3 to 5 items",
+      message: "must contain 2 to 4 items",
     });
   }
 
   for (const field of EXACT_THREE_REPORT_LIST_FIELDS) {
     const list = parsed[field];
-    if (!Array.isArray(list) || list.length !== 3) {
-      errors.push({
+    if (!Array.isArray(list) || list.length < 2 || list.length > 4) {
+      addIssue({
         field,
         value: list,
-        message: "must contain exactly 3 items",
+        message: "must contain 2 to 3 items",
       });
       continue;
     }
+    if (list.length !== 3) {
+      addIssue({
+        field,
+        value: list,
+        message: "preferred cardinality is exactly 3 items",
+      });
+    }
     list.forEach((item, index) => {
       if (typeof item !== "string") {
-        errors.push({ field, index, value: item, message: "item must be a string" });
+        addIssue({ field, index, value: item, message: "item must be a string" });
         return;
       }
       if (hasInvalidReportListText(item)) {
-        errors.push({ field, index, value: item, message: "invalid list item text" });
+        addIssue({ field, index, value: item, message: "invalid list item text" });
       }
       if (!itemHasContractLabels(item, field)) {
-        errors.push({
+        addIssue({
           field,
           index,
           value: item,
@@ -1402,24 +1789,38 @@ export function validateGeneratedReportJson(value: string | Record<string, unkno
 
   const paragraphs = strategicDiagnosisParagraphs(parsed.strategic_diagnosis);
   if (
-    paragraphs.length < 4 ||
+    paragraphs.length < 3 ||
     paragraphs.length > 5 ||
     paragraphs.some((paragraph) => !isSubstantialParagraph(paragraph))
   ) {
-    errors.push({
+    addIssue({
       field: "strategic_diagnosis",
       value: parsed.strategic_diagnosis,
-      message: "must contain 4 to 5 substantial paragraphs separated by blank lines",
+      message: "must contain 3 to 5 substantial paragraphs separated by blank lines",
     });
   }
 
-  return { ok: errors.length === 0, errors, parsed };
+  const warnings = [...editorialWarnings, ...qualityWarnings];
+  const errors = [...structuralErrors, ...correctableErrors];
+  return {
+    ok: errors.length === 0,
+    errors,
+    structural_errors: structuralErrors,
+    correctable_errors: correctableErrors,
+    editorial_warnings: editorialWarnings,
+    quality_warnings: qualityWarnings,
+    warnings,
+    reportStatus: warnings.length ? "report_ready_with_warnings" : "report_ready",
+    metrics,
+    parsed,
+  };
 }
 
 export function normalizeGeneratedReportJson(value: string): string {
   if (!value) return "";
+  const candidate = stripJsonCodeFence(value);
   try {
-    const parsed = JSON.parse(value) as Record<string, unknown>;
+    const parsed = JSON.parse(candidate) as Record<string, unknown>;
     const strategicDiagnosis = typeof parsed.strategic_diagnosis === "string"
       ? parsed.strategic_diagnosis
           .split(/\n\s*\n/)
@@ -1448,17 +1849,17 @@ export function normalizeGeneratedReportJson(value: string): string {
       executive_summary: normalizeReportValue(parsed.executive_summary),
       strategic_diagnosis: strategicDiagnosis,
       dimension_reading: dimensionReading,
-      evidence_summary: normalizeStringArray(parsed.evidence_summary, 5),
+      evidence_summary: normalizeStringArray(parsed.evidence_summary, 4),
       critical_bottlenecks: normalizeStringArray(parsed.critical_bottlenecks, undefined, "critical_bottlenecks"),
       strategic_bets: normalizeStringArray(parsed.strategic_bets, undefined, "strategic_bets"),
       renunciations: normalizeStringArray(parsed.renunciations, undefined, "renunciations"),
       governance_system: normalizeStringArray(parsed.governance_system, undefined, "governance_system"),
-      hypotheses_to_validate: normalizeStringArray(parsed.hypotheses_to_validate, 5),
+      hypotheses_to_validate: normalizeStringArray(parsed.hypotheses_to_validate, 4),
       final_recommendations: normalizeStringArray(parsed.final_recommendations, undefined, "final_recommendations"),
     };
     return JSON.stringify(normalized);
   } catch {
-    return value;
+    return candidate;
   }
 }
 
@@ -1513,6 +1914,44 @@ async function rewriteAiReportLanguage({
     return text;
   }
   return outputText || text;
+}
+
+function isTransientOpenAiFailure(status: number): boolean {
+  return status === 408 || status === 409 || status === 425 || status === 429 || status >= 500;
+}
+
+function logCgiAiAttempt(input: {
+  event: string;
+  attempt: number;
+  maxAttempts: number;
+  retryType: "full" | "none";
+  reasonCategory: ValidationIssueCategory | "http" | "exception" | "truncation";
+  model: string;
+  durationMs: number;
+  status?: number;
+  errorCode?: string;
+  message?: string;
+  responseMeta?: OpenAiResponseMeta;
+  metrics?: GeneratedReportMetrics | null;
+}) {
+  console.info(
+    "[CGI OpenAI]",
+    input.event,
+    JSON.stringify({
+      event: input.event,
+      attempt: input.attempt,
+      max_attempts: input.maxAttempts,
+      retry_type: input.retryType,
+      reason_category: input.reasonCategory,
+      model: input.model,
+      duration_ms: input.durationMs,
+      status: input.status,
+      error_code: input.errorCode,
+      message: input.message,
+      response: sanitizeOpenAiResponseMeta(input.responseMeta),
+      metrics: input.metrics || undefined,
+    })
+  );
 }
 
 async function generateAiDiagnostic({
@@ -1631,9 +2070,12 @@ async function generateAiDiagnostic({
 
   try {
     const validationErrors: unknown[] = [];
-    for (let attempt = 1; attempt <= CGI_REPORT_MAX_ATTEMPTS; attempt += 1) {
+    for (let attempt = 1; attempt <= CGI_REPORT_TRANSIENT_MAX_FULL_ATTEMPTS; attempt += 1) {
+      const attemptStartedAt = Date.now();
       const retryInstruction = buildReportRetryInstruction(validationErrors, attempt);
-      const response = await fetchOpenAiResponse(apiKey, {
+      let response: Response;
+      try {
+        response = await fetchOpenAiResponse(apiKey, {
           model,
           store: false,
           input: [
@@ -1662,11 +2104,56 @@ async function generateAiDiagnostic({
             },
           },
           max_output_tokens: CGI_REPORT_MAX_OUTPUT_TOKENS,
-      });
+        });
+      } catch (error) {
+        const durationMs = Date.now() - attemptStartedAt;
+        validationErrors.push({
+          attempt,
+          type: "transient_exception",
+          error: error instanceof Error ? error.name : "unknown_error",
+        });
+        logCgiAiAttempt({
+          event: "cgi_ai_full_attempt_exception",
+          attempt,
+          maxAttempts: CGI_REPORT_TRANSIENT_MAX_FULL_ATTEMPTS,
+          retryType: "full",
+          reasonCategory: "exception",
+          model,
+          durationMs,
+          errorCode: error instanceof Error ? error.name : "unknown_error",
+          message: error instanceof Error ? error.message : String(error),
+        });
+        if (attempt < CGI_REPORT_TRANSIENT_MAX_FULL_ATTEMPTS) continue;
+        return { status: "error", text: "", plainText: "" };
+      }
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error("[CGI OpenAI] request_failed", response.status, errorText);
+        const sanitizedError = snippet(errorText, 500);
+        validationErrors.push({
+          attempt,
+          type: "http_error",
+          status: response.status,
+          transient: isTransientOpenAiFailure(response.status),
+          error: sanitizedError,
+        });
+        logCgiAiAttempt({
+          event: "cgi_ai_full_attempt_http_failed",
+          attempt,
+          maxAttempts: isTransientOpenAiFailure(response.status)
+            ? CGI_REPORT_TRANSIENT_MAX_FULL_ATTEMPTS
+            : attempt,
+          retryType: "full",
+          reasonCategory: "http",
+          model,
+          durationMs: Date.now() - attemptStartedAt,
+          status: response.status,
+          errorCode: "openai_http_failed",
+          message: sanitizedError,
+        });
+        if (isTransientOpenAiFailure(response.status) && attempt < CGI_REPORT_TRANSIENT_MAX_FULL_ATTEMPTS) {
+          continue;
+        }
         return { status: "error", text: "", plainText: "" };
       }
 
@@ -1682,6 +2169,16 @@ async function generateAiDiagnostic({
           attempt,
           type: "output_truncated",
           meta: responseMeta,
+        });
+        logCgiAiAttempt({
+          event: "cgi_ai_output_truncated",
+          attempt,
+          maxAttempts: CGI_REPORT_TRANSIENT_MAX_FULL_ATTEMPTS,
+          retryType: "full",
+          reasonCategory: "truncation",
+          model,
+          durationMs: Date.now() - attemptStartedAt,
+          responseMeta,
         });
         continue;
       }
@@ -1701,17 +2198,95 @@ async function generateAiDiagnostic({
       }
 
       const validation = validateGeneratedReportJson(text);
-      if (validation.ok) {
+      if (validation.ok || !validation.structural_errors.length) {
+        const acceptedWarnings = [
+          ...validation.warnings,
+          ...(validation.ok ? [] : validation.correctable_errors),
+        ];
+        if (!validation.ok && !hasStructurallyUsefulReport(validation.parsed)) {
+          validationErrors.push({
+            attempt,
+            errors: sanitizeValidationErrorsForOperationalUse(validation.errors),
+            warnings: sanitizeValidationErrorsForOperationalUse(validation.warnings),
+            metrics: validation.metrics,
+          });
+          logCgiAiValidationFailure({
+            attempt,
+            maxAttempts: 1,
+            retryType: "none",
+            model,
+            durationMs: Date.now() - attemptStartedAt,
+            errors: validation.errors,
+            warnings: validation.warnings,
+            metrics: validation.metrics || undefined,
+            responseMeta,
+          });
+          break;
+        }
+        if (acceptedWarnings.length) {
+          console.warn(
+            "[CGI OpenAI] cgi_ai_report_ready_with_warnings",
+            JSON.stringify({
+              event: "cgi_ai_report_ready_with_warnings",
+              attempt,
+              max_attempts: 0,
+              retry_type: "none",
+              model,
+              duration_ms: Date.now() - attemptStartedAt,
+              response: sanitizeOpenAiResponseMeta(responseMeta),
+              metrics: validation.metrics,
+              warnings: sanitizeValidationErrorsForOperationalUse(acceptedWarnings),
+            })
+          );
+        }
         return {
           status: "generated",
           text,
           plainText: formatAiReportForEmail(text, language),
+          reportStatus: acceptedWarnings.length ? "report_ready_with_warnings" : "report_ready",
+          warnings: acceptedWarnings,
+          metrics: validation.metrics || undefined,
         };
       }
-      validationErrors.push({ attempt, errors: validation.errors });
+
+      validationErrors.push({
+        attempt,
+        errors: sanitizeValidationErrorsForOperationalUse(validation.errors),
+        warnings: sanitizeValidationErrorsForOperationalUse(validation.warnings),
+        metrics: validation.metrics,
+      });
+      logCgiAiValidationFailure({
+        attempt,
+        maxAttempts: validation.structural_errors.length
+          ? CGI_REPORT_CRITICAL_MAX_FULL_ATTEMPTS
+          : 1,
+        retryType: validation.structural_errors.length ? "full" : "none",
+        model,
+        durationMs: Date.now() - attemptStartedAt,
+        errors: validation.errors,
+        warnings: validation.warnings,
+        metrics: validation.metrics || undefined,
+        responseMeta,
+      });
+      if (validation.structural_errors.length && attempt >= CGI_REPORT_CRITICAL_MAX_FULL_ATTEMPTS) {
+        break;
+      }
     }
 
-    console.error("[CGI OpenAI] invalid_report_json", validationErrors);
+    console.error(
+      "[CGI OpenAI] invalid_report_json",
+      JSON.stringify({
+        event: "cgi_ai_generation_failed",
+        reason: "invalid_report_json",
+        model,
+        attempts: validationErrors.length,
+        max_transient_full_attempts: CGI_REPORT_TRANSIENT_MAX_FULL_ATTEMPTS,
+        max_critical_full_attempts: CGI_REPORT_CRITICAL_MAX_FULL_ATTEMPTS,
+        openai_attempt_timeout_ms: CGI_OPENAI_TIMEOUT_MS,
+        openai_total_timeout_budget_ms: CGI_OPENAI_TOTAL_TIMEOUT_BUDGET_MS,
+        validation_failures: validationErrors,
+      })
+    );
     return { status: "error", text: "", plainText: "" };
   } catch (error) {
     console.error("[CGI OpenAI] error", error);
@@ -2023,18 +2598,18 @@ export default async function handler(
     await markCgiReportFailed({
       publicAssessmentId: normalizedPublicAssessmentId,
       errorCode: "ai_generation_failed",
-      errorMessage: "AI report generation did not produce a valid report.",
+      errorMessage: "AI report validation failed after retry limit.",
     });
     res.status(503).json({
       ok: false,
       error: "report_generation_failed",
       report_status: "report_failed",
-      message: "Não foi possível gerar o relatório neste momento. Tente novamente em alguns instantes.",
+      message: "Não foi possível concluir o parecer neste momento. Tente novamente.",
       ai_generation_status: ai.status,
     });
     return;
   }
-  const reportStatus = "report_ready" as const;
+  const reportStatus = ai.reportStatus || "report_ready";
   logCgiOperation({
     correlationId,
     publicAssessmentId: normalizedPublicAssessmentId,

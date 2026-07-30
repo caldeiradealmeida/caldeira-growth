@@ -96,6 +96,63 @@ function createStoredReport() {
   };
 }
 
+function validOpenAiReport(overrides: Record<string, unknown> = {}) {
+  const paragraph =
+    "As respostas deste executivo indicam sinais especificos de maturidade, mas a leitura deve ser validada com outras liderancas e dados internos antes de virar decisao definitiva.";
+  const bottleneck =
+    "Título: Foco executivo. Sinal observado: As respostas deste executivo indicam tensao entre ambicao e disciplina. Causa provável: a rotina pode estar absorvendo energia demais. Impacto estratégico: ha risco de dispersao se a hipotese nao for validada.";
+  const bet =
+    "Título: Sequenciar prioridades. Ação prioritária: concentrar a lideranca em poucas frentes. Resultado esperado: maior previsibilidade executiva. Horizonte: proximo ciclo de 60 dias.";
+  const renunciation =
+    "Escolha: reduzir dispersao. O que deixar de fazer: abrir novas frentes sem criterio. Recurso ou capacidade protegida: foco da lideranca. Racional estratégico: a partir da perspectiva do respondente, isso protege execucao.";
+  const governance =
+    "Ritual: revisao executiva. Frequência: semanal. Participantes: liderancas chave. Indicadores: avancos, desvios e decisoes. Decisão esperada: remover bloqueios e validar hipoteses.";
+  const recommendation =
+    "Recomendação: validar gargalos. Prioridade: alta. Próximo passo: confrontar a leitura com indicadores internos. Condição de validação: confirmar se o sinal aparece alem da percepcao individual.";
+
+  return {
+    report_title: "Relatorio CGI",
+    report_subtitle: "Diagnostico executivo",
+    email_subject: "Relatorio CGI",
+    methodology_note: "Nota metodologica do CGI.",
+    evidence_summary: ["Evidencia 1", "Evidencia 2"],
+    executive_summary:
+      "As respostas deste executivo indicam uma organizacao com fundamentos relevantes, mas ainda dependente de validacao com outras liderancas e dados internos. O diagnostico sugere duas forcas reais e uma tensao central entre ambicao e disciplina de execucao.",
+    strategic_diagnosis: [paragraph, paragraph, paragraph].join("\n\n"),
+    dimension_reading: [
+      { dimension: "Estrategia", score: 80, analysis: "As respostas deste executivo indicam clareza.", implication: "A hipotese deve ser validada." },
+      { dimension: "Mercado", score: 70, analysis: "As respostas deste executivo indicam leitura parcial.", implication: "A hipotese deve ser validada." },
+      { dimension: "Crescimento", score: 60, analysis: "As respostas deste executivo indicam maquina em construcao.", implication: "A hipotese deve ser validada." },
+      { dimension: "Execucao", score: 50, analysis: "As respostas deste executivo indicam cadencia irregular.", implication: "A hipotese deve ser validada." },
+      { dimension: "Lideranca", score: 40, analysis: "As respostas deste executivo indicam necessidade cultural.", implication: "A hipotese deve ser validada." },
+    ],
+    critical_bottlenecks: [bottleneck, bottleneck, bottleneck],
+    strategic_bets: [bet, bet, bet],
+    renunciations: [renunciation, renunciation, renunciation],
+    governance_system: [governance, governance, governance],
+    hypotheses_to_validate: [
+      "Hipotese 1: validar a leitura do CGI com outras liderancas.",
+      "Hipotese 2: confrontar percepcao com indicadores internos.",
+    ],
+    final_recommendations: [recommendation, recommendation, recommendation],
+    ...overrides,
+  };
+}
+
+function openAiJsonResponse(report: Record<string, unknown>) {
+  return {
+    ok: true,
+    status: 200,
+    json: async () => ({
+      id: "resp_test",
+      model: "gpt-5.1",
+      status: "completed",
+      output_text: JSON.stringify(report),
+      usage: { output_tokens: 900 },
+    }),
+  };
+}
+
 describe("POST /api/cgi-assessment Supabase completion best-effort", () => {
   beforeEach(() => {
     process.env.OPENAI_API_KEY = "";
@@ -621,7 +678,7 @@ describe("POST /api/cgi-assessment Supabase completion best-effort", () => {
       report_status: "report_failed",
       ai_generation_status: "error",
     });
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain("api.openai.com");
     expect(supabaseMocks.saveCompletedCgiReport).not.toHaveBeenCalled();
     expect(supabaseMocks.updateCgiReportSecondarySyncStatus).not.toHaveBeenCalled();
@@ -631,6 +688,209 @@ describe("POST /api/cgi-assessment Supabase completion best-effort", () => {
         errorCode: "ai_generation_failed",
       })
     );
+  });
+
+  it("logs sanitized structured validation errors when OpenAI returns invalid report JSON", async () => {
+    process.env.OPENAI_API_KEY = "sk-test";
+    process.env.OPENAI_MODEL = "gpt-5.1";
+    process.env.CONTACT_FORM_URL = "https://script.google.test/macros/s/fake/exec";
+    const invalidReportJson = JSON.stringify({
+      report_title: "Relatorio CGI",
+      strategic_bets: ["Sem rotulo", "Sem rotulo", "Sem rotulo"],
+    });
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        status: "completed",
+        output_text: invalidReportJson,
+        usage: { output_tokens: 200 },
+      }),
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const response = createResponse();
+
+    await handler(
+      {
+        method: "POST",
+        headers: {},
+        body: createValidPayload(),
+      } as never,
+      response as never
+    );
+
+    expect(response.statusCode).toBe(503);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(supabaseMocks.saveCompletedCgiReport).not.toHaveBeenCalled();
+    expect(supabaseMocks.updateCgiReportSecondarySyncStatus).not.toHaveBeenCalled();
+    expect(supabaseMocks.markCgiReportFailed).toHaveBeenCalledWith(
+      expect.objectContaining({
+        publicAssessmentId: "assessment_1",
+        errorCode: "ai_generation_failed",
+        errorMessage: "AI report validation failed after retry limit.",
+      })
+    );
+
+    const validationLog = vi.mocked(console.error).mock.calls.find(
+      ([event]) => event === "[CGI OpenAI] cgi_ai_validation_failed"
+    );
+    expect(validationLog).toBeTruthy();
+    const payload = JSON.parse(String(validationLog?.[1] || "{}"));
+    expect(payload).toMatchObject({
+      event: "cgi_ai_validation_failed",
+      attempt: 1,
+      model: "gpt-5.1",
+    });
+    expect(payload.duration_ms).toEqual(expect.any(Number));
+    expect(payload.errors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: "strategic_diagnosis",
+          code: "missing_required",
+          message: "missing_key",
+          received_type: "undefined",
+        }),
+      ])
+    );
+    expect(payload.warnings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: "strategic_bets.0",
+          code: "invalid_structure",
+          reason_category: "editorial",
+        }),
+      ])
+    );
+    expect(String(validationLog?.[1])).not.toContain("Lead Teste");
+    expect(String(validationLog?.[1])).not.toContain("Sem rotulo");
+    expect(String(validationLog?.[1])).not.toContain("[Object]");
+  });
+
+  it("retries transient OpenAI failures and saves the later valid report", async () => {
+    process.env.OPENAI_API_KEY = "sk-test";
+    process.env.OPENAI_MODEL = "gpt-5.1";
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        text: async () => "temporary_openai_failure",
+      })
+      .mockResolvedValueOnce(openAiJsonResponse(validOpenAiReport()));
+    vi.stubGlobal("fetch", fetchMock);
+    const response = createResponse();
+
+    await handler(
+      {
+        method: "POST",
+        headers: {},
+        body: createValidPayload(),
+      } as never,
+      response as never
+    );
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toMatchObject({
+      ok: true,
+      report_status: "report_ready",
+      ai: { status: "generated" },
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(supabaseMocks.saveCompletedCgiReport).toHaveBeenCalledTimes(1);
+  });
+
+  it("accepts editorial-only validation issues as ready_with_warnings without a full retry", async () => {
+    process.env.OPENAI_API_KEY = "sk-test";
+    process.env.OPENAI_MODEL = "gpt-5.1";
+    const fetchMock = vi.fn(async () =>
+      openAiJsonResponse(
+        validOpenAiReport({
+          strategic_bets: ["Sem rotulo", "Sem rotulo", "Sem rotulo"],
+        })
+      )
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const response = createResponse();
+
+    await handler(
+      {
+        method: "POST",
+        headers: {},
+        body: createValidPayload(),
+      } as never,
+      response as never
+    );
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toMatchObject({
+      ok: true,
+      report_status: "report_ready_with_warnings",
+      ai: { status: "generated" },
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(supabaseMocks.saveCompletedCgiReport).toHaveBeenCalledTimes(1);
+  });
+
+  it("accepts correctable nonessential issues as warnings without another OpenAI call", async () => {
+    process.env.OPENAI_API_KEY = "sk-test";
+    process.env.OPENAI_MODEL = "gpt-5.1";
+    const fetchMock = vi.fn(async () =>
+      openAiJsonResponse(validOpenAiReport({ hypotheses_to_validate: [] }))
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const response = createResponse();
+
+    await handler(
+      {
+        method: "POST",
+        headers: {},
+        body: createValidPayload(),
+      } as never,
+      response as never
+    );
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toMatchObject({
+      ok: true,
+      report_status: "report_ready_with_warnings",
+      ai: { status: "generated" },
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(supabaseMocks.saveCompletedCgiReport).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses local normalization to resolve object-shaped arrays without retry", async () => {
+    process.env.OPENAI_API_KEY = "sk-test";
+    process.env.OPENAI_MODEL = "gpt-5.1";
+    const fetchMock = vi.fn(async () =>
+      openAiJsonResponse(
+        validOpenAiReport({
+          evidence_summary: { first: "Evidencia 1", second: "Evidencia 2" },
+          hypotheses_to_validate: {
+            first: "Hipotese 1: validar a leitura do CGI com outras liderancas.",
+            second: "Hipotese 2: confrontar percepcao com indicadores internos.",
+          },
+        })
+      )
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const response = createResponse();
+
+    await handler(
+      {
+        method: "POST",
+        headers: {},
+        body: createValidPayload(),
+      } as never,
+      response as never
+    );
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toMatchObject({
+      ok: true,
+      report_status: "report_ready",
+      ai: { status: "generated" },
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it("does not call OpenAI when the model is not explicitly configured", async () => {
@@ -684,7 +944,7 @@ describe("POST /api/cgi-assessment Supabase completion best-effort", () => {
       report_status: "report_failed",
       ai_generation_status: "error",
     });
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(supabaseMocks.saveCompletedCgiReport).not.toHaveBeenCalled();
     expect(supabaseMocks.updateCgiReportSecondarySyncStatus).not.toHaveBeenCalled();
     expect(supabaseMocks.markCgiReportFailed).toHaveBeenCalledWith(

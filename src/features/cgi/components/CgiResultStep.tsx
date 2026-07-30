@@ -148,7 +148,7 @@ export function CgiResultStep({
             </Alert>
           )}
 
-          {!isSubmitting && !submitError && (
+          {!isSubmitting && !submitError && reportReady && (
             <Alert className="border-primary/20">
               <CheckCircle2 className="h-4 w-4 text-primary" />
               <AlertTitle>{t.savedTitle}</AlertTitle>
@@ -157,6 +157,16 @@ export function CgiResultStep({
                 {aiStatus === "generated"
                   ? t.proprietaryBody
                   : result.diagnostic}
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {!isSubmitting && !submitError && !reportReady && (
+            <Alert className="border-primary/20">
+              <Sparkles className="h-4 w-4 text-primary" />
+              <AlertTitle>{t.reportAlertTitle}</AlertTitle>
+              <AlertDescription>
+                {t.savedPendingBody} {t.reportPending}
               </AlertDescription>
             </Alert>
           )}

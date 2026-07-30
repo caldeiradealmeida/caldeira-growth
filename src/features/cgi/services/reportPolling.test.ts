@@ -29,6 +29,33 @@ describe("pollCgiReport", () => {
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
 
+  it("stops when the backend returns report_ready_with_warnings", async () => {
+    const fetcher = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          ok: true,
+          report_status: "report_ready_with_warnings",
+          score: { finalScore: 80 },
+        }),
+        { status: 200 }
+      )
+    );
+
+    const result = await pollCgiReport({
+      publicAssessmentId: "assessment_1",
+      endpoint: "/api/cgi-assessment",
+      intervalMs: 0,
+      maxAttempts: 3,
+      fetcher,
+    });
+
+    expect(result).toMatchObject({
+      status: "ready",
+      data: { report_status: "report_ready_with_warnings" },
+    });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
   it("stops when the backend returns report_failed", async () => {
     const fetcher = vi.fn(async () =>
       new Response(

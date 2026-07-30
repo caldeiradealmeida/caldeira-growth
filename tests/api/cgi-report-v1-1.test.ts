@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   buildCgiReportEvidence,
+  buildReportRetryInstruction,
   buildCgiReportSystemPrompt,
+  estimateGeneratedReportMetrics,
+  getCgiReportTimeoutBudget,
   normalizeReportListItem,
   normalizeGeneratedReportJson,
   sanitizeReportText,
@@ -190,13 +193,14 @@ describe("CGI report v1.1 prompt contract", () => {
     expect(prompt).toContain("methodology_note");
     expect(prompt).toContain("evidence_summary");
     expect(prompt).toContain("hypotheses_to_validate");
-    expect(prompt).toContain("exatamente 3 strings");
+    expect(prompt).toContain("2 a 3 strings");
     expect(prompt).toContain("Não invente dados");
     expect(prompt).toContain("não substituem um diagnóstico organizacional completo");
     expect(prompt).toContain("response_evidence.by_dimension");
     expect(prompt).toContain("perspectiva do respondente");
     expect(prompt).toContain("não substituir uma etapa de diagnóstico aprofundado");
-    expect(prompt).toContain("nunca acima de 16.500 caracteres");
+    expect(prompt).toContain("nunca acima de 11.200 caracteres");
+    expect(prompt).toContain("no máximo 7 páginas úteis");
     expect(prompt).toContain("Sinal observado");
     expect(prompt).toContain("Condição de validação");
   });
@@ -307,6 +311,89 @@ describe("CGI report v1.1 prompt contract", () => {
     expect(text).not.toContain("}");
   });
 
+  it("normalizes markdown code fences before validation", () => {
+    const normalized = normalizeGeneratedReportJson(
+      "```json\n" + JSON.stringify(validReport()) + "\n```"
+    );
+    const validation = validateGeneratedReportJson(normalized);
+
+    expect(validation.ok).toBe(true);
+  });
+
+  it("normalizes object-shaped lists into arrays before validation", () => {
+    const normalized = normalizeGeneratedReportJson(
+      JSON.stringify(
+        validReport({
+          evidence_summary: {
+            first: "Evidencia 1",
+            second: "Evidencia 2",
+            third: "Evidencia 3",
+          },
+          hypotheses_to_validate: {
+            first: "Hipotese 1: validar a leitura do CGI com outras liderancas.",
+            second: "Hipotese 2: confrontar percepcao com indicadores.",
+            third: "Hipotese 3: confirmar se o gargalo aparece no ciclo de gestao.",
+          },
+        })
+      )
+    );
+    const parsed = JSON.parse(normalized);
+    const validation = validateGeneratedReportJson(normalized);
+
+    expect(parsed.evidence_summary).toHaveLength(3);
+    expect(parsed.hypotheses_to_validate).toHaveLength(3);
+    expect(validation.ok).toBe(true);
+  });
+
+  it("accepts safe alternate keys inside structured list objects after normalization", () => {
+    const normalized = normalizeGeneratedReportJson(
+      JSON.stringify(
+        validReport({
+          strategic_bets: [
+            {
+              titulo: "Sequenciar prioridades",
+              acao_prioritaria: "focar poucas alavancas",
+              resultado_esperado: "maior previsibilidade",
+              horizonte: "60 a 90 dias",
+            },
+            {
+              title: "Validar canal",
+              action: "testar canal prioritario",
+              outcome: "criterio comercial mais claro",
+              deadline: "proximo ciclo",
+            },
+            {
+              tema: "Governanca comercial",
+              decisao: "definir indicadores",
+              expected_result: "decisoes melhores",
+              prazo: "mensal",
+            },
+          ],
+        })
+      )
+    );
+    const validation = validateGeneratedReportJson(normalized);
+
+    expect(validation.ok).toBe(true);
+  });
+
+  it("keeps number-like strings and extra sections from blocking an otherwise valid report", () => {
+    const validation = validateGeneratedReportJson(
+      validReport({
+        extra_section_not_rendered: { status: "ignored" },
+        dimension_reading: [
+          { dimension: "Estrategia", score: "80", analysis: "Analise", implication: "Implicacao" },
+          { dimension: "Mercado", score: "70", analysis: "Analise", implication: "Implicacao" },
+          { dimension: "Crescimento", score: "60", analysis: "Analise", implication: "Implicacao" },
+          { dimension: "Execucao", score: "50", analysis: "Analise", implication: "Implicacao" },
+          { dimension: "Lideranca", score: "40", analysis: "Analise", implication: "Implicacao" },
+        ],
+      })
+    );
+
+    expect(validation.ok).toBe(true);
+  });
+
   it("rejects invalid list values after normalization", () => {
     const normalized = normalizeGeneratedReportJson(
       JSON.stringify(
@@ -323,15 +410,151 @@ describe("CGI report v1.1 prompt contract", () => {
     );
   });
 
-  it("rejects unnormalized punctuation artifacts", () => {
+  it("reports missing fields with structured path, code and sanitized type metadata", () => {
+    const report = validReport();
+    delete (report as Record<string, unknown>).executive_summary;
+
+    const validation = validateGeneratedReportJson(report);
+
+    expect(validation.ok).toBe(false);
+    expect(validation.errors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          field: "executive_summary",
+          path: "executive_summary",
+          code: "missing_required",
+          message: "missing_key",
+          expected: "required key",
+          received_type: "undefined",
+          section: "executive_summary",
+        }),
+      ])
+    );
+  });
+
+  it("reports null nested fields with exact paths", () => {
+    const validation = validateGeneratedReportJson(
+      validReport({
+        dimension_reading: [
+          { dimension: "Estrategia", score: 80, analysis: null, implication: "Implicacao" },
+          { dimension: "Mercado", score: 70, analysis: "Analise", implication: "Implicacao" },
+          { dimension: "Crescimento", score: 60, analysis: "Analise", implication: "Implicacao" },
+          { dimension: "Execucao", score: 50, analysis: "Analise", implication: "Implicacao" },
+          { dimension: "Lideranca", score: 40, analysis: "Analise", implication: "Implicacao" },
+        ],
+      })
+    );
+
+    expect(validation.ok).toBe(false);
+    expect(validation.errors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: "dimension_reading.0.analysis",
+          code: "missing_required",
+          received_type: "null",
+          received_summary: "null",
+        }),
+      ])
+    );
+  });
+
+  it("separates correctable array errors from editorial label warnings without raw content", () => {
+    const validation = validateGeneratedReportJson(
+      JSON.stringify(
+        validReport({
+          strategic_bets: ["Sem rotulo", "Sem rotulo", "Sem rotulo"],
+          hypotheses_to_validate: [],
+        })
+      )
+    );
+
+    expect(validation.ok).toBe(false);
+    expect(validation.errors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: "hypotheses_to_validate",
+          code: "invalid_array_length",
+          expected: "array with 2 to 4 items",
+          received_summary: "array(length=0)",
+        }),
+      ])
+    );
+    expect(validation.correctable_errors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ path: "hypotheses_to_validate", category: "correctable_structural" }),
+      ])
+    );
+    expect(validation.editorial_warnings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: "strategic_bets.0",
+          code: "invalid_structure",
+          expected: "string with required labels in order",
+          received_type: "string",
+          received_summary: expect.stringContaining("string(length="),
+          category: "editorial",
+        }),
+      ])
+    );
+    expect(JSON.stringify(validation.errors)).not.toContain("Sem rotulo");
+    expect(JSON.stringify(validation.editorial_warnings)).not.toContain("Sem rotulo");
+  });
+
+  it("reports truncated JSON as an invalid JSON validation error", () => {
+    const validation = validateGeneratedReportJson('{"report_title":"Relatorio CGI"');
+
+    expect(validation.ok).toBe(false);
+    expect(validation.errors[0]).toMatchObject({
+      path: "$",
+      code: "invalid_json",
+      expected: "valid JSON object",
+      received_type: "string",
+    });
+  });
+
+  it("feeds specific validation paths into retry instructions", () => {
+    const validation = validateGeneratedReportJson(
+      validReport({
+        strategic_bets: ["Sem rotulo", "Sem rotulo", "Sem rotulo"],
+      })
+    );
+    const retryInstruction = buildReportRetryInstruction(
+      [{ attempt: 1, errors: validation.editorial_warnings }],
+      2
+    );
+
+    expect(retryInstruction).toContain("Erros específicos da validação anterior");
+    expect(retryInstruction).toContain("strategic_bets.0: invalid_structure");
+  });
+
+  it("estimates the analytical report size against the seven-page content budget", () => {
+    const metrics = estimateGeneratedReportMetrics(validReport());
+    const validation = validateGeneratedReportJson(validReport());
+
+    expect(metrics.pageLimit).toBe(7);
+    expect(metrics.estimatedContentPages).toBeLessThanOrEqual(7);
+    expect(validation.metrics?.estimatedContentPages).toBeLessThanOrEqual(7);
+  });
+
+  it("keeps the worst-case full retry timeout budget below Vercel's 300s limit", () => {
+    const budget = getCgiReportTimeoutBudget();
+
+    expect(budget.maxTransientFullAttempts).toBe(3);
+    expect(budget.maxCriticalFullAttempts).toBe(2);
+    expect(budget.theoreticalWorstCaseMs).toBe(275000);
+    expect(budget.theoreticalWorstCaseMs).toBeLessThan(budget.vercelFunctionTimeoutMs);
+  });
+
+  it("treats unnormalized punctuation artifacts as nonblocking editorial warnings", () => {
     const validation = validateGeneratedReportJson({
       ...validReport(),
       executive_summary:
         "As respostas deste executivo indicam maturidade intermediaria.. A hipotese deve ser validada com outras liderancas.",
     });
 
-    expect(validation.ok).toBe(false);
-    expect(validation.errors).toEqual(
+    expect(validation.ok).toBe(true);
+    expect(validation.reportStatus).toBe("report_ready_with_warnings");
+    expect(validation.editorial_warnings).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           field: "$",
@@ -341,13 +564,14 @@ describe("CGI report v1.1 prompt contract", () => {
     );
   });
 
-  it("rejects items outside the standardized labeled structure", () => {
+  it("accepts missing labels as warnings instead of fatal validation errors", () => {
     const validation = validateGeneratedReportJson(
       JSON.stringify(validReport({ strategic_bets: ["Item 1", "Item 2", "Item 3"] }))
     );
 
-    expect(validation.ok).toBe(false);
-    expect(validation.errors).toEqual(
+    expect(validation.ok).toBe(true);
+    expect(validation.reportStatus).toBe("report_ready_with_warnings");
+    expect(validation.editorial_warnings).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           field: "strategic_bets",
@@ -357,7 +581,7 @@ describe("CGI report v1.1 prompt contract", () => {
     );
   });
 
-  it("rejects exact-three list fields with two or four items", () => {
+  it("accepts two or four decision items with warnings instead of fatal retries", () => {
     const twoItems = validateGeneratedReportJson(
       JSON.stringify(validReport({ strategic_bets: ["a", "b"] }))
     );
@@ -365,18 +589,20 @@ describe("CGI report v1.1 prompt contract", () => {
       JSON.stringify(validReport({ final_recommendations: ["a", "b", "c", "d"] }))
     );
 
-    expect(twoItems.ok).toBe(false);
-    expect(fourItems.ok).toBe(false);
-    expect(twoItems.errors).toEqual(
+    expect(twoItems.ok).toBe(true);
+    expect(fourItems.ok).toBe(true);
+    expect(twoItems.reportStatus).toBe("report_ready_with_warnings");
+    expect(fourItems.reportStatus).toBe("report_ready_with_warnings");
+    expect(twoItems.editorial_warnings).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ field: "strategic_bets", message: "must contain exactly 3 items" }),
+        expect.objectContaining({ field: "strategic_bets", message: "preferred cardinality is exactly 3 items" }),
       ])
     );
-    expect(fourItems.errors).toEqual(
+    expect(fourItems.editorial_warnings).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           field: "final_recommendations",
-          message: "must contain exactly 3 items",
+          message: "preferred cardinality is exactly 3 items",
         }),
       ])
     );
@@ -415,8 +641,14 @@ describe("CGI report v1.1 prompt contract", () => {
 
     expect(fourParagraphs.ok).toBe(true);
     expect(fiveParagraphs.ok).toBe(true);
-    expect(oneBlock.ok).toBe(false);
-    expect(emptyParagraph.ok).toBe(false);
+    expect(oneBlock.ok).toBe(true);
+    expect(emptyParagraph.ok).toBe(true);
+    expect(oneBlock.reportStatus).toBe("report_ready_with_warnings");
+    expect(emptyParagraph.editorial_warnings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ field: "strategic_diagnosis" }),
+      ])
+    );
   });
 
   it("validates total serialized report size", () => {
@@ -438,13 +670,13 @@ describe("CGI report v1.1 prompt contract", () => {
       expect.arrayContaining([
         expect.objectContaining({
           field: "$",
-          message: "must not exceed 16500 serialized characters",
+          message: "must not exceed 11200 serialized characters",
         }),
       ])
     );
   });
 
-  it("requires respondent-perspective language", () => {
+  it("keeps respondent-perspective gaps as warnings instead of fatal retries", () => {
     const validation = validateGeneratedReportJson(
       JSON.stringify(
         validReport({
@@ -466,8 +698,9 @@ describe("CGI report v1.1 prompt contract", () => {
       )
     );
 
-    expect(validation.ok).toBe(false);
-    expect(validation.errors).toEqual(
+    expect(validation.ok).toBe(true);
+    expect(validation.reportStatus).toBe("report_ready_with_warnings");
+    expect(validation.editorial_warnings).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           field: "$",

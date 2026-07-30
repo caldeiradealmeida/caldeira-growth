@@ -104,6 +104,7 @@ export const cgiUi: Record<
     proprietaryBody: string;
     savedTitle: string;
     savedBody: string;
+    savedPendingBody: string;
     scoreByDimension: string;
     attentionTitle: string;
     attentionBody: string;
@@ -295,7 +296,8 @@ export const cgiUi: Record<
     proprietaryBody:
       "Método Caldeira Growth. Inteligência artificial aplicada à personalização do parecer.",
     savedTitle: "Resultado registrado",
-    savedBody: "Seus dados foram salvos e o relatório foi preparado.",
+    savedBody: "O parecer foi preparado.",
+    savedPendingBody: "Seus dados foram salvos. O parecer está sendo preparado.",
     scoreByDimension: "Score por dimensão",
     attentionTitle: "3 principais pontos de atenção",
     attentionBody:
@@ -498,7 +500,8 @@ export const cgiUi: Record<
     proprietaryBody:
       "Caldeira Growth methodology. Artificial intelligence applied to report personalization.",
     savedTitle: "Result registered",
-    savedBody: "Your data has been saved and the report was prepared.",
+    savedBody: "The report is ready.",
+    savedPendingBody: "Your data has been saved. The report is being prepared.",
     scoreByDimension: "Score by dimension",
     attentionTitle: "3 main attention points",
     attentionBody:
@@ -701,7 +704,8 @@ export const cgiUi: Record<
     proprietaryBody:
       "Método Caldeira Growth. Inteligencia artificial aplicada a la personalización del informe.",
     savedTitle: "Resultado registrado",
-    savedBody: "Sus datos fueron guardados y el informe fue preparado.",
+    savedBody: "El informe fue preparado.",
+    savedPendingBody: "Sus datos fueron guardados. El informe se está preparando.",
     scoreByDimension: "Score por dimensión",
     attentionTitle: "3 principales puntos de atención",
     attentionBody:
