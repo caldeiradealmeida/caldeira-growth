@@ -24,11 +24,41 @@ function wait(ms: number, signal?: AbortSignal) {
   });
 }
 
+const CGI_POLL_REQUEST_TIMEOUT_MS = 12000;
+
+type PollFetchResult = { ok: true; response: Response } | { ok: false; stalled: boolean };
+
+async function fetchPollStatus(
+  fetcher: FetchLike,
+  url: string,
+  signal: AbortSignal | undefined,
+  requestTimeoutMs: number
+): Promise<PollFetchResult> {
+  const controller = new AbortController();
+  const onOuterAbort = () => controller.abort();
+  signal?.addEventListener("abort", onOuterAbort, { once: true });
+  const timeout = globalThis.setTimeout(() => controller.abort(), requestTimeoutMs);
+  try {
+    const response = await fetcher(url, { method: "GET", signal: controller.signal });
+    return { ok: true, response };
+  } catch {
+    // A per-request timeout or a genuinely stalled connection (e.g. right
+    // after a laptop sleep/wake cycle) must never block the polling loop
+    // indefinitely - treat it as one missed attempt and let the loop's own
+    // wall-clock ceiling decide whether to keep polling.
+    return { ok: false, stalled: !signal?.aborted };
+  } finally {
+    globalThis.clearTimeout(timeout);
+    signal?.removeEventListener("abort", onOuterAbort);
+  }
+}
+
 export async function pollCgiReport({
   publicAssessmentId,
   endpoint = CGI_ASSESSMENT_ENDPOINT,
   intervalMs = 2500,
   timeoutMs = 120000,
+  requestTimeoutMs = CGI_POLL_REQUEST_TIMEOUT_MS,
   maxAttempts,
   signal,
   fetcher = fetch,
@@ -37,6 +67,7 @@ export async function pollCgiReport({
   endpoint?: string;
   intervalMs?: number;
   timeoutMs?: number;
+  requestTimeoutMs?: number;
   maxAttempts?: number;
   signal?: AbortSignal;
   fetcher?: FetchLike;
@@ -52,10 +83,15 @@ export async function pollCgiReport({
     if (signal?.aborted) return { status: "aborted" };
 
     const separator = endpoint.includes("?") ? "&" : "?";
-    const response = await fetcher(
-      `${endpoint}${separator}public_assessment_id=${encodeURIComponent(assessmentId)}`,
-      { method: "GET", signal }
-    );
+    const url = `${endpoint}${separator}public_assessment_id=${encodeURIComponent(assessmentId)}`;
+    const result = await fetchPollStatus(fetcher, url, signal, requestTimeoutMs);
+    if (!result.ok) {
+      if (signal?.aborted) return { status: "aborted" };
+      if (Date.now() - startedAt >= timeoutMs) break;
+      await wait(intervalMs, signal);
+      continue;
+    }
+    const response = result.response;
     const data = (await response.json().catch(() => ({}))) as Record<string, unknown>;
 
     if (

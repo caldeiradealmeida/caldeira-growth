@@ -122,7 +122,10 @@ const REPORT_METHODOLOGY_VERSION = "1.1.0";
 const SCORING_VERSION = "1.0.0";
 const CGI_OPENAI_ENDPOINT = "https://api.openai.com/v1/responses";
 const CGI_OPENAI_MODEL_ENV = "OPENAI_MODEL";
-const CGI_OPENAI_TIMEOUT_MS = 85000;
+// 70-80s per attempt: long enough for a single full generation, short enough to
+// leave headroom under the Vercel function ceiling even if the one allowed
+// transient retry (see CGI_REPORT_MAX_FULL_ATTEMPTS) is used.
+const CGI_OPENAI_TIMEOUT_MS = 75000;
 const CGI_REPORT_MAX_OUTPUT_TOKENS = 10000;
 const CGI_REPORT_PREFERRED_MIN_CHARS = 8500;
 const CGI_REPORT_PREFERRED_MAX_CHARS = 10500;
@@ -130,11 +133,23 @@ const CGI_REPORT_WARNING_CHARS = 10800;
 const CGI_REPORT_MAX_CHARS = 11200;
 const CGI_REPORT_MAX_CONTENT_PAGES = 7;
 const CGI_REPORT_ESTIMATED_CHARS_PER_CONTENT_PAGE = 1600;
-const CGI_REPORT_TRANSIENT_MAX_FULL_ATTEMPTS = 3;
-const CGI_REPORT_CRITICAL_MAX_FULL_ATTEMPTS = 2;
-const CGI_OPENAI_TOTAL_TIMEOUT_BUDGET_MS = CGI_OPENAI_TIMEOUT_MS * CGI_REPORT_TRANSIENT_MAX_FULL_ATTEMPTS;
+// Conservative recovery policy: one primary attempt, plus at most one retry,
+// and only for a proven transient failure (network exception, timeout, 429,
+// or 5xx). No retry is ever granted for editorial/quality/length/validation
+// content issues - see generateAiDiagnostic.
+const CGI_REPORT_MAX_FULL_ATTEMPTS = 2;
+const CGI_OPENAI_TOTAL_TIMEOUT_BUDGET_MS = CGI_OPENAI_TIMEOUT_MS * CGI_REPORT_MAX_FULL_ATTEMPTS;
 const CGI_NON_OPENAI_RUNTIME_BUDGET_MS = 20000;
+// No functions.maxDuration is configured in vercel.json; this project runs on
+// Vercel Hobby (confirmed via API). This value is a documented conservative
+// assumption, not a value read from actual Vercel configuration - the retry
+// budget check below refuses a second attempt if it would risk exceeding it.
 const VERCEL_FUNCTION_TIMEOUT_MS = 300000;
+// Safety margin kept under VERCEL_FUNCTION_TIMEOUT_MS to account for the
+// request work that happens before generateAiDiagnostic is called (spam
+// checks, DNS/email validation, website enrichment) and after it returns
+// (persistence, secondary sync).
+const CGI_SAFE_EXECUTION_BUDGET_MS = VERCEL_FUNCTION_TIMEOUT_MS - CGI_NON_OPENAI_RUNTIME_BUDGET_MS * 2;
 
 type ValidationIssueCategory =
   | "transient"
@@ -170,12 +185,12 @@ type GeneratedReportValidationError = {
 export function getCgiReportTimeoutBudget() {
   return {
     openAiAttemptTimeoutMs: CGI_OPENAI_TIMEOUT_MS,
-    maxTransientFullAttempts: CGI_REPORT_TRANSIENT_MAX_FULL_ATTEMPTS,
-    maxCriticalFullAttempts: CGI_REPORT_CRITICAL_MAX_FULL_ATTEMPTS,
+    maxFullAttempts: CGI_REPORT_MAX_FULL_ATTEMPTS,
     openAiWorstCaseMs: CGI_OPENAI_TOTAL_TIMEOUT_BUDGET_MS,
     nonOpenAiRuntimeBudgetMs: CGI_NON_OPENAI_RUNTIME_BUDGET_MS,
     theoreticalWorstCaseMs: CGI_OPENAI_TOTAL_TIMEOUT_BUDGET_MS + CGI_NON_OPENAI_RUNTIME_BUDGET_MS,
     vercelFunctionTimeoutMs: VERCEL_FUNCTION_TIMEOUT_MS,
+    safeExecutionBudgetMs: CGI_SAFE_EXECUTION_BUDGET_MS,
   };
 }
 
@@ -1961,6 +1976,7 @@ async function generateAiDiagnostic({
   websiteEnrichment,
   requestContext,
   language,
+  requestStartedAt,
 }: {
   lead: CgiLead;
   answers: Record<string, number>;
@@ -1968,6 +1984,7 @@ async function generateAiDiagnostic({
   websiteEnrichment: WebsiteEnrichment;
   requestContext: RequestContext;
   language: "pt" | "en" | "es";
+  requestStartedAt: number;
 }): Promise<AiResult> {
   const openAiConfig = getOpenAiConfig();
   if (!openAiConfig) return { status: "not_configured", text: "", plainText: "" };
@@ -2069,10 +2086,36 @@ async function generateAiDiagnostic({
   };
 
   try {
-    const validationErrors: unknown[] = [];
-    for (let attempt = 1; attempt <= CGI_REPORT_TRANSIENT_MAX_FULL_ATTEMPTS; attempt += 1) {
+    let lastFailure: { errorCode: string; message?: string } = {
+      errorCode: "ai_generation_failed",
+    };
+    for (let attempt = 1; attempt <= CGI_REPORT_MAX_FULL_ATTEMPTS; attempt += 1) {
+      if (attempt > 1) {
+        // The only reason we ever get here is a proven transient failure on
+        // the previous attempt (network exception, timeout, 429, or 5xx).
+        // Before spending another full OpenAI call, make sure there is still
+        // a safe execution budget left - otherwise fail now instead of
+        // risking a hard platform timeout.
+        const elapsedMs = Date.now() - requestStartedAt;
+        const remainingMs = CGI_SAFE_EXECUTION_BUDGET_MS - elapsedMs;
+        const neededMs = CGI_OPENAI_TIMEOUT_MS + CGI_NON_OPENAI_RUNTIME_BUDGET_MS;
+        if (remainingMs < neededMs) {
+          logCgiAiAttempt({
+            event: "cgi_ai_retry_skipped_budget",
+            attempt,
+            maxAttempts: CGI_REPORT_MAX_FULL_ATTEMPTS,
+            retryType: "none",
+            reasonCategory: "transient",
+            model,
+            durationMs: 0,
+            errorCode: "insufficient_execution_budget",
+            message: `remaining_ms=${remainingMs} needed_ms=${neededMs}`,
+          });
+          break;
+        }
+      }
+
       const attemptStartedAt = Date.now();
-      const retryInstruction = buildReportRetryInstruction(validationErrors, attempt);
       let response: Response;
       try {
         response = await fetchOpenAiResponse(apiKey, {
@@ -2084,7 +2127,7 @@ async function generateAiDiagnostic({
               content: [
                 {
                   type: "input_text",
-                  text: `${buildCgiReportSystemPrompt(languageInstruction)}${retryInstruction}`,
+                  text: buildCgiReportSystemPrompt(languageInstruction),
                 },
               ],
             },
@@ -2107,51 +2150,46 @@ async function generateAiDiagnostic({
         });
       } catch (error) {
         const durationMs = Date.now() - attemptStartedAt;
-        validationErrors.push({
-          attempt,
-          type: "transient_exception",
-          error: error instanceof Error ? error.name : "unknown_error",
-        });
+        const errorName = error instanceof Error ? error.name : "unknown_error";
         logCgiAiAttempt({
           event: "cgi_ai_full_attempt_exception",
           attempt,
-          maxAttempts: CGI_REPORT_TRANSIENT_MAX_FULL_ATTEMPTS,
-          retryType: "full",
-          reasonCategory: "exception",
+          maxAttempts: CGI_REPORT_MAX_FULL_ATTEMPTS,
+          retryType: attempt < CGI_REPORT_MAX_FULL_ATTEMPTS ? "full" : "none",
+          reasonCategory: "transient",
           model,
           durationMs,
-          errorCode: error instanceof Error ? error.name : "unknown_error",
+          errorCode: errorName,
           message: error instanceof Error ? error.message : String(error),
         });
-        if (attempt < CGI_REPORT_TRANSIENT_MAX_FULL_ATTEMPTS) continue;
+        lastFailure = { errorCode: "openai_unreachable", message: errorName };
+        // Network/abort exceptions are the only proven-transient case that
+        // ever earns the single allowed retry.
+        if (attempt < CGI_REPORT_MAX_FULL_ATTEMPTS) continue;
         return { status: "error", text: "", plainText: "" };
       }
 
       if (!response.ok) {
         const errorText = await response.text();
         const sanitizedError = snippet(errorText, 500);
-        validationErrors.push({
-          attempt,
-          type: "http_error",
-          status: response.status,
-          transient: isTransientOpenAiFailure(response.status),
-          error: sanitizedError,
-        });
+        const transient = isTransientOpenAiFailure(response.status);
         logCgiAiAttempt({
           event: "cgi_ai_full_attempt_http_failed",
           attempt,
-          maxAttempts: isTransientOpenAiFailure(response.status)
-            ? CGI_REPORT_TRANSIENT_MAX_FULL_ATTEMPTS
-            : attempt,
-          retryType: "full",
-          reasonCategory: "http",
+          maxAttempts: CGI_REPORT_MAX_FULL_ATTEMPTS,
+          retryType: transient && attempt < CGI_REPORT_MAX_FULL_ATTEMPTS ? "full" : "none",
+          reasonCategory: "transient",
           model,
           durationMs: Date.now() - attemptStartedAt,
           status: response.status,
           errorCode: "openai_http_failed",
           message: sanitizedError,
         });
-        if (isTransientOpenAiFailure(response.status) && attempt < CGI_REPORT_TRANSIENT_MAX_FULL_ATTEMPTS) {
+        lastFailure = { errorCode: "openai_http_failed", message: sanitizedError };
+        // Only a proven-transient HTTP status (timeout/rate-limit/5xx) earns
+        // the single allowed retry. Any other HTTP error fails immediately -
+        // no retry for anything else.
+        if (transient && attempt < CGI_REPORT_MAX_FULL_ATTEMPTS) {
           continue;
         }
         return { status: "error", text: "", plainText: "" };
@@ -2164,23 +2202,25 @@ async function generateAiDiagnostic({
         rawText,
         CGI_REPORT_MAX_OUTPUT_TOKENS
       );
-      if (responseMeta.isTruncated) {
-        validationErrors.push({
-          attempt,
-          type: "output_truncated",
-          meta: responseMeta,
-        });
+
+      // From here on, the OpenAI call itself succeeded. Any remaining
+      // problem is a content/validation issue (including truncation), never
+      // a transient one - per the recovery policy, none of these ever earn
+      // a retry. The report either has enough usable content to present, or
+      // generation fails outright for this assessment.
+      if (!rawText || !rawText.trim()) {
         logCgiAiAttempt({
-          event: "cgi_ai_output_truncated",
+          event: "cgi_ai_empty_response",
           attempt,
-          maxAttempts: CGI_REPORT_TRANSIENT_MAX_FULL_ATTEMPTS,
-          retryType: "full",
-          reasonCategory: "truncation",
+          maxAttempts: CGI_REPORT_MAX_FULL_ATTEMPTS,
+          retryType: "none",
+          reasonCategory: "critical_structural",
           model,
           durationMs: Date.now() - attemptStartedAt,
+          errorCode: "empty_content",
           responseMeta,
         });
-        continue;
+        return { status: "error", text: "", plainText: "" };
       }
 
       let text = normalizeGeneratedReportJson(rawText);
@@ -2198,93 +2238,77 @@ async function generateAiDiagnostic({
       }
 
       const validation = validateGeneratedReportJson(text);
-      if (validation.ok || !validation.structural_errors.length) {
-        const acceptedWarnings = [
-          ...validation.warnings,
-          ...(validation.ok ? [] : validation.correctable_errors),
-        ];
-        if (!validation.ok && !hasStructurallyUsefulReport(validation.parsed)) {
-          validationErrors.push({
-            attempt,
-            errors: sanitizeValidationErrorsForOperationalUse(validation.errors),
-            warnings: sanitizeValidationErrorsForOperationalUse(validation.warnings),
-            metrics: validation.metrics,
-          });
-          logCgiAiValidationFailure({
-            attempt,
-            maxAttempts: 1,
-            retryType: "none",
-            model,
-            durationMs: Date.now() - attemptStartedAt,
-            errors: validation.errors,
-            warnings: validation.warnings,
-            metrics: validation.metrics || undefined,
-            responseMeta,
-          });
-          break;
-        }
-        if (acceptedWarnings.length) {
-          console.warn(
-            "[CGI OpenAI] cgi_ai_report_ready_with_warnings",
-            JSON.stringify({
-              event: "cgi_ai_report_ready_with_warnings",
-              attempt,
-              max_attempts: 0,
-              retry_type: "none",
-              model,
-              duration_ms: Date.now() - attemptStartedAt,
-              response: sanitizeOpenAiResponseMeta(responseMeta),
-              metrics: validation.metrics,
-              warnings: sanitizeValidationErrorsForOperationalUse(acceptedWarnings),
-            })
-          );
-        }
-        return {
-          status: "generated",
-          text,
-          plainText: formatAiReportForEmail(text, language),
-          reportStatus: acceptedWarnings.length ? "report_ready_with_warnings" : "report_ready",
-          warnings: acceptedWarnings,
+      if (!validation.parsed) {
+        logCgiAiValidationFailure({
+          attempt,
+          maxAttempts: CGI_REPORT_MAX_FULL_ATTEMPTS,
+          retryType: "none",
+          model,
+          durationMs: Date.now() - attemptStartedAt,
+          errors: validation.errors,
+          warnings: validation.warnings,
           metrics: validation.metrics || undefined,
-        };
+          responseMeta,
+        });
+        return { status: "error", text: "", plainText: "" };
       }
 
-      validationErrors.push({
-        attempt,
-        errors: sanitizeValidationErrorsForOperationalUse(validation.errors),
-        warnings: sanitizeValidationErrorsForOperationalUse(validation.warnings),
-        metrics: validation.metrics,
-      });
-      logCgiAiValidationFailure({
-        attempt,
-        maxAttempts: validation.structural_errors.length
-          ? CGI_REPORT_CRITICAL_MAX_FULL_ATTEMPTS
-          : 1,
-        retryType: validation.structural_errors.length ? "full" : "none",
-        model,
-        durationMs: Date.now() - attemptStartedAt,
-        errors: validation.errors,
-        warnings: validation.warnings,
-        metrics: validation.metrics || undefined,
-        responseMeta,
-      });
-      if (validation.structural_errors.length && attempt >= CGI_REPORT_CRITICAL_MAX_FULL_ATTEMPTS) {
-        break;
+      if (!hasStructurallyUsefulReport(validation.parsed)) {
+        logCgiAiValidationFailure({
+          attempt,
+          maxAttempts: CGI_REPORT_MAX_FULL_ATTEMPTS,
+          retryType: "none",
+          model,
+          durationMs: Date.now() - attemptStartedAt,
+          errors: validation.errors,
+          warnings: validation.warnings,
+          metrics: validation.metrics || undefined,
+          responseMeta,
+        });
+        return { status: "error", text: "", plainText: "" };
       }
+
+      // Usable report. Everything else validateGeneratedReportJson flagged
+      // (cardinality, punctuation, length/page budget, missing decorative
+      // keys, contract-label phrasing, respondent-perspective language) is
+      // logged as a non-blocking internal warning and never prevents
+      // delivery. This version does not persist report_ready_with_warnings -
+      // a usable report is always report_ready.
+      const warnings = [...validation.errors, ...validation.warnings];
+      if (warnings.length) {
+        console.warn(
+          "[CGI OpenAI] cgi_ai_report_ready_with_warnings",
+          JSON.stringify({
+            event: "cgi_ai_report_ready_with_warnings",
+            attempt,
+            model,
+            duration_ms: Date.now() - attemptStartedAt,
+            response: sanitizeOpenAiResponseMeta(responseMeta),
+            metrics: validation.metrics,
+            warnings: sanitizeValidationErrorsForOperationalUse(warnings),
+          })
+        );
+      }
+      return {
+        status: "generated",
+        text,
+        plainText: formatAiReportForEmail(text, language),
+        reportStatus: "report_ready",
+        warnings,
+        metrics: validation.metrics || undefined,
+      };
     }
 
     console.error(
-      "[CGI OpenAI] invalid_report_json",
+      "[CGI OpenAI] ai_generation_failed",
       JSON.stringify({
         event: "cgi_ai_generation_failed",
-        reason: "invalid_report_json",
+        reason: lastFailure.errorCode,
+        message: lastFailure.message,
         model,
-        attempts: validationErrors.length,
-        max_transient_full_attempts: CGI_REPORT_TRANSIENT_MAX_FULL_ATTEMPTS,
-        max_critical_full_attempts: CGI_REPORT_CRITICAL_MAX_FULL_ATTEMPTS,
+        max_full_attempts: CGI_REPORT_MAX_FULL_ATTEMPTS,
         openai_attempt_timeout_ms: CGI_OPENAI_TIMEOUT_MS,
         openai_total_timeout_budget_ms: CGI_OPENAI_TOTAL_TIMEOUT_BUDGET_MS,
-        validation_failures: validationErrors,
       })
     );
     return { status: "error", text: "", plainText: "" };
@@ -2585,20 +2609,33 @@ export default async function handler(
     websiteEnrichment,
     requestContext,
     language,
+    requestStartedAt: handlerStartedAt,
   });
-  if (ai.status === "error" || (ai.status === "generated" && !ai.text.trim())) {
+  if (
+    ai.status === "error" ||
+    ai.status === "not_configured" ||
+    (ai.status === "generated" && !ai.text.trim())
+  ) {
+    // ai.status === "not_configured" (missing OPENAI_API_KEY/OPENAI_MODEL) is
+    // treated as a hard failure, not a permissive pass-through: shipping an
+    // empty report as "ready" because the model wasn't configured is exactly
+    // the silent-failure mode this recovery version is meant to eliminate.
+    const isNotConfigured = ai.status === "not_configured";
+    const errorCode = isNotConfigured ? "ai_not_configured" : "ai_generation_failed";
     logCgiOperation({
       correlationId,
       publicAssessmentId: normalizedPublicAssessmentId,
       operation: "report_generation",
       success: false,
-      errorCode: "ai_generation_failed",
+      errorCode,
       durationMs: Date.now() - aiStartedAt,
     });
     await markCgiReportFailed({
       publicAssessmentId: normalizedPublicAssessmentId,
-      errorCode: "ai_generation_failed",
-      errorMessage: "AI report validation failed after retry limit.",
+      errorCode,
+      errorMessage: isNotConfigured
+        ? "OPENAI_API_KEY or OPENAI_MODEL is not configured in this environment."
+        : "AI report generation failed.",
     });
     res.status(503).json({
       ok: false,

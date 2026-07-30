@@ -155,10 +155,20 @@ function openAiJsonResponse(report: Record<string, unknown>) {
 
 describe("POST /api/cgi-assessment Supabase completion best-effort", () => {
   beforeEach(() => {
-    process.env.OPENAI_API_KEY = "";
+    // Default to a working OpenAI configuration with a successful generation
+    // stub. Requirement: a missing OPENAI_API_KEY/OPENAI_MODEL must now be a
+    // hard failure (503), not a silent pass-through - so tests that are not
+    // specifically about AI generation get a real successful call here
+    // instead of relying on "not configured" as a free shortcut. Tests that
+    // exercise AI behavior directly override process.env and/or fetch.
+    process.env.OPENAI_API_KEY = "sk-test";
     process.env.OPENAI_MODEL = "gpt-5.1";
     process.env.CONTACT_FORM_URL = "";
     process.env.VITE_CONTACT_FORM_URL = "";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => openAiJsonResponse(validOpenAiReport()))
+    );
     supabaseMocks.createEventId.mockReturnValue("completion_event_generated");
     supabaseMocks.getCgiReportState.mockResolvedValue(null);
     supabaseMocks.getReadyCgiReport.mockResolvedValue(null);
@@ -197,7 +207,7 @@ describe("POST /api/cgi-assessment Supabase completion best-effort", () => {
     expect(response.body).toMatchObject({
       ok: true,
       save: { ok: false, error: "not_configured" },
-      ai: { status: "not_configured" },
+      ai: { status: "generated" },
     });
     expect(console.error).toHaveBeenCalledWith(
       "[CGI Supabase]",
@@ -374,7 +384,7 @@ describe("POST /api/cgi-assessment Supabase completion best-effort", () => {
   it("does not return report_ready or call Sheets when final report persistence fails", async () => {
     process.env.CONTACT_FORM_URL = "https://script.google.test/macros/s/fake/exec";
     supabaseMocks.saveCompletedCgiReport.mockResolvedValue(false);
-    const fetchMock = vi.fn();
+    const fetchMock = vi.fn(async () => openAiJsonResponse(validOpenAiReport()));
     vi.stubGlobal("fetch", fetchMock);
     const response = createResponse();
 
@@ -392,9 +402,9 @@ describe("POST /api/cgi-assessment Supabase completion best-effort", () => {
       ok: false,
       error: "report_persistence_unavailable",
       report_status: "report_failed",
-      ai_generation_status: "not_configured",
+      ai_generation_status: "generated",
     });
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(supabaseMocks.markCgiReportFailed).toHaveBeenCalledWith(
       expect.objectContaining({
         publicAssessmentId: "assessment_1",
@@ -407,13 +417,18 @@ describe("POST /api/cgi-assessment Supabase completion best-effort", () => {
     process.env.CONTACT_FORM_URL = "https://script.google.test/macros/s/fake/exec";
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => ({
-        ok: true,
-        status: 200,
-        url: process.env.CONTACT_FORM_URL,
-        headers: { get: () => "application/json" },
-        text: async () => JSON.stringify({ ok: false, error: "validation" }),
-      }))
+      vi.fn(async (url: string) => {
+        if (String(url).includes("api.openai.com")) {
+          return openAiJsonResponse(validOpenAiReport());
+        }
+        return {
+          ok: true,
+          status: 200,
+          url: process.env.CONTACT_FORM_URL,
+          headers: { get: () => "application/json" },
+          text: async () => JSON.stringify({ ok: false, error: "validation" }),
+        };
+      })
     );
     const response = createResponse();
 
@@ -437,7 +452,7 @@ describe("POST /api/cgi-assessment Supabase completion best-effort", () => {
         ok: false,
         error: "apps_script_outdated_or_wrong_deployment",
       },
-      ai: { status: "not_configured" },
+      ai: { status: "generated" },
     });
   });
 
@@ -445,13 +460,18 @@ describe("POST /api/cgi-assessment Supabase completion best-effort", () => {
     process.env.CONTACT_FORM_URL = "https://script.google.test/macros/s/fake/exec";
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => ({
-        ok: true,
-        status: 200,
-        url: process.env.CONTACT_FORM_URL,
-        headers: { get: () => "application/json" },
-        text: async () => JSON.stringify({ ok: true, type: "cgi_assessment" }),
-      }))
+      vi.fn(async (url: string) => {
+        if (String(url).includes("api.openai.com")) {
+          return openAiJsonResponse(validOpenAiReport());
+        }
+        return {
+          ok: true,
+          status: 200,
+          url: process.env.CONTACT_FORM_URL,
+          headers: { get: () => "application/json" },
+          text: async () => JSON.stringify({ ok: true, type: "cgi_assessment" }),
+        };
+      })
     );
     const response = createResponse();
 
@@ -621,7 +641,7 @@ describe("POST /api/cgi-assessment Supabase completion best-effort", () => {
       storedReport = createStoredReport();
       return true;
     });
-    const fetchMock = vi.fn();
+    const fetchMock = vi.fn(async () => openAiJsonResponse(validOpenAiReport()));
     vi.stubGlobal("fetch", fetchMock);
 
     await handler(
@@ -642,7 +662,9 @@ describe("POST /api/cgi-assessment Supabase completion best-effort", () => {
       retryResponse as never
     );
 
-    expect(fetchMock).not.toHaveBeenCalled();
+    // Exactly one OpenAI call for the first request; the retried request is
+    // served from the idempotency lookup and must not call OpenAI again.
+    expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(retryResponse.body).toMatchObject({
       ok: true,
       reused: true,
@@ -678,7 +700,9 @@ describe("POST /api/cgi-assessment Supabase completion best-effort", () => {
       report_status: "report_failed",
       ai_generation_status: "error",
     });
-    expect(fetchMock).toHaveBeenCalledTimes(3);
+    // 500 is a proven-transient HTTP status: exactly one primary attempt plus
+    // the single allowed transient retry, never more.
+    expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain("api.openai.com");
     expect(supabaseMocks.saveCompletedCgiReport).not.toHaveBeenCalled();
     expect(supabaseMocks.updateCgiReportSecondarySyncStatus).not.toHaveBeenCalled();
@@ -719,14 +743,15 @@ describe("POST /api/cgi-assessment Supabase completion best-effort", () => {
     );
 
     expect(response.statusCode).toBe(503);
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    // Missing essential sections is a content/validation failure, never a
+    // transient one - it must not retry, even though a retry budget exists.
+    expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(supabaseMocks.saveCompletedCgiReport).not.toHaveBeenCalled();
     expect(supabaseMocks.updateCgiReportSecondarySyncStatus).not.toHaveBeenCalled();
     expect(supabaseMocks.markCgiReportFailed).toHaveBeenCalledWith(
       expect.objectContaining({
         publicAssessmentId: "assessment_1",
         errorCode: "ai_generation_failed",
-        errorMessage: "AI report validation failed after retry limit.",
       })
     );
 
@@ -798,7 +823,7 @@ describe("POST /api/cgi-assessment Supabase completion best-effort", () => {
     expect(supabaseMocks.saveCompletedCgiReport).toHaveBeenCalledTimes(1);
   });
 
-  it("accepts editorial-only validation issues as ready_with_warnings without a full retry", async () => {
+  it("accepts a usable report with editorial-only issues as report_ready, without a retry", async () => {
     process.env.OPENAI_API_KEY = "sk-test";
     process.env.OPENAI_MODEL = "gpt-5.1";
     const fetchMock = vi.fn(async () =>
@@ -823,7 +848,10 @@ describe("POST /api/cgi-assessment Supabase completion best-effort", () => {
     expect(response.statusCode).toBe(200);
     expect(response.body).toMatchObject({
       ok: true,
-      report_status: "report_ready_with_warnings",
+      // This version does not persist/return report_ready_with_warnings - a
+      // usable report (even with non-blocking warnings) is always
+      // report_ready, and it must not trigger an extra OpenAI call.
+      report_status: "report_ready",
       ai: { status: "generated" },
     });
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -851,7 +879,10 @@ describe("POST /api/cgi-assessment Supabase completion best-effort", () => {
     expect(response.statusCode).toBe(200);
     expect(response.body).toMatchObject({
       ok: true,
-      report_status: "report_ready_with_warnings",
+      // This version does not persist/return report_ready_with_warnings - a
+      // usable report (even with non-blocking warnings) is always
+      // report_ready, and it must not trigger an extra OpenAI call.
+      report_status: "report_ready",
       ai: { status: "generated" },
     });
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -893,7 +924,10 @@ describe("POST /api/cgi-assessment Supabase completion best-effort", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it("does not call OpenAI when the model is not explicitly configured", async () => {
+  it("fails loudly instead of shipping an empty report when the model is not explicitly configured", async () => {
+    // Requirement: a missing OPENAI_API_KEY/OPENAI_MODEL must never be
+    // hidden silently behind a 200 response with an empty AI report - it is
+    // a hard failure, exactly like any other AI generation failure.
     process.env.OPENAI_API_KEY = "sk-test";
     process.env.OPENAI_MODEL = "";
     const fetchMock = vi.fn();
@@ -909,16 +943,24 @@ describe("POST /api/cgi-assessment Supabase completion best-effort", () => {
       response as never
     );
 
-    expect(response.statusCode).toBe(200);
+    expect(response.statusCode).toBe(503);
     expect(response.body).toMatchObject({
-      ok: true,
-      report_status: "report_ready",
-      ai: { status: "not_configured" },
+      ok: false,
+      error: "report_generation_failed",
+      report_status: "report_failed",
+      ai_generation_status: "not_configured",
     });
     expect(fetchMock).not.toHaveBeenCalled();
+    expect(supabaseMocks.saveCompletedCgiReport).not.toHaveBeenCalled();
+    expect(supabaseMocks.markCgiReportFailed).toHaveBeenCalledWith(
+      expect.objectContaining({
+        publicAssessmentId: "assessment_1",
+        errorCode: "ai_not_configured",
+      })
+    );
   });
 
-  it("treats OpenAI timeout or abort as a generation failure", async () => {
+  it("retries a proven-transient timeout/abort exactly once, then fails", async () => {
     process.env.OPENAI_API_KEY = "sk-test";
     process.env.OPENAI_MODEL = "gpt-5.1";
     process.env.CONTACT_FORM_URL = "https://script.google.test/macros/s/fake/exec";
@@ -944,7 +986,9 @@ describe("POST /api/cgi-assessment Supabase completion best-effort", () => {
       report_status: "report_failed",
       ai_generation_status: "error",
     });
-    expect(fetchMock).toHaveBeenCalledTimes(3);
+    // One primary attempt plus exactly one retry for the proven-transient
+    // abort/timeout - never more, per the conservative recovery policy.
+    expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(supabaseMocks.saveCompletedCgiReport).not.toHaveBeenCalled();
     expect(supabaseMocks.updateCgiReportSecondarySyncStatus).not.toHaveBeenCalled();
     expect(supabaseMocks.markCgiReportFailed).toHaveBeenCalledWith(

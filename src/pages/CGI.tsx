@@ -45,6 +45,7 @@ import {
   writeReportDocument,
 } from "@/features/cgi/services/report";
 import { pollCgiReport } from "@/features/cgi/services/reportPolling";
+import { shouldAutoResumeReportPolling } from "@/features/cgi/services/reportLifecycle";
 import { useCgiReportProgress } from "@/features/cgi/hooks/useCgiReportProgress";
 import { CgiAssessmentStep } from "@/features/cgi/components/CgiAssessmentStep";
 import { CgiContextStep } from "@/features/cgi/components/CgiContextStep";
@@ -357,11 +358,13 @@ export default function CGI() {
       fallbackLead,
       fallbackAnswers,
       fallbackResult,
+      isResume = false,
     }: {
       assessmentId: string;
       fallbackLead: LeadForm;
       fallbackAnswers: Record<string, number>;
       fallbackResult?: CgiScoreResult | null;
+      isResume?: boolean;
     }) => {
       if (!assessmentId) return;
       if (reportPollAssessmentRef.current === assessmentId) return;
@@ -373,10 +376,15 @@ export default function CGI() {
       setReportStatus("report_generating");
       setSecondarySyncStatus("secondary_sync_pending");
       setSubmitError("");
-      toast({
-        title: t.reportAlertTitle,
-        description: t.reportPollingBody,
-      });
+      // Only a genuine resume (page reload/remount while a previous attempt
+      // was still generating) shows "Seu índice já foi calculado" - a brand
+      // new submission is not "already calculated" and must not show it.
+      if (isResume) {
+        toast({
+          title: t.reportAlertTitle,
+          description: t.reportPollingBody,
+        });
+      }
 
       const pollResult = await pollCgiReport({
         publicAssessmentId: assessmentId,
@@ -395,6 +403,13 @@ export default function CGI() {
         setReportStatus("report_failed");
         setSubmitError(t.primaryReportFailureBody);
         assessmentSubmitStartedRef.current = false;
+        // Persist the terminal failure immediately so a later reload can
+        // never again read a stale "report_generating" snapshot and restart
+        // polling (and re-show the resume toast) for an attempt that is
+        // already over.
+        saveCgiAssessment(fallbackLead, fallbackAnswers, {
+          reportStatus: "report_failed",
+        });
       } else if (pollResult.status === "timeout") {
         toast({
           title: t.reportAlertTitle,
@@ -428,14 +443,13 @@ export default function CGI() {
     const savedState = readAssessmentState();
     const saved = readSavedCgiAssessment();
     const assessmentId = savedState?.public_assessment_id || publicAssessmentId;
-    if (
-      !assessmentId ||
-      isReportReadyStatus(reportStatus) ||
-      saved?.reportStatus !== "report_generating" ||
-      !saved.answers
-    ) {
-      return;
-    }
+    const shouldResume = shouldAutoResumeReportPolling({
+      assessmentId,
+      isCurrentReportReady: isReportReadyStatus(reportStatus),
+      savedReportStatus: saved?.reportStatus,
+      hasSavedAnswers: Boolean(saved?.answers),
+    });
+    if (!shouldResume || !saved) return;
     const normalizedAnswers = normalizeCgiAnswers(saved.answers);
     if (!areCgiAnswersComplete(normalizedAnswers)) return;
     const localScore = calculateCgiScore(normalizedAnswers, lang);
@@ -448,6 +462,7 @@ export default function CGI() {
       fallbackLead: saved.lead,
       fallbackAnswers: normalizedAnswers,
       fallbackResult: localScore,
+      isResume: true,
     });
   }, [beginReportPolling, lang, publicAssessmentId, reportStatus]);
 

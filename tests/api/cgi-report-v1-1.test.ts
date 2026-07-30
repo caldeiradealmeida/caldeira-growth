@@ -536,13 +536,17 @@ describe("CGI report v1.1 prompt contract", () => {
     expect(validation.metrics?.estimatedContentPages).toBeLessThanOrEqual(7);
   });
 
-  it("keeps the worst-case full retry timeout budget below Vercel's 300s limit", () => {
+  it("keeps the worst-case single-retry timeout budget safely below Vercel's function ceiling", () => {
     const budget = getCgiReportTimeoutBudget();
 
-    expect(budget.maxTransientFullAttempts).toBe(3);
-    expect(budget.maxCriticalFullAttempts).toBe(2);
-    expect(budget.theoreticalWorstCaseMs).toBe(275000);
+    // Conservative recovery policy: one primary attempt plus at most one
+    // retry, only for a proven transient failure.
+    expect(budget.maxFullAttempts).toBe(2);
+    expect(budget.openAiAttemptTimeoutMs).toBeGreaterThanOrEqual(70000);
+    expect(budget.openAiAttemptTimeoutMs).toBeLessThanOrEqual(80000);
+    expect(budget.openAiWorstCaseMs).toBe(budget.openAiAttemptTimeoutMs * 2);
     expect(budget.theoreticalWorstCaseMs).toBeLessThan(budget.vercelFunctionTimeoutMs);
+    expect(budget.theoreticalWorstCaseMs).toBeLessThan(budget.safeExecutionBudgetMs);
   });
 
   it("treats unnormalized punctuation artifacts as nonblocking editorial warnings", () => {

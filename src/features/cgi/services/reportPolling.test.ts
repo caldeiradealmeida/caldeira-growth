@@ -107,4 +107,35 @@ describe("pollCgiReport", () => {
     expect(fetcher).toHaveBeenCalledTimes(2);
     expect(fetcher.mock.calls.every((call) => call[1]?.method === "GET")).toBe(true);
   });
+
+  it("does not hang forever when a single GET stalls, e.g. right after a laptop sleep/wake", async () => {
+    // A fetcher that never resolves on its own, exactly like a stalled
+    // connection - it only ever settles if its AbortSignal is aborted, the
+    // same contract the real global fetch has under AbortController.
+    const stalledFetcher = vi.fn(
+      (_url: string, init?: { signal?: AbortSignal }) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => {
+            reject(new DOMException("The operation was aborted.", "AbortError"));
+          });
+        })
+    );
+
+    const startedAt = Date.now();
+    const result = await pollCgiReport({
+      publicAssessmentId: "assessment_1",
+      endpoint: "/api/cgi-assessment",
+      intervalMs: 5,
+      timeoutMs: 40,
+      requestTimeoutMs: 10,
+      fetcher: stalledFetcher as unknown as typeof fetch,
+    });
+    const elapsedMs = Date.now() - startedAt;
+
+    expect(result).toEqual({ status: "timeout" });
+    expect(stalledFetcher.mock.calls.length).toBeGreaterThan(0);
+    // Bounded by requestTimeoutMs/timeoutMs, never by the stalled fetch
+    // itself - this is the whole point of the per-request AbortController.
+    expect(elapsedMs).toBeLessThan(2000);
+  });
 });
