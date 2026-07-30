@@ -856,7 +856,7 @@ export default function CGI() {
     });
     const reportWindow = window.open("", "_blank");
     if (!reportWindow) return;
-    writeReportDocument(reportWindow, buildReportHtml(reportText, lead.company, result, t, lang));
+    writeReportDocument(reportWindow, buildReportHtml(aiReport, lead, result, t, lang));
     reportWindow.focus();
   };
 
@@ -865,8 +865,8 @@ export default function CGI() {
     setIsGeneratingPdf(true);
     try {
       await downloadReportPdf({
-        reportText,
-        companyName: lead.company,
+        aiReport,
+        lead,
         result,
         t,
         lang,

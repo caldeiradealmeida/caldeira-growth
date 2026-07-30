@@ -5,6 +5,7 @@ import type { Language } from "@/lib/routing";
 import type { CgiScoreResult } from "@/lib/cgiScore";
 import { cgiUi } from "../config";
 import type { LeadForm } from "../types";
+import { buildReportBlocks, type ReportBlock, type ReportBlockItem } from "./reportBlocks";
 
 export function parseAiReport(value: string): {
   report_title?: string;
@@ -142,13 +143,19 @@ export function formatAiReportText(
             item.dimension ||
             t.dimensionReadingTitle;
           const scoreValue = item.score ?? matchingDimension?.score;
+          // Analysis and implication are two distinct sentences, not two
+          // halves of one "label: value" pair - joining them with ": "
+          // produced artifacts like "foco.: O risco…" whenever the analysis
+          // already ended in its own period. Keep them on their own lines.
+          const bodyLines = [item.analysis, item.implication]
+            .filter(Boolean)
+            .join("\n  ");
           return [
             `- ${dimensionLabel}${scoreValue ? ` (${scoreValue}/100)` : ""}`,
-            item.analysis,
-            item.implication,
+            bodyLines ? `  ${bodyLines}` : "",
           ]
             .filter(Boolean)
-            .join(": ");
+            .join("\n");
         })
         .join("\n")
     : "";
@@ -252,84 +259,6 @@ export function formatReportListItem(line: string) {
   )}`;
 }
 
-export function formatReportBodyHtml(reportText: string) {
-  const escapedSignature = escapeAttr(reportSignature);
-  const sectionTitles = new Set([
-    "Diagnóstico",
-    "Diagnosis",
-    "Diagnóstico",
-    "3 principais pontos de atenção",
-    "3 main attention points",
-    "3 principales puntos de atención",
-    "Sumário Executivo",
-    "Contexto e diagnóstico",
-    "Leitura por dimensão",
-    "Gargalos críticos",
-    "Apostas estratégicas recomendadas",
-    "Renúncias estratégicas",
-    "Sistema mínimo de governança",
-    "Nota metodológica",
-    "Resumo de evidências",
-    "Hipóteses a validar",
-    "Methodological note",
-    "Evidence summary",
-    "Hypotheses to validate",
-    "Nota metodológica",
-    "Resumen de evidencias",
-    "Hipótesis a validar",
-    "Recomendações finais",
-    "Contato",
-  ]);
-
-  return reportText
-    .split(/\n{2,}/)
-    .map((block) => block.trim())
-    .filter(Boolean)
-    .map((block) => {
-      const lines = block.split("\n").map((line) => line.trim()).filter(Boolean);
-      if (lines.length === 1 && sectionTitles.has(lines[0])) {
-        return `<h2>${escapeHtml(lines[0])}</h2>`;
-      }
-      if (lines.length === 1 && /:$/.test(lines[0])) {
-        return `<h3>${escapeHtml(lines[0])}</h3>`;
-      }
-      if (lines.length > 1 && /:$/.test(lines[0])) {
-        const rest = lines.slice(1);
-        const content = rest.every((line) => line.startsWith("- "))
-          ? `<ul>${rest
-              .map((line) => `<li>${formatReportListItem(line)}</li>`)
-              .join("")}</ul>`
-          : `<p>${escapeHtml(rest.join("\n")).replace(/\n/g, "<br />")}</p>`;
-        return `<h3>${escapeHtml(lines[0])}</h3>${content}`;
-      }
-      if (lines[0] === "Denis Caldeira de Almeida") {
-        return `
-          <div class="signature-block">
-            <img src="${escapedSignature}" alt="Assinatura Denis Caldeira" />
-            <p>
-              <strong>Denis Caldeira de Almeida</strong><br />
-              ${escapeHtml(lines.slice(1).join("\n")).replace(/\n/g, "<br />")}
-            </p>
-          </div>
-        `;
-      }
-      if (
-        block.startsWith("Para aprofundar este diagnóstico") ||
-        block.startsWith("To deepen this diagnosis") ||
-        block.startsWith("Para profundizar este diagnóstico")
-      ) {
-        return `<p class="contact-callout">${escapeHtml(block)}</p>`;
-      }
-      if (lines.every((line) => line.startsWith("- "))) {
-        return `<ul>${lines
-          .map((line) => `<li>${formatReportListItem(line)}</li>`)
-          .join("")}</ul>`;
-      }
-      return `<p>${escapeHtml(block).replace(/\n/g, "<br />")}</p>`;
-    })
-    .join("\n");
-}
-
 export function buildFinalScoreHtml(result: CgiScoreResult, finalScoreLabel: string) {
   return `
     <section class="final-score">
@@ -371,6 +300,39 @@ export function buildScoreBarsHtml(result: CgiScoreResult, title: string) {
   `;
 }
 
+function renderSegmentHtml(segment: { label: string; text: string }) {
+  if (!segment.label) return `<p>${escapeHtml(segment.text)}</p>`;
+  return `<p class="segment"><span class="segment-label">${escapeHtml(
+    segment.label
+  )}</span>${escapeHtml(segment.text)}</p>`;
+}
+
+function renderReportItemHtml(item: ReportBlockItem) {
+  const segmentsHtml = item.segments.map(renderSegmentHtml).join("");
+  const titleHtml = item.emphasis
+    ? `<h3>${escapeHtml(item.title)}</h3>`
+    : `<p class="numbered-item">${escapeHtml(item.title)}</p>`;
+  return `<div class="report-item">${titleHtml}${segmentsHtml}</div>`;
+}
+
+export function renderReportBlocksHtml(blocks: ReportBlock[]) {
+  return blocks
+    .map((block) => {
+      if (block.kind === "heading") {
+        return block.level === 2
+          ? `<h2>${escapeHtml(block.text)}</h2>`
+          : `<h3>${escapeHtml(block.text)}</h3>`;
+      }
+      if (block.kind === "paragraph") {
+        return `<p>${escapeHtml(block.text)}</p>`;
+      }
+      return `<div class="report-item-list">${block.items
+        .map(renderReportItemHtml)
+        .join("")}</div>`;
+    })
+    .join("\n");
+}
+
 export function buildMethodologyHtml(t: (typeof cgiUi)[Language]) {
   return `
     <section class="method-note">
@@ -382,17 +344,45 @@ export function buildMethodologyHtml(t: (typeof cgiUi)[Language]) {
   `;
 }
 
+export function buildBackCoverHtml(t: (typeof cgiUi)[Language]) {
+  const escapedSignature = escapeAttr(reportSignature);
+  return `
+    <section class="back-cover">
+      <div class="back-cover-content">
+        <p class="back-cover-eyebrow">Caldeira Growth Index</p>
+        <h2>${escapeHtml(t.contact)}</h2>
+        <p>${escapeHtml(t.contactText)}</p>
+      </div>
+      <div class="back-cover-signature">
+        <img src="${escapedSignature}" alt="Assinatura Denis Caldeira" />
+        <p>
+          <strong>Denis Caldeira de Almeida</strong><br />
+          ${escapeHtml(t.founderLine)}<br />
+          contato@caldeiragrowth.com · www.caldeiragrowth.com
+        </p>
+      </div>
+    </section>
+  `;
+}
+
 export function buildReportHtml(
-  reportText: string,
-  companyName: string,
+  aiReport: ReturnType<typeof parseAiReport>,
+  lead: LeadForm,
   result: CgiScoreResult,
   t: (typeof cgiUi)[Language],
   lang: Language
 ) {
-  const bodyHtml = formatReportBodyHtml(reportText);
+  const blocks = buildReportBlocks({ aiReport, result, t });
+  const bodyHtml = renderReportBlocksHtml(blocks);
+  const attention = result.attentionPoints
+    .map((item) => `<li>${formatReportListItem(`- ${item.title}: ${item.score}/100`)}</li>`)
+    .join("");
+  const attentionHtml = `<h2>${escapeHtml(t.attentionTitle)}</h2><ul>${attention}</ul>`;
+  const backCoverHtml = buildBackCoverHtml(t);
   const finalScoreHtml = buildFinalScoreHtml(result, t.finalScore);
   const scoreBarsHtml = buildScoreBarsHtml(result, t.scoreByDimension);
   const methodologyHtml = buildMethodologyHtml(t);
+  const companyName = lead.company;
   const escapedCompany = escapeHtml(companyName || "Caldeira Growth");
   const escapedTitle = `${escapeHtml(t.reportDocTitle)} - ${escapedCompany}`;
   const escapedLogo = escapeAttr(footerLogo);
@@ -425,14 +415,20 @@ export function buildReportHtml(
       .cover .meta { font-family: Georgia, serif; font-size: 24px; color: rgba(255,255,255,.9); }
       .cover-details { font-size: 15px; line-height: 1.7; color: rgba(255,255,255,.86); }
       .page { background: #f7f4ef; min-height: 297mm; padding: 60px 70px 132px; }
-      h2 { font-family: Georgia, serif; font-size: 30px; font-weight: 700; margin: 34px 0 14px; color: #2e3340; }
+      h2 { font-family: Georgia, serif; font-size: 30px; font-weight: 700; margin: 34px 0 14px; color: #2e3340; break-after: avoid; page-break-after: avoid; }
       h2:first-child { margin-top: 0; }
-      h3 { font-family: Georgia, serif; font-size: 20px; font-weight: 700; margin: 24px 0 10px; color: #2e3340; }
+      h3 { font-family: Georgia, serif; font-size: 20px; font-weight: 700; margin: 24px 0 10px; color: #2e3340; break-after: avoid; page-break-after: avoid; }
       .rule { height: 2px; background: #344763; margin: 0 0 28px; }
-      p { font-size: 14px; margin: 0 0 16px; text-align: justify; }
+      p { font-size: 14px; line-height: 1.5; margin: 0 0 16px; text-align: justify; hyphens: auto; -webkit-hyphens: auto; }
       ul { margin: 0 0 18px 20px; padding: 0; }
-      li { font-size: 14px; margin: 0 0 8px; text-align: justify; }
-      h2, h3, .score-row, p, li { break-inside: avoid; }
+      li { font-size: 14px; line-height: 1.5; margin: 0 0 8px; text-align: justify; hyphens: auto; -webkit-hyphens: auto; }
+      h2, h3, .score-row, p, li { break-inside: avoid; page-break-inside: avoid; }
+      .report-item-list { margin: 0 0 26px; }
+      .report-item { break-inside: avoid; page-break-inside: avoid; margin: 0 0 22px; }
+      .report-item h3 { margin-top: 0; }
+      .numbered-item { font-weight: 700; margin: 0 0 8px; text-align: left; }
+      .segment { margin: 0 0 10px; }
+      .segment-label { color: #344763; display: block; font-size: 11px; font-weight: 800; letter-spacing: .1em; margin-bottom: 2px; text-transform: uppercase; }
       .final-score { align-items: center; background: #344763; color: #f7f4ef; display: grid; gap: 28px; grid-template-columns: 180px 1fr; margin: 0 0 34px; padding: 28px 32px; break-inside: avoid; }
       .final-score-label { font-size: 13px; font-weight: 800; letter-spacing: .16em; margin: 0 0 2px; text-align: left; text-transform: uppercase; }
       .final-score-number { font-family: Georgia, serif; font-size: 88px; font-weight: 700; line-height: .95; margin: 0; text-align: left; }
@@ -452,6 +448,13 @@ export function buildReportHtml(
       .signature-block { margin: 34px 0 8px; break-inside: avoid; }
       .signature-block img { display: block; width: 475px; max-width: 90%; height: auto; margin: -10px 0 -58px -48px; }
       .signature-block p { margin-top: 0; text-align: left; }
+      .back-cover { background: #334257; box-sizing: border-box; color: #f5f7f8; display: flex; flex-direction: column; justify-content: space-between; min-height: 297mm; padding: 92px 70px; }
+      .back-cover-eyebrow { color: rgba(255,255,255,.72); font-size: 13px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; }
+      .back-cover h2 { color: #ffffff; font-size: 34px; margin: 16px 0 18px; }
+      .back-cover-content p { color: rgba(255,255,255,.88); font-size: 16px; max-width: 480px; text-align: left; }
+      .back-cover-signature { align-items: flex-end; display: flex; gap: 24px; }
+      .back-cover-signature img { filter: brightness(0) invert(1); height: auto; width: 220px; }
+      .back-cover-signature p { color: rgba(255,255,255,.88); font-size: 13px; margin: 0; text-align: left; }
       footer { border-top: 1px solid #c8cdd4; padding-top: 8px; text-align: center; background: #f7f4ef; }
       footer img { width: 112px; height: auto; }
       @media screen { footer { margin: 44px 70px 0; } }
@@ -461,6 +464,7 @@ export function buildReportHtml(
         .report { box-shadow: none; margin: 0; max-width: none; width: auto; }
         .cover { min-height: 297mm; page-break-after: always; width: 210mm; }
         .page { min-height: auto; padding: 0; }
+        .back-cover { break-before: page; page-break-before: always; min-height: 297mm; }
         footer { margin: 18mm 22mm 0; }
       }
     </style>
@@ -488,7 +492,9 @@ export function buildReportHtml(
         ${scoreBarsHtml}
         ${methodologyHtml}
         ${bodyHtml}
+        ${attentionHtml}
       </section>
+      ${backCoverHtml}
       <footer><img src="${escapedLogo}" alt="Caldeira Growth" /></footer>
     </main>
   </body>
@@ -604,18 +610,19 @@ export async function optionalImageToDataUrl(src: string): Promise<ReportImage |
 }
 
 export async function downloadReportPdf({
-  reportText,
-  companyName,
+  aiReport,
+  lead,
   result,
   t,
   lang,
 }: {
-  reportText: string;
-  companyName: string;
+  aiReport: ReturnType<typeof parseAiReport>;
+  lead: LeadForm;
   result: CgiScoreResult;
   t: (typeof cgiUi)[Language];
   lang: Language;
 }) {
+  const companyName = lead.company;
   const [{ jsPDF }, coverImage, signatureImage, logoImage] = await Promise.all([
     import("jspdf"),
     optionalImageToDataUrl(reportCover),
@@ -625,9 +632,16 @@ export async function downloadReportPdf({
   const doc = new jsPDF({ unit: "pt", format: "a4", compress: true });
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
-  const marginX = 56;
+  // Slightly narrower margins than before to widen the useful text column,
+  // one of the concrete PDF-quality asks (wider column reduces the ragged/
+  // gappy look that plain justification alone can create).
+  const marginX = 48;
   const contentWidth = pageWidth - marginX * 2;
   const footerTop = pageHeight - 62;
+  // Minimum trailing space a heading/item title must be able to share a
+  // page with before it's allowed to start - prevents an orphaned title at
+  // the bottom of a page with its own content pushed to the next one.
+  const KEEP_WITH_NEXT_MIN = 64;
   let y = 56;
 
   const drawPageBackground = () => {
@@ -670,6 +684,15 @@ export async function downloadReportPdf({
     addContentPage();
   };
 
+  // Like ensureSpace, but also requires room for a minimum amount of
+  // following content on the same page - used before headings/item titles
+  // so a title never gets stranded alone at the bottom of a page with its
+  // own content pushed to the next one.
+  const ensureSpaceWithFollowing = (height: number, followingMinHeight: number) => {
+    if (y + height + followingMinHeight <= footerTop - 18) return;
+    addContentPage();
+  };
+
   const writeWrappedText = (
     text: string,
     options: {
@@ -680,6 +703,7 @@ export async function downloadReportPdf({
       color?: [number, number, number];
       lineHeight?: number;
       after?: number;
+      justify?: boolean;
     } = {}
   ) => {
     const size = options.size ?? 10.5;
@@ -691,9 +715,14 @@ export async function downloadReportPdf({
     doc.setTextColor(...(options.color ?? [37, 43, 53]));
     const lines = doc.splitTextToSize(normalizePdfText(text), width) as string[];
     ensureSpace(lines.length * lineHeight + (options.after ?? 9));
+    // Justify body copy (jsPDF supports "justify" natively on an array of
+    // pre-wrapped lines, and leaves the final line of the block ragged as
+    // usual) - single-line text just renders left-aligned either way.
+    const justify = options.justify ?? lines.length > 1;
     doc.text(lines, marginX + indent, y, {
       baseline: "top",
       maxWidth: width,
+      align: justify ? "justify" : "left",
     });
     y += lines.length * lineHeight + (options.after ?? 9);
   };
@@ -750,7 +779,7 @@ export async function downloadReportPdf({
 
   const writeHeading = (text: string, level: 2 | 3 = 2) => {
     const size = level === 2 ? 20 : 14;
-    ensureSpace(size * 2.2);
+    ensureSpaceWithFollowing(size * 2.2, KEEP_WITH_NEXT_MIN);
     doc.setFont("times", "bold");
     doc.setFontSize(size);
     doc.setTextColor(46, 51, 64);
@@ -759,6 +788,110 @@ export async function downloadReportPdf({
       maxWidth: contentWidth,
     });
     y += size * 1.45;
+  };
+
+  const writeSegment = (segment: { label: string; text: string }) => {
+    if (!segment.label) {
+      writeWrappedText(segment.text, { size: 10.5, after: 8 });
+      return;
+    }
+    ensureSpaceWithFollowing(11, 16);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8.5);
+    doc.setTextColor(52, 71, 99);
+    doc.text(normalizePdfText(segment.label).toUpperCase(), marginX, y, {
+      baseline: "top",
+      charSpace: 0.6,
+    });
+    y += 12;
+    writeWrappedText(segment.text, { size: 10.5, after: 10 });
+  };
+
+  const writeReportItem = (item: ReportBlockItem) => {
+    const size = item.emphasis ? 12.5 : 10.5;
+    const font = item.emphasis ? "times" : "helvetica";
+    const titleLines = doc.splitTextToSize(normalizePdfText(item.title), contentWidth) as string[];
+    ensureSpaceWithFollowing(titleLines.length * size * 1.3 + 8, KEEP_WITH_NEXT_MIN);
+    doc.setFont(font, "bold");
+    doc.setFontSize(size);
+    doc.setTextColor(46, 51, 64);
+    doc.text(titleLines, marginX, y, { baseline: "top", maxWidth: contentWidth });
+    y += titleLines.length * size * 1.3 + 8;
+    item.segments.forEach(writeSegment);
+    y += 6;
+  };
+
+  const writeReportBlocks = (blocks: ReportBlock[]) => {
+    blocks.forEach((block) => {
+      if (block.kind === "heading") {
+        writeHeading(block.text, block.level);
+        return;
+      }
+      if (block.kind === "paragraph") {
+        writeWrappedText(block.text, { size: 10.5, after: 9 });
+        return;
+      }
+      block.items.forEach(writeReportItem);
+    });
+  };
+
+  const drawBackCover = () => {
+    // Close out the last content page's footer, then start a fresh page
+    // with its own deliberate navy closing design (no standard footer/rule)
+    // instead of trailing off into mostly-empty space.
+    drawFooter();
+    doc.addPage();
+    doc.setFillColor(51, 66, 87);
+    doc.rect(0, 0, pageWidth, pageHeight, "F");
+    doc.setTextColor(245, 247, 248);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.text("CALDEIRA GROWTH INDEX", marginX, 96, { charSpace: 1.6 });
+    doc.setFont("times", "bold");
+    doc.setFontSize(30);
+    doc.text(doc.splitTextToSize(normalizePdfText(t.contact), 420), marginX, 132, {
+      baseline: "top",
+    });
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(12.5);
+    doc.setTextColor(230, 233, 238);
+    const contactLines = doc.splitTextToSize(normalizePdfText(t.contactText), 440) as string[];
+    doc.text(contactLines, marginX, 190, { baseline: "top", maxWidth: 440, lineHeightFactor: 1.5 });
+
+    const cardY = pageHeight - 210;
+    const cardHeight = 150;
+    const textX = marginX + 190;
+    const textWidth = contentWidth - 190 - 24;
+    doc.setFillColor(247, 244, 239);
+    doc.rect(marginX, cardY, contentWidth, cardHeight, "F");
+    if (signatureImage) {
+      const signatureWidth = 130;
+      const signatureHeight = signatureWidth * (signatureImage.height / signatureImage.width);
+      doc.addImage(
+        signatureImage.dataUrl,
+        "PNG",
+        marginX + 24,
+        cardY + (cardHeight - signatureHeight) / 2,
+        signatureWidth,
+        signatureHeight
+      );
+    }
+    let cardTextY = cardY + 48;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.setTextColor(37, 43, 53);
+    doc.text("Denis Caldeira de Almeida", textX, cardTextY, { baseline: "top", maxWidth: textWidth });
+    cardTextY += 18;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    const founderLines = doc.splitTextToSize(normalizePdfText(t.founderLine), textWidth) as string[];
+    doc.text(founderLines, textX, cardTextY, { baseline: "top", maxWidth: textWidth });
+    cardTextY += founderLines.length * 12 + 6;
+    const contactLine = doc.splitTextToSize(
+      "contato@caldeiragrowth.com · www.caldeiragrowth.com",
+      textWidth
+    ) as string[];
+    doc.text(contactLine, textX, cardTextY, { baseline: "top", maxWidth: textWidth });
   };
 
   const drawCover = () => {
@@ -912,58 +1045,16 @@ export async function downloadReportPdf({
     y += boxHeight + 22;
   };
 
-  const drawReportBody = () => {
-    reportText
-      .split(/\n{2,}/)
-      .map((block) => block.trim())
-      .filter(Boolean)
-      .forEach((block) => {
-        const lines = block.split("\n").map((line) => line.trim()).filter(Boolean);
-        if (lines.length === 1 && /:$/.test(lines[0])) {
-          writeHeading(lines[0], 3);
-          return;
-        }
-        if (lines.length === 1 && lines[0].length <= 80) {
-          writeWrappedText(lines[0], { size: 10.5, style: "normal", after: 8 });
-          return;
-        }
-        if (lines.length > 1 && /:$/.test(lines[0])) {
-          writeHeading(lines[0], 3);
-          lines.slice(1).forEach((line) => {
-            if (line.startsWith("- ")) {
-              writePdfListItem(line, { indent: 12, after: 6 });
-            } else {
-              writeWrappedText(line);
-            }
-          });
-          return;
-        }
-        if (lines.every((line) => line.startsWith("- "))) {
-          lines.forEach((line) => writePdfListItem(line, { indent: 12, after: 6 }));
-          y += 6;
-          return;
-        }
-        if (lines[0] === "Denis Caldeira de Almeida") {
-          ensureSpace(250);
-          if (signatureImage) {
-            const signatureWidth = 450;
-            const signatureHeight = signatureWidth * (signatureImage.height / signatureImage.width);
-            doc.addImage(
-              signatureImage.dataUrl,
-              "PNG",
-              marginX - 105,
-              y - 78,
-              signatureWidth,
-              signatureHeight
-            );
-            y += 178;
-          }
-          writeWrappedText(lines.join("\n"), { style: "bold", after: 5 });
-          return;
-        }
-        writeWrappedText(block);
-      });
+  const drawAttentionPoints = () => {
+    if (!result.attentionPoints.length) return;
+    writeHeading(t.attentionTitle, 2);
+    result.attentionPoints.forEach((item) =>
+      writePdfListItem(`- ${item.title}: ${item.score}/100`, { indent: 12, after: 6 })
+    );
+    y += 6;
   };
+
+  const blocks = buildReportBlocks({ aiReport, result, t });
 
   drawCover();
   doc.addPage();
@@ -975,7 +1066,8 @@ export async function downloadReportPdf({
   drawFinalScore();
   drawScoreBars();
   drawMethodology();
-  drawReportBody();
-  drawFooter();
+  writeReportBlocks(blocks);
+  drawAttentionPoints();
+  drawBackCover();
   doc.save(safePdfFilename(companyName));
 }

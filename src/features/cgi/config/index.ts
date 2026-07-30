@@ -129,6 +129,14 @@ export const cgiUi: Record<
     evidenceSummaryTitle: string;
     hypothesesTitle: string;
     finalRecommendationsTitle: string;
+    itemOrdinalLabels: {
+      criticalBottlenecks: string;
+      strategicBets: string;
+      renunciations: string;
+      governanceSystem: string;
+      hypotheses: string;
+      finalRecommendations: string;
+    };
     methodEyebrow: string;
     methodReportTitle: string;
     methodReportBody: string[];
@@ -143,6 +151,7 @@ export const cgiUi: Record<
     respondent: string;
     role: string;
     diagnosis: string;
+    executiveSummaryTitle: string;
     contact: string;
     contactText: string;
     founderLine: string;
@@ -323,6 +332,14 @@ export const cgiUi: Record<
     evidenceSummaryTitle: "Resumo de evidências",
     hypothesesTitle: "Hipóteses a validar",
     finalRecommendationsTitle: "Recomendações finais",
+    itemOrdinalLabels: {
+      criticalBottlenecks: "Gargalo",
+      strategicBets: "Aposta",
+      renunciations: "Renúncia",
+      governanceSystem: "Ritual",
+      hypotheses: "Hipótese",
+      finalRecommendations: "Recomendação",
+    },
     methodEyebrow: "Método proprietário Caldeira Growth",
     methodReportTitle: "Sobre este diagnóstico",
     methodReportBody: [
@@ -344,6 +361,7 @@ export const cgiUi: Record<
     respondent: "Respondente",
     role: "Cargo",
     diagnosis: "Diagnóstico",
+    executiveSummaryTitle: "Sumário Executivo",
     contact: "Contato",
     contactText:
       "Para aprofundar este diagnóstico e traduzir as hipóteses em decisões práticas, o próximo passo recomendado é uma conversa estratégica com a Caldeira Growth.",
@@ -527,6 +545,14 @@ export const cgiUi: Record<
     evidenceSummaryTitle: "Evidence summary",
     hypothesesTitle: "Hypotheses to validate",
     finalRecommendationsTitle: "Final recommendations",
+    itemOrdinalLabels: {
+      criticalBottlenecks: "Bottleneck",
+      strategicBets: "Bet",
+      renunciations: "Renunciation",
+      governanceSystem: "Ritual",
+      hypotheses: "Hypothesis",
+      finalRecommendations: "Recommendation",
+    },
     methodEyebrow: "Proprietary Caldeira Growth methodology",
     methodReportTitle: "About this assessment",
     methodReportBody: [
@@ -548,6 +574,7 @@ export const cgiUi: Record<
     respondent: "Respondent",
     role: "Role",
     diagnosis: "Diagnosis",
+    executiveSummaryTitle: "Executive Summary",
     contact: "Contact",
     contactText:
       "To deepen this diagnosis and translate the hypotheses into practical decisions, the recommended next step is a strategic conversation with Caldeira Growth.",
@@ -731,6 +758,14 @@ export const cgiUi: Record<
     evidenceSummaryTitle: "Resumen de evidencias",
     hypothesesTitle: "Hipótesis a validar",
     finalRecommendationsTitle: "Recomendaciones finales",
+    itemOrdinalLabels: {
+      criticalBottlenecks: "Cuello de botella",
+      strategicBets: "Apuesta",
+      renunciations: "Renuncia",
+      governanceSystem: "Ritual",
+      hypotheses: "Hipótesis",
+      finalRecommendations: "Recomendación",
+    },
     methodEyebrow: "Método propietario de Caldeira Growth",
     methodReportTitle: "Sobre este diagnóstico",
     methodReportBody: [
@@ -752,6 +787,7 @@ export const cgiUi: Record<
     respondent: "Respondente",
     role: "Cargo",
     diagnosis: "Diagnóstico",
+    executiveSummaryTitle: "Resumen Ejecutivo",
     contact: "Contacto",
     contactText:
       "Para profundizar este diagnóstico y traducir las hipótesis en decisiones prácticas, el próximo paso recomendado es una conversación estratégica con Caldeira Growth.",

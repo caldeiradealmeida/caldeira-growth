@@ -198,7 +198,7 @@ const CGI_PRESENTATION =
   "O CGI é um diagnóstico executivo desenvolvido pela Caldeira Growth para avaliar a capacidade de uma organização transformar ambição de crescimento em direção estratégica, leitura de mercado, máquina comercial, disciplina de execução e liderança. O instrumento não avalia perfil comportamental; ele identifica padrões, tensões e prioridades que podem influenciar a qualidade e a sustentabilidade do crescimento.";
 
 const CGI_METHODOLOGY_NOTE =
-  "Este parecer foi produzido a partir das respostas fornecidas ao CGI — Crescimento, Gestão e Implementação —, combinadas, quando indicado, com informações públicas sobre a empresa e seu contexto de atuação. As conclusões representam uma leitura executiva orientada por padrões de resposta e não substituem um diagnóstico organizacional completo. Hipóteses estratégicas, causas e prioridades devem ser validadas em discussão com a liderança e, quando aplicável, com dados operacionais adicionais.";
+  "Este parecer foi produzido a partir das respostas fornecidas ao CGI — Caldeira Growth Index —, combinadas, quando indicado, com informações públicas sobre a empresa e seu contexto de atuação. As conclusões representam uma leitura executiva orientada por padrões de resposta e não substituem um diagnóstico organizacional completo. Hipóteses estratégicas, causas e prioridades devem ser validadas em discussão com a liderança e, quando aplicável, com dados operacionais adicionais.";
 
 function snippet(value: string, maxLength = 700): string {
   return value.replace(/\s+/g, " ").trim().slice(0, maxLength);
