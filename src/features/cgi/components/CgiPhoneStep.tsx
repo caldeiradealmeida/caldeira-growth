@@ -3,7 +3,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Phone, Search } from "lucide-react";
+import { Loader2, Search } from "lucide-react";
 import type { CgiUiText } from "../config";
 import type { LeadForm } from "../types";
 import { sanitizePhoneInput } from "../utils/form";
@@ -14,7 +14,6 @@ type CgiPhoneStepProps = {
   isSubmitting: boolean;
   isLeadSubmitting: boolean;
   updateLead: (key: keyof LeadForm, value: string) => void;
-  submitPhoneInterest: () => void;
   viewResult: () => void;
 };
 
@@ -24,7 +23,6 @@ export function CgiPhoneStep({
   isSubmitting,
   isLeadSubmitting,
   updateLead,
-  submitPhoneInterest,
   viewResult,
 }: CgiPhoneStepProps) {
   return (
@@ -65,11 +63,7 @@ export function CgiPhoneStep({
           )}
 
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-            <Button onClick={submitPhoneInterest} disabled={isLeadSubmitting}>
-              <Phone className="mr-2 h-4 w-4" />
-              {t.phonePrimary}
-            </Button>
-            <Button variant="outline" onClick={viewResult}>
+            <Button onClick={viewResult} disabled={isLeadSubmitting}>
               <Search className="mr-2 h-4 w-4" />
               {t.viewResult}
             </Button>

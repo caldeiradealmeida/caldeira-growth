@@ -62,7 +62,6 @@ export const cgiUi: Record<
     assessmentSubtitle: string;
     phoneTitle: string;
     phoneBody: string;
-    phonePrimary: string;
     viewResult: string;
     continue: string;
     continueToDiagnosis: string;
@@ -200,7 +199,6 @@ export const cgiUi: Record<
     phoneTitle: "Quer aprofundar seu diagnóstico?",
     phoneBody:
       "Deixe seu telefone ou WhatsApp caso queira conversar sobre os resultados e as prioridades identificadas.",
-    phonePrimary: "Quero conversar sobre o diagnóstico",
     viewResult: "Ver meu resultado",
     continue: "Continuar",
     continueToDiagnosis: "Continuar para o diagnóstico",
@@ -413,7 +411,6 @@ export const cgiUi: Record<
     phoneTitle: "Want to deepen your diagnosis?",
     phoneBody:
       "Leave your phone or WhatsApp if you want to discuss the results and identified priorities.",
-    phonePrimary: "I want to discuss the diagnosis",
     viewResult: "See my result",
     continue: "Continue",
     continueToDiagnosis: "Continue to the diagnosis",
@@ -626,7 +623,6 @@ export const cgiUi: Record<
     phoneTitle: "¿Quiere profundizar su diagnóstico?",
     phoneBody:
       "Deje su teléfono o WhatsApp si quiere conversar sobre los resultados y las prioridades identificadas.",
-    phonePrimary: "Quiero conversar sobre el diagnóstico",
     viewResult: "Ver mi resultado",
     continue: "Continuar",
     continueToDiagnosis: "Continuar al diagnóstico",

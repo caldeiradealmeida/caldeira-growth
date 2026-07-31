@@ -7,6 +7,16 @@ import { cgiUi } from "../config";
 import type { LeadForm } from "../types";
 import { buildReportBlocks, type ReportBlock, type ReportBlockItem } from "./reportBlocks";
 
+// Web and PDF signature sizes are deliberately two independent constants,
+// not one shared value scaled per output - they're tuned separately for
+// each medium's layout. Web was doubled (+100%) from its previous 220px;
+// PDF was halved (-50%) from its previous 150pt. Both preserve the source
+// image's aspect ratio (height is always derived from width), and neither
+// changes the card/name/role/contact layout around it or how the image
+// itself is loaded/cropped.
+export const WEB_SIGNATURE_WIDTH_PX = 440;
+export const PDF_SIGNATURE_WIDTH_PT = 75;
+
 export function parseAiReport(value: string): {
   report_title?: string;
   report_subtitle?: string;
@@ -453,7 +463,7 @@ export function buildReportHtml(
       .back-cover h2 { color: #ffffff; font-size: 34px; margin: 16px 0 18px; }
       .back-cover-content p { color: rgba(255,255,255,.88); font-size: 16px; max-width: 480px; text-align: left; }
       .back-cover-signature { align-items: flex-end; display: flex; gap: 24px; }
-      .back-cover-signature img { filter: brightness(0) invert(1); height: auto; width: 220px; }
+      .back-cover-signature img { filter: brightness(0) invert(1); height: auto; width: ${WEB_SIGNATURE_WIDTH_PX}px; }
       .back-cover-signature p { color: rgba(255,255,255,.88); font-size: 13px; margin: 0; text-align: left; }
       footer { border-top: 1px solid #c8cdd4; padding-top: 8px; text-align: center; background: #f7f4ef; }
       footer img { width: 112px; height: auto; }
@@ -1104,7 +1114,7 @@ export async function downloadReportPdf({
     doc.setFillColor(247, 244, 239);
     doc.rect(marginX, cardY, contentWidth, cardHeight, "F");
     if (signatureImage) {
-      const signatureWidth = 150;
+      const signatureWidth = PDF_SIGNATURE_WIDTH_PT;
       const signatureHeight = signatureWidth * (signatureImage.height / signatureImage.width);
       doc.addImage(
         signatureImage.dataUrl,

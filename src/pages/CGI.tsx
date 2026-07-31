@@ -23,8 +23,8 @@ import type { LeadForm, Step } from "@/features/cgi/types";
 import type { CgiConsentState, CgiReportStatus, CgiSecondarySyncStatus } from "@/features/cgi/types";
 import {
   CGI_COMMENTS_MAX_LENGTH,
+  decidePhoneStepAction,
   isOtherOption,
-  isValidPhone,
   isValidProfessionalField,
   normalizeLeadForSubmit,
   parseAnswersJsonInput,
@@ -662,28 +662,6 @@ export default function CGI() {
     return validateProfessionalFields(["comments"]);
   };
 
-  const validatePhoneIfPresent = (): boolean => {
-    if (!lead.phone.trim()) {
-      trackInternalError("cgi_validation_error", "missing_phone_interest");
-      toast({
-        title: t.invalidRequiredTitle,
-        description: t.invalidPhoneBody,
-        variant: "destructive",
-      });
-      return false;
-    }
-    if (!isValidPhone(lead.phone)) {
-      trackInternalError("cgi_validation_error", "invalid_phone");
-      toast({
-        title: t.invalidRequiredTitle,
-        description: t.invalidPhoneBody,
-        variant: "destructive",
-      });
-      return false;
-    }
-    return true;
-  };
-
   const persistLead = async ({
     normalizedLead,
     eventName,
@@ -1129,41 +1107,45 @@ export default function CGI() {
     });
   };
 
-  const viewResult = () => {
+  // The phone step's single remaining action: save the phone/WhatsApp if the
+  // respondent filled it in (still validating its format the same way the
+  // old dedicated "quero conversar" CTA did), then always advance to the
+  // result - whether or not a phone was provided. Never touches report
+  // generation/polling; ensurePublicAssessment (inside persistLead) only
+  // reuses/creates the anonymous lead-tracking id, the same one every
+  // earlier step already relies on.
+  const viewResult = async () => {
+    const decision = decidePhoneStepAction(lead.phone);
+    if (decision.kind === "block_invalid_phone") {
+      trackInternalError("cgi_validation_error", "invalid_phone");
+      toast({
+        title: t.invalidRequiredTitle,
+        description: t.invalidPhoneBody,
+        variant: "destructive",
+      });
+      return;
+    }
+    if (decision.kind === "save_and_advance") {
+      setIsLeadSubmitting(true);
+      const normalizedLead = normalizeLeadForSubmit(lead);
+      try {
+        await persistLead({
+          normalizedLead,
+          eventName: "cgi_phone_submitted",
+          commercialInterest: true,
+        });
+      } catch (error) {
+        if (import.meta.env.DEV) {
+          console.error("[CGI] phone submit error", error);
+        }
+        trackInternalError("cgi_system_error", "phone_submit_failed");
+      } finally {
+        setIsLeadSubmitting(false);
+        setLead(normalizedLead);
+      }
+    }
     setStep("result");
     scrollToAssessment();
-  };
-
-  const submitPhoneInterest = async () => {
-    if (!validatePhoneIfPresent()) return;
-    setIsLeadSubmitting(true);
-    const normalizedLead = normalizeLeadForSubmit(lead);
-    try {
-      await persistLead({
-        normalizedLead,
-        eventName: "cgi_phone_submitted",
-        commercialInterest: true,
-      });
-      void sendCgiClientEvent({
-        eventName: "cgi_cta_clicked",
-        anonymousSessionId,
-        publicAssessmentId: publicAssessmentId || null,
-        metadata: {
-          cta_name: "diagnostic_conversation_phone",
-          cta_location: "phone_step",
-          destination_type: "lead_follow_up",
-        },
-      });
-    } catch (error) {
-      if (import.meta.env.DEV) {
-        console.error("[CGI] phone submit error", error);
-      }
-      trackInternalError("cgi_system_error", "phone_submit_failed");
-    } finally {
-      setIsLeadSubmitting(false);
-      setLead(normalizedLead);
-      viewResult();
-    }
   };
 
   const submitAssessment = () => {
@@ -1286,7 +1268,6 @@ export default function CGI() {
               isSubmitting={isSubmitting}
               isLeadSubmitting={isLeadSubmitting}
               updateLead={updateLead}
-              submitPhoneInterest={submitPhoneInterest}
               viewResult={viewResult}
             />
           )}

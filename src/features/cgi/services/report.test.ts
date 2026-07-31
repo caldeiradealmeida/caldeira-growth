@@ -3,11 +3,14 @@ import { describe, expect, it } from "vitest";
 import { cgiUi } from "../config";
 import type { ReportBlockItem } from "./reportBlocks";
 import {
+  buildReportHtml,
   getSubmitErrorMessage,
   measurePdfItemHeight,
   measurePdfItemLeadHeight,
   normalizePdfText,
+  PDF_SIGNATURE_WIDTH_PT,
   shouldBreakToKeepTogether,
+  WEB_SIGNATURE_WIDTH_PX,
 } from "./report";
 
 describe("getSubmitErrorMessage", () => {
@@ -154,5 +157,33 @@ describe("measurePdfItemHeight / measurePdfItemLeadHeight (page-break measuremen
         bottomThreshold: BOTTOM_THRESHOLD,
       })
     ).toBe(false);
+  });
+});
+
+describe("signature sizing (web vs. PDF are independent constants)", () => {
+  it("PDF signature width is exactly 50% of its previous 150pt", () => {
+    expect(PDF_SIGNATURE_WIDTH_PT).toBe(75);
+  });
+
+  it("web signature width is exactly 200% of its previous 220px", () => {
+    expect(WEB_SIGNATURE_WIDTH_PX).toBe(440);
+  });
+
+  it("web and PDF sizes are independent - changing one must never imply the other", () => {
+    expect(WEB_SIGNATURE_WIDTH_PX).not.toBe(PDF_SIGNATURE_WIDTH_PT);
+  });
+
+  it("the generated report HTML's stylesheet actually uses the web signature constant, not a stray hardcoded pixel value", () => {
+    const result = {
+      finalScore: 68,
+      level: { title: "x", summary: "" },
+      diagnostic: "",
+      dimensionScores: [],
+      attentionPoints: [],
+    } as never;
+    const lead = { company: "Acme" } as never;
+    const html = buildReportHtml(null, lead, result, cgiUi.pt, "pt");
+    expect(html).toContain(`.back-cover-signature img { filter: brightness(0) invert(1); height: auto; width: ${WEB_SIGNATURE_WIDTH_PX}px; }`);
+    expect(html).not.toContain("width: 220px");
   });
 });
