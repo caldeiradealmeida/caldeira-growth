@@ -583,6 +583,97 @@ export function normalizePdfText(value: string) {
   // and renders identically to a plain space in jsPDF base fonts.
 }
 
+// --- PDF pagination measurement (pure, exported for testing) --------------
+//
+// Only the two jsPDF methods actually needed for text-wrapping measurement -
+// narrow on purpose so these functions can be exercised with a real jsPDF
+// document in a plain Node test, without any of downloadReportPdf's DOM/
+// canvas/image dependencies.
+type PdfTextMeasurer = {
+  setFontSize: (size: number) => unknown;
+  splitTextToSize: (text: string, width: number) => string[];
+};
+
+export function measureWrappedLineCount(
+  doc: PdfTextMeasurer,
+  text: string,
+  size: number,
+  width: number
+): number {
+  doc.setFontSize(size);
+  return doc.splitTextToSize(normalizePdfText(text), width).length;
+}
+
+// Mirrors writeSegment's exact layout math (see below): an unlabeled segment
+// is just a wrapped body paragraph; a labeled one adds the label's own
+// fixed-height line above it.
+export function measurePdfSegmentHeight(
+  doc: PdfTextMeasurer,
+  segment: { label: string; text: string },
+  contentWidth: number
+): number {
+  if (!segment.label) {
+    const lines = measureWrappedLineCount(doc, segment.text, 10.5, contentWidth);
+    return lines * (10.5 * 1.45) + 8;
+  }
+  const bodyLines = measureWrappedLineCount(doc, segment.text, 10.5, contentWidth);
+  return 15 + bodyLines * (10.5 * 1.45) + 10;
+}
+
+// Mirrors writeReportItem's exact layout math: title height plus every
+// segment's height plus the item's own trailing gap.
+export function measurePdfItemHeight(
+  doc: PdfTextMeasurer,
+  item: ReportBlockItem,
+  contentWidth: number
+): number {
+  const size = item.emphasis ? 12.5 : 10.5;
+  const titleLines = measureWrappedLineCount(doc, item.title, size, contentWidth);
+  const titleHeight = titleLines * size * 1.3 + 8;
+  const segmentsHeight = item.segments.reduce(
+    (sum, segment) => sum + measurePdfSegmentHeight(doc, segment, contentWidth),
+    0
+  );
+  return titleHeight + segmentsHeight + 6;
+}
+
+// Title height plus just the first field - used to decide whether a section
+// heading has enough room to start its first item, without requiring the
+// whole (possibly much longer) item to fit.
+export function measurePdfItemLeadHeight(
+  doc: PdfTextMeasurer,
+  item: ReportBlockItem,
+  contentWidth: number
+): number {
+  const size = item.emphasis ? 12.5 : 10.5;
+  const titleLines = measureWrappedLineCount(doc, item.title, size, contentWidth);
+  const titleHeight = titleLines * size * 1.3 + 8;
+  const firstSegmentHeight = item.segments[0]
+    ? measurePdfSegmentHeight(doc, item.segments[0], contentWidth)
+    : 0;
+  return titleHeight + firstSegmentHeight;
+}
+
+// A block (item, or heading + its first item's lead) is moved to a fresh
+// page only when it actually fits within a full page's usable height and
+// doesn't fit in what's left of the current one - never for a block bigger
+// than a page (that still breaks internally) and never adding blank space
+// beyond what already didn't fit.
+export function shouldBreakToKeepTogether({
+  estimatedHeight,
+  currentY,
+  pageUsableHeight,
+  bottomThreshold,
+}: {
+  estimatedHeight: number;
+  currentY: number;
+  pageUsableHeight: number;
+  bottomThreshold: number;
+}): boolean {
+  if (estimatedHeight > pageUsableHeight) return false;
+  return currentY + estimatedHeight > bottomThreshold;
+}
+
 type ReportImage = {
   dataUrl: string;
   width: number;
@@ -867,9 +958,9 @@ export async function downloadReportPdf({
     y += lines.length * lineHeight + after;
   };
 
-  const writeHeading = (text: string, level: 2 | 3 = 2) => {
+  const writeHeading = (text: string, level: 2 | 3 = 2, followingMinHeight = KEEP_WITH_NEXT_MIN) => {
     const size = level === 2 ? 20 : 14;
-    ensureSpaceWithFollowing(size * 2.2, KEEP_WITH_NEXT_MIN);
+    ensureSpaceWithFollowing(size * 2.2, followingMinHeight);
     doc.setFont("times", "bold");
     doc.setFontSize(size);
     doc.setTextColor(46, 51, 64);
@@ -879,6 +970,45 @@ export async function downloadReportPdf({
       charSpace: 0,
     });
     y += size * 1.45;
+  };
+
+  // --- Conservative "keep together" page-break helpers --------------------
+  //
+  // A section heading must stay with at least the start of its first item,
+  // an item's own title must stay with at least its first field, and an
+  // item that fits entirely on one page is moved there whole rather than
+  // split across two - but only when it actually fits within a full page's
+  // usable height; an item bigger than that still breaks internally exactly
+  // as before. These only ever move content that already didn't fit where
+  // it was - never add blank space beyond what naturally didn't fit. The
+  // pure measurement/decision math lives in standalone functions below
+  // (exported for testing); these closures just supply this document's
+  // doc/contentWidth/y and perform the actual page-break side effect.
+  const PAGE_USABLE_HEIGHT = footerTop - 18 - 56;
+
+  const wrappedLineCount = (text: string, size: number, width: number) =>
+    measureWrappedLineCount(doc, text, size, width);
+
+  const measureSegmentHeight = (segment: { label: string; text: string }) =>
+    measurePdfSegmentHeight(doc, segment, contentWidth);
+
+  const measureItemHeight = (item: ReportBlockItem) =>
+    measurePdfItemHeight(doc, item, contentWidth);
+
+  const measureItemLeadHeight = (item: ReportBlockItem) =>
+    measurePdfItemLeadHeight(doc, item, contentWidth);
+
+  const keepTogetherIfFits = (estimatedHeight: number) => {
+    if (
+      shouldBreakToKeepTogether({
+        estimatedHeight,
+        currentY: y,
+        pageUsableHeight: PAGE_USABLE_HEIGHT,
+        bottomThreshold: footerTop - 18,
+      })
+    ) {
+      addContentPage();
+    }
   };
 
   const writeSegment = (segment: { label: string; text: string }) => {
@@ -900,10 +1030,19 @@ export async function downloadReportPdf({
   };
 
   const writeReportItem = (item: ReportBlockItem) => {
+    // If the whole item fits on one page, move it there entirely instead of
+    // starting it here and splitting it across two pages. An item bigger
+    // than a full page is left alone here and breaks internally below,
+    // exactly as before.
+    keepTogetherIfFits(measureItemHeight(item));
     const size = item.emphasis ? 12.5 : 10.5;
     const font = item.emphasis ? "times" : "helvetica";
+    doc.setFontSize(size);
     const titleLines = doc.splitTextToSize(normalizePdfText(item.title), contentWidth) as string[];
-    ensureSpaceWithFollowing(titleLines.length * size * 1.3 + 8, KEEP_WITH_NEXT_MIN);
+    const firstFieldHeight = item.segments[0]
+      ? measureSegmentHeight(item.segments[0])
+      : KEEP_WITH_NEXT_MIN;
+    ensureSpaceWithFollowing(titleLines.length * size * 1.3 + 8, firstFieldHeight);
     doc.setFont(font, "bold");
     doc.setFontSize(size);
     doc.setTextColor(46, 51, 64);
@@ -914,9 +1053,17 @@ export async function downloadReportPdf({
   };
 
   const writeReportBlocks = (blocks: ReportBlock[]) => {
-    blocks.forEach((block) => {
+    blocks.forEach((block, index) => {
       if (block.kind === "heading") {
-        writeHeading(block.text, block.level);
+        // A section heading must stay with at least the start of its first
+        // item (title + first field), not just a generic minimum - so it's
+        // never left alone with the whole item pushed to the next page.
+        const next = blocks[index + 1];
+        const followingMinHeight =
+          next?.kind === "numbered" && next.items[0]
+            ? measureItemLeadHeight(next.items[0])
+            : KEEP_WITH_NEXT_MIN;
+        writeHeading(block.text, block.level, followingMinHeight);
         return;
       }
       if (block.kind === "paragraph") {
@@ -1139,7 +1286,14 @@ export async function downloadReportPdf({
 
   const drawAttentionPoints = () => {
     if (!result.attentionPoints.length) return;
-    writeHeading(t.attentionTitle, 2);
+    const listLines = result.attentionPoints.map((item) =>
+      wrappedLineCount(`• ${item.title}: ${item.score}/100`, 10.5, contentWidth - 12)
+    );
+    const listHeight = listLines.reduce((sum, lines) => sum + lines * (10.5 * 1.45) + 6, 0);
+    // This whole block (heading + all 3 points) is always small - move it
+    // together rather than leaving the heading alone if it doesn't fit here.
+    keepTogetherIfFits(20 * 1.45 + listHeight);
+    writeHeading(t.attentionTitle, 2, listLines[0] * (10.5 * 1.45) + 6);
     result.attentionPoints.forEach((item) =>
       writePdfListItem(`- ${item.title}: ${item.score}/100`, { indent: 12, after: 6 })
     );

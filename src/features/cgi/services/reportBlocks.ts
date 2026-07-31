@@ -255,6 +255,17 @@ function buildSectionItems(
   });
 }
 
+// The model sometimes prefixes its own hypothesis sentence with the literal
+// word "Hipótese:" (marking it "clearly as a hypothesis", per the prompt) -
+// redundant once we already render "Hipótese N" as the title, producing
+// "Hipótese N / Hipótese: <text>". Strip only that literal leading word; the
+// rest of the sentence is never shortened or otherwise touched.
+const HYPOTHESIS_PREFIX_RE = /^\s*(?:Hip[oó]tese|Hip[oó]tesis|Hypothesis)\s*:\s*/i;
+
+function stripHypothesisPrefix(text: string): string {
+  return text.replace(HYPOTHESIS_PREFIX_RE, "");
+}
+
 // Hypotheses render only the ordinal ("Hipótese N") in bold - the entire
 // sentence is normal-weight body text below it. No title is ever extracted
 // from the sentence.
@@ -262,7 +273,9 @@ function buildHypothesisItems(rawItems: string[], ordinalLabel: string): ReportB
   return rawItems.map((raw, index) => ({
     number: index + 1,
     title: `${ordinalLabel} ${index + 1}`,
-    segments: [{ label: "", text: capitalizeFirst(normalizeReportText(raw)) }],
+    segments: [
+      { label: "", text: capitalizeFirst(stripHypothesisPrefix(normalizeReportText(raw))) },
+    ],
     emphasis: true,
   }));
 }

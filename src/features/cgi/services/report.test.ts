@@ -1,6 +1,14 @@
+import { jsPDF } from "jspdf";
 import { describe, expect, it } from "vitest";
 import { cgiUi } from "../config";
-import { getSubmitErrorMessage, normalizePdfText } from "./report";
+import type { ReportBlockItem } from "./reportBlocks";
+import {
+  getSubmitErrorMessage,
+  measurePdfItemHeight,
+  measurePdfItemLeadHeight,
+  normalizePdfText,
+  shouldBreakToKeepTogether,
+} from "./report";
 
 describe("getSubmitErrorMessage", () => {
   it("maps report persistence outages to a temporary recoverable error", () => {
@@ -45,5 +53,106 @@ describe("normalizePdfText", () => {
     expect(normalizePdfText("tráfego → diagnóstico → proposta")).toBe(
       "tráfego para diagnóstico para proposta"
     );
+  });
+});
+
+describe("shouldBreakToKeepTogether", () => {
+  it("never breaks for a block bigger than a full page - it must be left to split internally", () => {
+    expect(
+      shouldBreakToKeepTogether({
+        estimatedHeight: 900,
+        currentY: 100,
+        pageUsableHeight: 700,
+        bottomThreshold: 780,
+      })
+    ).toBe(false);
+  });
+
+  it("breaks to a fresh page when a block that fits on one page doesn't fit in what's left of the current one", () => {
+    expect(
+      shouldBreakToKeepTogether({
+        estimatedHeight: 200,
+        currentY: 650,
+        pageUsableHeight: 700,
+        bottomThreshold: 780,
+      })
+    ).toBe(true);
+  });
+
+  it("does not break when the block already fits where it currently is", () => {
+    expect(
+      shouldBreakToKeepTogether({
+        estimatedHeight: 100,
+        currentY: 200,
+        pageUsableHeight: 700,
+        bottomThreshold: 780,
+      })
+    ).toBe(false);
+  });
+});
+
+describe("measurePdfItemHeight / measurePdfItemLeadHeight (page-break measurement)", () => {
+  const doc = new jsPDF({ unit: "pt", format: "a4" });
+  const CONTENT_WIDTH = 500;
+  const PAGE_USABLE_HEIGHT = 706; // matches report.ts's footerTop - 18 - 56 for A4
+  const BOTTOM_THRESHOLD = 762; // matches report.ts's footerTop - 18 for A4
+
+  it("a section heading's required following height (title + first field) is smaller than the whole item, so it never demands the entire item fit before starting", () => {
+    const ritual: ReportBlockItem = {
+      number: 1,
+      title: "Ritual 1 — Reunião semanal de alinhamento estratégico",
+      segments: [
+        { label: "Frequência", text: "Semanal, às segundas-feiras pela manhã." },
+        { label: "Participantes", text: "CEO, diretor comercial e head de growth." },
+        { label: "Indicadores", text: "Pipeline gerado e taxa de conversão de vendas." },
+        { label: "Decisão esperada", text: "Ajuste de prioridades comerciais para a semana." },
+      ],
+      emphasis: true,
+    };
+    const leadHeight = measurePdfItemLeadHeight(doc, ritual, CONTENT_WIDTH);
+    const fullHeight = measurePdfItemHeight(doc, ritual, CONTENT_WIDTH);
+    expect(leadHeight).toBeGreaterThan(0);
+    expect(leadHeight).toBeLessThan(fullHeight);
+  });
+
+  it("moves a small item whole to a fresh page when it doesn't fit here, but lets a page-sized item split internally instead", () => {
+    const smallItem: ReportBlockItem = {
+      number: 1,
+      title: "Gargalo 1 — Baixa clareza de proposta de valor",
+      segments: [
+        { label: "Sinal observado", text: "Dispersão de oferta observada nas respostas." },
+        { label: "Causa provável", text: "Falta de tese explícita de posicionamento." },
+        { label: "Impacto estratégico", text: "Menor conversão e dificuldade de precificação." },
+      ],
+      emphasis: true,
+    };
+    const smallHeight = measurePdfItemHeight(doc, smallItem, CONTENT_WIDTH);
+    expect(smallHeight).toBeLessThan(PAGE_USABLE_HEIGHT);
+    expect(
+      shouldBreakToKeepTogether({
+        estimatedHeight: smallHeight,
+        currentY: 680,
+        pageUsableHeight: PAGE_USABLE_HEIGHT,
+        bottomThreshold: BOTTOM_THRESHOLD,
+      })
+    ).toBe(true);
+
+    const hugeItem: ReportBlockItem = {
+      ...smallItem,
+      segments: smallItem.segments.map((segment) => ({
+        ...segment,
+        text: segment.text.repeat(60),
+      })),
+    };
+    const hugeHeight = measurePdfItemHeight(doc, hugeItem, CONTENT_WIDTH);
+    expect(hugeHeight).toBeGreaterThan(PAGE_USABLE_HEIGHT);
+    expect(
+      shouldBreakToKeepTogether({
+        estimatedHeight: hugeHeight,
+        currentY: 680,
+        pageUsableHeight: PAGE_USABLE_HEIGHT,
+        bottomThreshold: BOTTOM_THRESHOLD,
+      })
+    ).toBe(false);
   });
 });

@@ -297,6 +297,30 @@ describe("buildReportBlocks", () => {
     }
   });
 
+  it("strips a redundant 'Hipótese:' prefix from the body without extracting any additional title", () => {
+    const blocks = buildReportBlocks({
+      result,
+      t,
+      aiReport: {
+        hypotheses_to_validate: [
+          "Hipótese: A maior alavanca é a clareza de segmento.",
+          "Hypothesis: The main lever is segment clarity.",
+        ],
+      },
+    });
+    const items = numberedItems(blocks, t.hypothesesTitle);
+    expect(items[0].title).toBe("Hipótese 1");
+    expect(items[0].segments[0].text).not.toMatch(/^Hip[oó]tese\s*:/i);
+    expect(items[0].segments[0].text).toBe("A maior alavanca é a clareza de segmento.");
+    expect(items[1].segments[0].text).not.toMatch(/^Hypothesis\s*:/i);
+    expect(items[1].segments[0].text).toBe("The main lever is segment clarity.");
+    // An empty segment label is what makes the renderer (report.ts) draw the
+    // body as a plain, non-bold paragraph - only item.title ("Hipótese N")
+    // ever gets the bold/heading treatment.
+    expect(items[0].segments[0].label).toBe("");
+    expect(items[1].segments[0].label).toBe("");
+  });
+
   it("keeps the last two words of an item title glued with a non-breaking space, to avoid an orphaned last word", () => {
     const blocks = buildReportBlocks({
       result,
