@@ -5,37 +5,27 @@ import type { parseAiReport } from "./report";
 
 export type LabeledSegment = { label: string; text: string };
 
-// Splits a single labeled-contract string (e.g. "Título: X. Sinal observado:
-// Y. Causa provável: Z.") into its individual label/text segments. Generic
-// and language-agnostic - it looks for short capitalized "Label: " runs that
-// start either at the beginning of the string or right after a sentence
-// boundary, rather than hardcoding the Portuguese label vocabulary (which
-// would break for en/es translated reports).
-const LABEL_BOUNDARY_RE = /(^|\.\s+)([A-ZÀ-Ý][\w À-ÿ/'’-]{1,44}):\s+/g;
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
 
-export function parseLabeledSegments(raw: string): LabeledSegment[] {
-  const text = String(raw || "").trim();
-  if (!text) return [];
+// A right-arrow ("→", U+2192) occasionally shows up in AI-generated sequence
+// phrases (e.g. "tráfego → diagnóstico → proposta"). Standard PDF fonts have
+// no glyph for it and have been observed rendering it as the garbled "!'"/
+// "!’" pair instead (see normalizePdfText in report.ts, which further
+// substitutes the word "para" for it in PDF output). Canonicalize every
+// variant - including that corrupted artifact, in case it already made it
+// into stored text - to a plain "→" here, once, so both the web/HTML
+// renderer (which displays "→" fine) and the PDF renderer always start from
+// the same clean text rather than whatever encoding artifact might already
+// be present.
+const ARROW_LIKE_RE = /\s*(?:→|➜|⇒|⟶|->|!['’])\s*/g;
 
-  const matches = [...text.matchAll(LABEL_BOUNDARY_RE)];
-  if (matches.length === 0) return [{ label: "", text }];
-
-  const segments: LabeledSegment[] = [];
-  matches.forEach((match, index) => {
-    const label = match[2].trim();
-    const start = (match.index ?? 0) + match[0].length;
-    const nextMatch = matches[index + 1];
-    // The next match's boundary group (". ") belongs to the end of *this*
-    // segment's sentence, not to the next label - keep the period here so
-    // segments end cleanly instead of losing their terminal punctuation.
-    const nextBoundary = nextMatch?.[1] || "";
-    const end = nextMatch
-      ? (nextMatch.index ?? text.length) + (nextBoundary.startsWith(".") ? 1 : 0)
-      : text.length;
-    const value = text.slice(start, end).trim();
-    if (value) segments.push({ label, text: value });
-  });
-  return segments.length ? segments : [{ label: "", text }];
+export function normalizeReportText(value: string): string {
+  return String(value || "")
+    .replace(ARROW_LIKE_RE, " → ")
+    .replace(/[ \t]+/g, " ")
+    .trim();
 }
 
 function stripTrailingPeriod(value: string) {
@@ -88,57 +78,206 @@ export type ReportBlock =
   | { kind: "paragraph"; text: string }
   | { kind: "numbered"; items: ReportBlockItem[] };
 
-function buildLabeledItems(rawItems: string[], ordinalLabel: string): ReportBlockItem[] {
-  return rawItems.map((raw, index) => {
-    const segments = parseLabeledSegments(raw);
-    const [first, ...rest] = segments;
-    const capitalizedRest = rest.map((segment) => ({
-      ...segment,
-      text: capitalizeFirst(segment.text),
-    }));
-    if (first?.label) {
+// --- Deterministic, per-section field contracts --------------------------
+//
+// Which part of a raw AI string is the bold item title vs. a labeled field
+// is decided entirely by which report section it belongs to - never by text
+// length, punctuation, or a generic "any capitalized word before a colon"
+// heuristic. Each section knows exactly which field labels to expect - in
+// Portuguese, matching the AI prompt's literal contract (api/cgi-assessment.ts
+// REPORT_ITEM_CONTRACTS), plus the English/Spanish equivalents the model may
+// use when asked to write a translated report - and always renders them in
+// this fixed canonical order and casing, regardless of how (or whether) the
+// model capitalized, punctuated or ordered them.
+
+type SectionField = { canonical: string; variants: string[] };
+type SectionSpec = { titleMarkers: string[]; fields: SectionField[] };
+
+const SECTION_SPECS = {
+  criticalBottlenecks: {
+    titleMarkers: ["Título", "Title"],
+    fields: [
+      {
+        canonical: "Sinal observado",
+        variants: ["Sinal observado", "Observed signal", "Señal observada"],
+      },
+      {
+        canonical: "Causa provável",
+        variants: ["Causa provável", "Probable cause", "Causa probable"],
+      },
+      {
+        canonical: "Impacto estratégico",
+        variants: ["Impacto estratégico", "Strategic impact"],
+      },
+    ],
+  },
+  strategicBets: {
+    titleMarkers: ["Título", "Title"],
+    fields: [
+      {
+        canonical: "Ação prioritária",
+        variants: ["Ação prioritária", "Priority action", "Acción prioritaria"],
+      },
+      {
+        canonical: "Resultado esperado",
+        variants: ["Resultado esperado", "Expected result", "Expected outcome"],
+      },
+      { canonical: "Horizonte", variants: ["Horizonte", "Horizon"] },
+    ],
+  },
+  renunciations: {
+    titleMarkers: ["Escolha", "Choice"],
+    fields: [
+      {
+        canonical: "O que deixar de fazer",
+        variants: ["O que deixar de fazer", "What to stop doing", "What to stop", "Qué dejar de hacer"],
+      },
+      {
+        canonical: "Recurso ou capacidade protegida",
+        variants: [
+          "Recurso ou capacidade protegida",
+          "Protected resource or capability",
+          "Protected resource",
+          "Protected capability",
+          "Recurso o capacidad protegida",
+        ],
+      },
+      {
+        canonical: "Racional estratégico",
+        variants: ["Racional estratégico", "Strategic rationale"],
+      },
+    ],
+  },
+  governanceSystem: {
+    titleMarkers: ["Ritual"],
+    fields: [
+      { canonical: "Frequência", variants: ["Frequência", "Frequency", "Frecuencia"] },
+      { canonical: "Participantes", variants: ["Participantes", "Participants"] },
+      { canonical: "Indicadores", variants: ["Indicadores", "Indicators", "Metrics"] },
+      {
+        canonical: "Decisão esperada",
+        variants: ["Decisão esperada", "Expected decision", "Decisión esperada"],
+      },
+    ],
+  },
+  finalRecommendations: {
+    titleMarkers: ["Recomendação", "Recommendation"],
+    fields: [
+      { canonical: "Prioridade", variants: ["Prioridade", "Priority", "Prioridad"] },
+      {
+        canonical: "Próximo passo",
+        variants: ["Próximo passo", "Next step", "Próximo paso"],
+      },
+      {
+        canonical: "Condição de validação",
+        variants: ["Condição de validação", "Validation condition", "Condición de validación"],
+      },
+    ],
+  },
+} satisfies Record<string, SectionSpec>;
+
+function stripTitleMarker(text: string, titleMarkers: string[]): string {
+  if (!titleMarkers.length) return text;
+  const alternatives = titleMarkers.map(escapeRegExp).join("|");
+  return text.replace(new RegExp(`^\\s*(?:${alternatives})\\s*:\\s*`, "i"), "");
+}
+
+function buildFieldRegex(fields: SectionField[]): RegExp {
+  const alternatives = fields
+    .flatMap((field) => field.variants)
+    .map(escapeRegExp)
+    // Longest-first so e.g. "Protected resource or capability" is tried
+    // before the shorter "Protected resource" it starts with.
+    .sort((a, b) => b.length - a.length);
+  return new RegExp(`\\b(${alternatives.join("|")})\\s*:\\s*`, "gi");
+}
+
+function canonicalFieldFor(matchedVariant: string, fields: SectionField[]): string {
+  const normalized = matchedVariant.trim().toLowerCase();
+  const found = fields.find((field) =>
+    field.variants.some((variant) => variant.toLowerCase() === normalized)
+  );
+  return found ? found.canonical : matchedVariant.trim();
+}
+
+// Splits one raw AI string into its short title plus its section's known
+// labeled fields, using only that section's own fixed field contract.
+function splitBySectionSpec(
+  raw: string,
+  spec: SectionSpec
+): { title: string; fields: LabeledSegment[] } {
+  const text = stripTitleMarker(normalizeReportText(raw), spec.titleMarkers);
+  const regex = buildFieldRegex(spec.fields);
+  const matches = [...text.matchAll(regex)];
+  if (matches.length === 0) {
+    return { title: text, fields: [] };
+  }
+
+  const title = text.slice(0, matches[0].index ?? 0).trim();
+  const fields: LabeledSegment[] = matches
+    .map((match, index) => {
+      const start = (match.index ?? 0) + match[0].length;
+      const end = matches[index + 1]?.index ?? text.length;
       return {
-        number: index + 1,
-        title: preventOrphanWord(
-          `${ordinalLabel} ${index + 1} — ${capitalizeFirst(stripTrailingPeriod(first.text))}`
-        ),
-        segments: capitalizedRest,
-        emphasis: true,
+        label: canonicalFieldFor(match[1], spec.fields),
+        text: text.slice(start, end).trim(),
       };
-    }
+    })
+    .filter((segment) => segment.text);
+
+  // Always render fields in the section's own canonical order, regardless
+  // of the order the model happened to write them in.
+  const orderIndex = new Map(spec.fields.map((field, index) => [field.canonical, index]));
+  fields.sort((a, b) => (orderIndex.get(a.label) ?? 0) - (orderIndex.get(b.label) ?? 0));
+
+  return { title: title || text, fields };
+}
+
+function buildSectionItems(
+  rawItems: string[],
+  ordinalLabel: string,
+  spec: SectionSpec
+): ReportBlockItem[] {
+  return rawItems.map((raw, index) => {
+    const { title, fields } = splitBySectionSpec(raw, spec);
+    const capitalizedFields = fields.map((field) => ({
+      ...field,
+      text: capitalizeFirst(field.text),
+    }));
     return {
       number: index + 1,
       title: preventOrphanWord(
-        `${ordinalLabel} ${index + 1} — ${capitalizeFirst(stripTrailingPeriod(raw.trim()))}`
+        `${ordinalLabel} ${index + 1} — ${capitalizeFirst(stripTrailingPeriod(title))}`
       ),
-      segments: [],
+      segments: capitalizedFields,
       emphasis: true,
     };
   });
 }
 
-function buildPlainItems(rawItems: string[], ordinalLabel: string): ReportBlockItem[] {
-  return rawItems.map((raw, index) => {
-    // A raw item can arrive with its own redundant leading label (e.g. the
-    // model writes "Hipótese: A maior alavanca…"), which combined with our
-    // own ordinal prefix produced "Hipótese 1 — Hipótese: A maior…". If the
-    // text is a single leading label with nothing else after it, drop that
-    // label and keep only its content.
-    const segments = parseLabeledSegments(raw);
-    const content = capitalizeFirst(
-      stripTrailingPeriod(
-        segments.length === 1 && segments[0].label ? segments[0].text : raw.trim()
-      )
-    );
-    return {
-      number: index + 1,
-      title: preventOrphanWord(
-        ordinalLabel ? `${ordinalLabel} ${index + 1} — ${content}` : `${index + 1}. ${content}`
-      ),
-      segments: [],
-      emphasis: Boolean(ordinalLabel),
-    };
-  });
+// Hypotheses render only the ordinal ("Hipótese N") in bold - the entire
+// sentence is normal-weight body text below it. No title is ever extracted
+// from the sentence.
+function buildHypothesisItems(rawItems: string[], ordinalLabel: string): ReportBlockItem[] {
+  return rawItems.map((raw, index) => ({
+    number: index + 1,
+    title: `${ordinalLabel} ${index + 1}`,
+    segments: [{ label: "", text: capitalizeFirst(normalizeReportText(raw)) }],
+    emphasis: true,
+  }));
+}
+
+// Evidence bullets have no label contract at all - always a single
+// unlabeled, non-emphasis line.
+function buildEvidenceItems(rawItems: string[]): ReportBlockItem[] {
+  return rawItems.map((raw, index) => ({
+    number: index + 1,
+    title: preventOrphanWord(
+      `${index + 1}. ${capitalizeFirst(stripTrailingPeriod(normalizeReportText(raw)))}`
+    ),
+    segments: [],
+    emphasis: false,
+  }));
 }
 
 export function buildReportBlocks({
@@ -153,7 +292,7 @@ export function buildReportBlocks({
   if (!aiReport) return [];
   const blocks: ReportBlock[] = [];
   const paragraphs = (value?: string) =>
-    String(value || "")
+    normalizeReportText(value || "")
       .split(/\n\s*\n/)
       .map((paragraph) => capitalizeFirst(paragraph.trim()))
       .filter(Boolean);
@@ -171,31 +310,35 @@ export function buildReportBlocks({
     paragraphs(diagnosis).forEach((text) => blocks.push({ kind: "paragraph", text }));
   }
 
+  // Dimension names and their order are always the 5 canonical CGI
+  // dimensions from result.dimensionScores (computed locally from the
+  // respondent's answers, never AI-generated), matched to the AI's
+  // dimension_reading entries strictly by position. The AI's own
+  // "dimension" field and self-reported "score" are never used as a display
+  // label or score, so AI text can never rename or duplicate a dimension.
   if (Array.isArray(aiReport.dimension_reading) && aiReport.dimension_reading.length) {
     blocks.push({ kind: "heading", level: 2, text: t.dimensionReadingTitle });
-    aiReport.dimension_reading.forEach((item, index) => {
-      const matchingDimension =
-        typeof item.score === "number"
-          ? result.dimensionScores.find((score) => score.score === item.score)
-          : undefined;
-      const dimensionLabel =
-        matchingDimension?.title ||
-        result.dimensionScores[index]?.title ||
-        item.dimension ||
-        t.dimensionReadingTitle;
-      const scoreValue = item.score ?? matchingDimension?.score;
+    result.dimensionScores.forEach((dimensionScore, index) => {
+      const item = aiReport.dimension_reading?.[index];
+      if (!item) return;
       blocks.push({
         kind: "heading",
         level: 3,
-        text: `${dimensionLabel}${scoreValue ? ` (${scoreValue}/100)` : ""}`,
+        text: `${dimensionScore.title} (${dimensionScore.score}/100)`,
       });
       // Rendered as two independent paragraphs, never joined with ": " -
       // that join is exactly what produced the "foco.: O risco…" artifact.
       if (item.analysis) {
-        blocks.push({ kind: "paragraph", text: capitalizeFirst(item.analysis) });
+        blocks.push({
+          kind: "paragraph",
+          text: capitalizeFirst(normalizeReportText(item.analysis)),
+        });
       }
       if (item.implication) {
-        blocks.push({ kind: "paragraph", text: capitalizeFirst(item.implication) });
+        blocks.push({
+          kind: "paragraph",
+          text: capitalizeFirst(normalizeReportText(item.implication)),
+        });
       }
     });
   }
@@ -203,61 +346,66 @@ export function buildReportBlocks({
   const evidence = toStringArray(aiReport.evidence_summary);
   if (evidence.length) {
     blocks.push({ kind: "heading", level: 2, text: t.evidenceSummaryTitle });
-    blocks.push({ kind: "numbered", items: buildPlainItems(evidence, "") });
+    blocks.push({ kind: "numbered", items: buildEvidenceItems(evidence) });
   }
 
-  const sections: Array<{
-    items?: string[];
-    title: string;
-    ordinal: string;
-    labeled: boolean;
-  }> = [
+  type SectionDescriptor =
+    | { kind: "fields"; items?: string[]; title: string; ordinal: string; spec: SectionSpec }
+    | { kind: "hypothesis"; items?: string[]; title: string; ordinal: string };
+
+  const sections: SectionDescriptor[] = [
     {
+      kind: "fields",
       items: aiReport.critical_bottlenecks,
       title: t.criticalBottlenecksTitle,
       ordinal: t.itemOrdinalLabels.criticalBottlenecks,
-      labeled: true,
+      spec: SECTION_SPECS.criticalBottlenecks,
     },
     {
+      kind: "fields",
       items: aiReport.strategic_bets,
       title: t.strategicBetsTitle,
       ordinal: t.itemOrdinalLabels.strategicBets,
-      labeled: true,
+      spec: SECTION_SPECS.strategicBets,
     },
     {
+      kind: "fields",
       items: aiReport.renunciations,
       title: t.renunciationsTitle,
       ordinal: t.itemOrdinalLabels.renunciations,
-      labeled: true,
+      spec: SECTION_SPECS.renunciations,
     },
     {
+      kind: "fields",
       items: aiReport.governance_system,
       title: t.governanceTitle,
       ordinal: t.itemOrdinalLabels.governanceSystem,
-      labeled: true,
+      spec: SECTION_SPECS.governanceSystem,
     },
     {
+      kind: "hypothesis",
       items: aiReport.hypotheses_to_validate,
       title: t.hypothesesTitle,
       ordinal: t.itemOrdinalLabels.hypotheses,
-      labeled: false,
     },
     {
+      kind: "fields",
       items: aiReport.final_recommendations || aiReport.recommended_next_steps,
       title: t.finalRecommendationsTitle,
       ordinal: t.itemOrdinalLabels.finalRecommendations,
-      labeled: true,
+      spec: SECTION_SPECS.finalRecommendations,
     },
   ];
 
-  sections.forEach(({ items, title, ordinal, labeled }) => {
-    const rawItems = toStringArray(items);
+  sections.forEach((section) => {
+    const rawItems = toStringArray(section.items);
     if (!rawItems.length) return;
-    blocks.push({ kind: "heading", level: 2, text: title });
-    blocks.push({
-      kind: "numbered",
-      items: labeled ? buildLabeledItems(rawItems, ordinal) : buildPlainItems(rawItems, ordinal),
-    });
+    blocks.push({ kind: "heading", level: 2, text: section.title });
+    const items =
+      section.kind === "hypothesis"
+        ? buildHypothesisItems(rawItems, section.ordinal)
+        : buildSectionItems(rawItems, section.ordinal, section.spec);
+    blocks.push({ kind: "numbered", items });
   });
 
   return blocks;

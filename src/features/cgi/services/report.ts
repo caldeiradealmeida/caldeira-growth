@@ -567,7 +567,15 @@ export function normalizePdfText(value: string) {
     .replace(/[“”]/g, '"')
     .replace(/[‘’]/g, "'")
     .replace(/—/g, "-")
-    .replace(/–/g, "-");
+    .replace(/–/g, "-")
+    // Standard PDF fonts (Helvetica/Times) only cover the WinAnsi/Latin-1
+    // range and have no glyph for "→" (U+2192) - jsPDF has been observed
+    // rendering it as the garbled "!'" pair instead. Substitute the word
+    // "para" so a sequence phrase like "tráfego → diagnóstico → proposta"
+    // stays readable in the PDF. The web/HTML renderer keeps the real "→"
+    // (see reportBlocks.ts/normalizeReportText), since browser fonts render
+    // it correctly.
+    .replace(/\s*→\s*/g, " para ");
   // Note: U+00A0 (non-breaking space) is intentionally NOT normalized
   // away here - it glues the last two words of item titles together so
   // a line wrap never strands a single short word alone (see
@@ -793,10 +801,15 @@ export async function downloadReportPdf({
     // pre-wrapped lines, and leaves the final line of the block ragged as
     // usual) - single-line text just renders left-aligned either way.
     const justify = options.justify ?? lines.length > 1;
+    // charSpace is a persistent jsPDF graphics-state property, not a
+    // one-shot text() option - without resetting it here explicitly, body
+    // copy written right after a letter-spaced segment label (see
+    // writeSegment below) would silently inherit that label's spacing.
     doc.text(lines, marginX + indent, y, {
       baseline: "top",
       maxWidth: width,
       align: justify ? "justify" : "left",
+      charSpace: 0,
     });
     y += lines.length * lineHeight + (options.after ?? 9);
   };
@@ -821,6 +834,7 @@ export async function downloadReportPdf({
       doc.text(lines, marginX + indent, y, {
         baseline: "top",
         maxWidth: width,
+        charSpace: 0,
       });
       y += lines.length * lineHeight + after;
       return;
@@ -831,13 +845,14 @@ export async function downloadReportPdf({
       const lineY = y + index * lineHeight;
       if (index === 0 && wrappedLine.startsWith(prefix)) {
         doc.setFont("helvetica", "bold");
-        doc.text(prefix, marginX + indent, lineY, { baseline: "top" });
+        doc.text(prefix, marginX + indent, lineY, { baseline: "top", charSpace: 0 });
         const prefixWidth = doc.getTextWidth(prefix);
         const suffix = wrappedLine.slice(prefix.length);
         if (suffix) {
           doc.setFont("helvetica", "normal");
           doc.text(suffix, marginX + indent + prefixWidth, lineY, {
             baseline: "top",
+            charSpace: 0,
           });
         }
         return;
@@ -846,6 +861,7 @@ export async function downloadReportPdf({
       doc.text(wrappedLine, marginX + indent, lineY, {
         baseline: "top",
         maxWidth: width,
+        charSpace: 0,
       });
     });
     y += lines.length * lineHeight + after;
@@ -860,6 +876,7 @@ export async function downloadReportPdf({
     doc.text(normalizePdfText(text.replace(/:$/, "")), marginX, y, {
       baseline: "top",
       maxWidth: contentWidth,
+      charSpace: 0,
     });
     y += size * 1.45;
   };
@@ -890,7 +907,7 @@ export async function downloadReportPdf({
     doc.setFont(font, "bold");
     doc.setFontSize(size);
     doc.setTextColor(46, 51, 64);
-    doc.text(titleLines, marginX, y, { baseline: "top", maxWidth: contentWidth });
+    doc.text(titleLines, marginX, y, { baseline: "top", maxWidth: contentWidth, charSpace: 0 });
     y += titleLines.length * size * 1.3 + 8;
     item.segments.forEach(writeSegment);
     y += 6;
