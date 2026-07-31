@@ -12,6 +12,8 @@ export type CgiDataLayerEvent =
   | "cgi_start_click"
   | "cgi_lead_form_view"
   | "cgi_lead_submitted"
+  | "cgi_company_context_submitted"
+  | "cgi_phone_submitted"
   | "cgi_assessment_started"
   | "cgi_progress"
   | "cgi_assessment_completed"

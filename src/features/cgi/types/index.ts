@@ -1,4 +1,11 @@
-export type Step = "lead" | "assessment" | "result";
+export type Step = "lead" | "context" | "assessment" | "phone" | "result";
+export type CgiReportStatus =
+  | "idle"
+  | "report_generating"
+  | "report_ready"
+  | "report_ready_with_warnings"
+  | "report_failed";
+export type CgiSecondarySyncStatus = "idle" | "secondary_sync_pending" | "secondary_sync_failed" | "secondary_sync_succeeded";
 
 export type LeadForm = {
   name: string;
@@ -57,4 +64,7 @@ export type SavedCgiAssessment = {
   lead: LeadForm;
   answers: Record<string, number>;
   savedAt: string;
+  aiReport?: string;
+  aiStatus?: string;
+  reportStatus?: CgiReportStatus;
 };

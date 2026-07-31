@@ -19,7 +19,6 @@ import Contato from "./pages/Contato";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import Campaign from "./pages/Campaign";
 import AmazonRedirect from "./pages/AmazonRedirect";
-import Desafio650 from "./pages/Desafio650";
 import CGI from "./pages/CGI";
 import NotFound from "./pages/NotFound";
 
@@ -64,7 +63,6 @@ const App = () => (
             <Route path="/campanha" element={<Campaign />} />
             <Route path="/qr" element={<AmazonRedirect />} />
             <Route path="/amazon" element={<AmazonRedirect />} />
-            <Route path="/650" element={<Desafio650 />} />
             <Route path="/cgi" element={<CGI />} />
 
             <Route path="/en" element={<Index />} />

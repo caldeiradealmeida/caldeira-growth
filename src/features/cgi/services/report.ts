@@ -5,11 +5,25 @@ import type { Language } from "@/lib/routing";
 import type { CgiScoreResult } from "@/lib/cgiScore";
 import { cgiUi } from "../config";
 import type { LeadForm } from "../types";
+import { buildReportBlocks, type ReportBlock, type ReportBlockItem } from "./reportBlocks";
+
+// Web and PDF signature sizes are deliberately two independent constants,
+// not one shared value scaled per output - they're tuned separately for
+// each medium's layout. Web is now 572px (+30% over the prior 440px, which
+// was itself +100% over the original 220px); PDF stays exactly 75pt - it was
+// already approved at its current size/position and is untouched here. Both
+// preserve the source image's aspect ratio (height is always derived from
+// width), and neither changes the card/name/role/contact layout around it or
+// how the image itself is loaded/cropped.
+export const WEB_SIGNATURE_WIDTH_PX = 572;
+export const PDF_SIGNATURE_WIDTH_PT = 75;
 
 export function parseAiReport(value: string): {
   report_title?: string;
   report_subtitle?: string;
   executive_summary?: string;
+  methodology_note?: string;
+  evidence_summary?: string[] | string;
   strategic_diagnosis?: string;
   priority_diagnosis?: string;
   dimension_reading?: Array<{
@@ -22,6 +36,7 @@ export function parseAiReport(value: string): {
   strategic_bets?: string[];
   renunciations?: string[];
   governance_system?: string[];
+  hypotheses_to_validate?: string[];
   final_recommendations?: string[];
   attention_points?: string[];
   recommended_next_steps?: string[];
@@ -52,6 +67,22 @@ export function getSubmitErrorMessage(data: unknown, t = cgiUi.pt): string {
 
   if (error === "invalid_email_domain") {
     return t.invalidEmailBody;
+  }
+
+  if (error === "invalid_professional_content") {
+    return t.invalidProfessionalFieldBody;
+  }
+
+  if (error === "report_persistence_unavailable") {
+    return "Não foi possível iniciar a geração do relatório neste momento. Tente novamente em alguns instantes.";
+  }
+
+  if (error === "report_generation_failed") {
+    return "Não foi possível concluir o parecer neste momento. Tente novamente.";
+  }
+
+  if (error === "report_failed") {
+    return "Não foi possível concluir o parecer neste momento. Tente novamente.";
   }
 
   if (error === "upstream_request_failed") {
@@ -104,6 +135,10 @@ export function formatAiReportText(
 
   const list = (items?: string[]) =>
     Array.isArray(items) ? items.map((item) => `- ${item}`).join("\n") : "";
+  const textOrList = (value?: string[] | string) => {
+    if (Array.isArray(value)) return list(value);
+    return typeof value === "string" ? value.trim() : "";
+  };
   const dimensionReading = Array.isArray(aiReport.dimension_reading)
     ? aiReport.dimension_reading
         .map((item, index) => {
@@ -119,13 +154,19 @@ export function formatAiReportText(
             item.dimension ||
             t.dimensionReadingTitle;
           const scoreValue = item.score ?? matchingDimension?.score;
+          // Analysis and implication are two distinct sentences, not two
+          // halves of one "label: value" pair - joining them with ": "
+          // produced artifacts like "foco.: O risco…" whenever the analysis
+          // already ended in its own period. Keep them on their own lines.
+          const bodyLines = [item.analysis, item.implication]
+            .filter(Boolean)
+            .join("\n  ");
           return [
             `- ${dimensionLabel}${scoreValue ? ` (${scoreValue}/100)` : ""}`,
-            item.analysis,
-            item.implication,
+            bodyLines ? `  ${bodyLines}` : "",
           ]
             .filter(Boolean)
-            .join(": ");
+            .join("\n");
         })
         .join("\n")
     : "";
@@ -133,6 +174,12 @@ export function formatAiReportText(
   return [
     aiReport.report_title,
     aiReport.report_subtitle,
+    aiReport.methodology_note
+      ? `${t.methodologyNoteTitle}:\n${aiReport.methodology_note}`
+      : "",
+    textOrList(aiReport.evidence_summary)
+      ? `${t.evidenceSummaryTitle}:\n${textOrList(aiReport.evidence_summary)}`
+      : "",
     aiReport.executive_summary,
     aiReport.strategic_diagnosis || aiReport.priority_diagnosis,
     dimensionReading ? `${t.dimensionReadingTitle}:\n${dimensionReading}` : "",
@@ -147,6 +194,9 @@ export function formatAiReportText(
       : "",
     list(aiReport.governance_system)
       ? `${t.governanceTitle}:\n${list(aiReport.governance_system)}`
+      : "",
+    list(aiReport.hypotheses_to_validate)
+      ? `${t.hypothesesTitle}:\n${list(aiReport.hypotheses_to_validate)}`
       : "",
     list(aiReport.final_recommendations || aiReport.recommended_next_steps)
       ? `${t.finalRecommendationsTitle}:\n${list(
@@ -220,75 +270,6 @@ export function formatReportListItem(line: string) {
   )}`;
 }
 
-export function formatReportBodyHtml(reportText: string) {
-  const escapedSignature = escapeAttr(reportSignature);
-  const sectionTitles = new Set([
-    "Diagnóstico",
-    "Diagnosis",
-    "Diagnóstico",
-    "3 principais pontos de atenção",
-    "3 main attention points",
-    "3 principales puntos de atención",
-    "Sumário Executivo",
-    "Contexto e diagnóstico",
-    "Leitura por dimensão",
-    "Gargalos críticos",
-    "Apostas estratégicas recomendadas",
-    "Renúncias estratégicas",
-    "Sistema mínimo de governança",
-    "Recomendações finais",
-    "Contato",
-  ]);
-
-  return reportText
-    .split(/\n{2,}/)
-    .map((block) => block.trim())
-    .filter(Boolean)
-    .map((block) => {
-      const lines = block.split("\n").map((line) => line.trim()).filter(Boolean);
-      if (lines.length === 1 && sectionTitles.has(lines[0])) {
-        return `<h2>${escapeHtml(lines[0])}</h2>`;
-      }
-      if (lines.length === 1 && /:$/.test(lines[0])) {
-        return `<h3>${escapeHtml(lines[0])}</h3>`;
-      }
-      if (lines.length > 1 && /:$/.test(lines[0])) {
-        const rest = lines.slice(1);
-        const content = rest.every((line) => line.startsWith("- "))
-          ? `<ul>${rest
-              .map((line) => `<li>${formatReportListItem(line)}</li>`)
-              .join("")}</ul>`
-          : `<p>${escapeHtml(rest.join("\n")).replace(/\n/g, "<br />")}</p>`;
-        return `<h3>${escapeHtml(lines[0])}</h3>${content}`;
-      }
-      if (lines[0] === "Denis Caldeira de Almeida") {
-        return `
-          <div class="signature-block">
-            <img src="${escapedSignature}" alt="Assinatura Denis Caldeira" />
-            <p>
-              <strong>Denis Caldeira de Almeida</strong><br />
-              ${escapeHtml(lines.slice(1).join("\n")).replace(/\n/g, "<br />")}
-            </p>
-          </div>
-        `;
-      }
-      if (
-        block.startsWith("Para aprofundar este diagnóstico") ||
-        block.startsWith("To deepen this diagnosis") ||
-        block.startsWith("Para profundizar este diagnóstico")
-      ) {
-        return `<p class="contact-callout">${escapeHtml(block)}</p>`;
-      }
-      if (lines.every((line) => line.startsWith("- "))) {
-        return `<ul>${lines
-          .map((line) => `<li>${formatReportListItem(line)}</li>`)
-          .join("")}</ul>`;
-      }
-      return `<p>${escapeHtml(block).replace(/\n/g, "<br />")}</p>`;
-    })
-    .join("\n");
-}
-
 export function buildFinalScoreHtml(result: CgiScoreResult, finalScoreLabel: string) {
   return `
     <section class="final-score">
@@ -330,6 +311,39 @@ export function buildScoreBarsHtml(result: CgiScoreResult, title: string) {
   `;
 }
 
+function renderSegmentHtml(segment: { label: string; text: string }) {
+  if (!segment.label) return `<p>${escapeHtml(segment.text)}</p>`;
+  return `<p class="segment"><span class="segment-label">${escapeHtml(
+    segment.label
+  )}</span>${escapeHtml(segment.text)}</p>`;
+}
+
+function renderReportItemHtml(item: ReportBlockItem) {
+  const segmentsHtml = item.segments.map(renderSegmentHtml).join("");
+  const titleHtml = item.emphasis
+    ? `<h3>${escapeHtml(item.title)}</h3>`
+    : `<p class="numbered-item">${escapeHtml(item.title)}</p>`;
+  return `<div class="report-item">${titleHtml}${segmentsHtml}</div>`;
+}
+
+export function renderReportBlocksHtml(blocks: ReportBlock[]) {
+  return blocks
+    .map((block) => {
+      if (block.kind === "heading") {
+        return block.level === 2
+          ? `<h2>${escapeHtml(block.text)}</h2>`
+          : `<h3>${escapeHtml(block.text)}</h3>`;
+      }
+      if (block.kind === "paragraph") {
+        return `<p>${escapeHtml(block.text)}</p>`;
+      }
+      return `<div class="report-item-list">${block.items
+        .map(renderReportItemHtml)
+        .join("")}</div>`;
+    })
+    .join("\n");
+}
+
 export function buildMethodologyHtml(t: (typeof cgiUi)[Language]) {
   return `
     <section class="method-note">
@@ -341,17 +355,45 @@ export function buildMethodologyHtml(t: (typeof cgiUi)[Language]) {
   `;
 }
 
+export function buildBackCoverHtml(t: (typeof cgiUi)[Language]) {
+  const escapedSignature = escapeAttr(reportSignature);
+  return `
+    <section class="back-cover">
+      <div class="back-cover-content">
+        <p class="back-cover-eyebrow">Caldeira Growth Index</p>
+        <h2>${escapeHtml(t.contact)}</h2>
+        <p>${escapeHtml(t.contactText)}</p>
+      </div>
+      <div class="back-cover-signature">
+        <img src="${escapedSignature}" alt="Assinatura Denis Caldeira" />
+        <p>
+          <strong>Denis Caldeira de Almeida</strong><br />
+          ${escapeHtml(t.founderLine)}<br />
+          contato@caldeiragrowth.com · www.caldeiragrowth.com
+        </p>
+      </div>
+    </section>
+  `;
+}
+
 export function buildReportHtml(
-  reportText: string,
-  companyName: string,
+  aiReport: ReturnType<typeof parseAiReport>,
+  lead: LeadForm,
   result: CgiScoreResult,
   t: (typeof cgiUi)[Language],
   lang: Language
 ) {
-  const bodyHtml = formatReportBodyHtml(reportText);
+  const blocks = buildReportBlocks({ aiReport, result, t });
+  const bodyHtml = renderReportBlocksHtml(blocks);
+  const attention = result.attentionPoints
+    .map((item) => `<li>${formatReportListItem(`- ${item.title}: ${item.score}/100`)}</li>`)
+    .join("");
+  const attentionHtml = `<h2>${escapeHtml(t.attentionTitle)}</h2><ul>${attention}</ul>`;
+  const backCoverHtml = buildBackCoverHtml(t);
   const finalScoreHtml = buildFinalScoreHtml(result, t.finalScore);
   const scoreBarsHtml = buildScoreBarsHtml(result, t.scoreByDimension);
   const methodologyHtml = buildMethodologyHtml(t);
+  const companyName = lead.company;
   const escapedCompany = escapeHtml(companyName || "Caldeira Growth");
   const escapedTitle = `${escapeHtml(t.reportDocTitle)} - ${escapedCompany}`;
   const escapedLogo = escapeAttr(footerLogo);
@@ -384,14 +426,20 @@ export function buildReportHtml(
       .cover .meta { font-family: Georgia, serif; font-size: 24px; color: rgba(255,255,255,.9); }
       .cover-details { font-size: 15px; line-height: 1.7; color: rgba(255,255,255,.86); }
       .page { background: #f7f4ef; min-height: 297mm; padding: 60px 70px 132px; }
-      h2 { font-family: Georgia, serif; font-size: 30px; font-weight: 700; margin: 34px 0 14px; color: #2e3340; }
+      h2 { font-family: Georgia, serif; font-size: 30px; font-weight: 700; margin: 34px 0 14px; color: #2e3340; break-after: avoid; page-break-after: avoid; }
       h2:first-child { margin-top: 0; }
-      h3 { font-family: Georgia, serif; font-size: 20px; font-weight: 700; margin: 24px 0 10px; color: #2e3340; }
+      h3 { font-family: Georgia, serif; font-size: 20px; font-weight: 700; margin: 24px 0 10px; color: #2e3340; break-after: avoid; page-break-after: avoid; }
       .rule { height: 2px; background: #344763; margin: 0 0 28px; }
-      p { font-size: 14px; margin: 0 0 16px; text-align: justify; }
+      p { font-size: 14px; line-height: 1.5; margin: 0 0 16px; text-align: justify; hyphens: auto; -webkit-hyphens: auto; }
       ul { margin: 0 0 18px 20px; padding: 0; }
-      li { font-size: 14px; margin: 0 0 8px; text-align: justify; }
-      h2, h3, .score-row, p, li { break-inside: avoid; }
+      li { font-size: 14px; line-height: 1.5; margin: 0 0 8px; text-align: justify; hyphens: auto; -webkit-hyphens: auto; }
+      h2, h3, .score-row, p, li { break-inside: avoid; page-break-inside: avoid; }
+      .report-item-list { margin: 0 0 26px; }
+      .report-item { break-inside: avoid; page-break-inside: avoid; margin: 0 0 22px; }
+      .report-item h3 { margin-top: 0; }
+      .numbered-item { font-weight: 700; margin: 0 0 8px; text-align: left; }
+      .segment { margin: 0 0 12px; }
+      .segment-label { color: #5b6b85; display: block; font-size: 9.5px; font-weight: 700; letter-spacing: .08em; margin: 6px 0 3px; text-transform: uppercase; }
       .final-score { align-items: center; background: #344763; color: #f7f4ef; display: grid; gap: 28px; grid-template-columns: 180px 1fr; margin: 0 0 34px; padding: 28px 32px; break-inside: avoid; }
       .final-score-label { font-size: 13px; font-weight: 800; letter-spacing: .16em; margin: 0 0 2px; text-align: left; text-transform: uppercase; }
       .final-score-number { font-family: Georgia, serif; font-size: 88px; font-weight: 700; line-height: .95; margin: 0; text-align: left; }
@@ -411,6 +459,13 @@ export function buildReportHtml(
       .signature-block { margin: 34px 0 8px; break-inside: avoid; }
       .signature-block img { display: block; width: 475px; max-width: 90%; height: auto; margin: -10px 0 -58px -48px; }
       .signature-block p { margin-top: 0; text-align: left; }
+      .back-cover { background: #334257; box-sizing: border-box; color: #f5f7f8; display: flex; flex-direction: column; justify-content: space-between; min-height: 297mm; padding: 92px 70px; }
+      .back-cover-eyebrow { color: rgba(255,255,255,.72); font-size: 13px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; }
+      .back-cover h2 { color: #ffffff; font-size: 34px; margin: 16px 0 18px; }
+      .back-cover-content p { color: rgba(255,255,255,.88); font-size: 16px; max-width: 480px; text-align: left; }
+      .back-cover-signature { align-items: center; display: flex; gap: 14px; justify-content: center; }
+      .back-cover-signature img { filter: brightness(0) invert(1); height: auto; width: ${WEB_SIGNATURE_WIDTH_PX}px; }
+      .back-cover-signature p { color: rgba(255,255,255,.88); font-size: 13px; margin: 0; text-align: left; }
       footer { border-top: 1px solid #c8cdd4; padding-top: 8px; text-align: center; background: #f7f4ef; }
       footer img { width: 112px; height: auto; }
       @media screen { footer { margin: 44px 70px 0; } }
@@ -420,6 +475,7 @@ export function buildReportHtml(
         .report { box-shadow: none; margin: 0; max-width: none; width: auto; }
         .cover { min-height: 297mm; page-break-after: always; width: 210mm; }
         .page { min-height: auto; padding: 0; }
+        .back-cover { break-before: page; page-break-before: always; min-height: 297mm; }
         footer { margin: 18mm 22mm 0; }
       }
     </style>
@@ -447,7 +503,9 @@ export function buildReportHtml(
         ${scoreBarsHtml}
         ${methodologyHtml}
         ${bodyHtml}
+        ${attentionHtml}
       </section>
+      ${backCoverHtml}
       <footer><img src="${escapedLogo}" alt="Caldeira Growth" /></footer>
     </main>
   </body>
@@ -521,7 +579,110 @@ export function normalizePdfText(value: string) {
     .replace(/[‘’]/g, "'")
     .replace(/—/g, "-")
     .replace(/–/g, "-")
-    .replace(/\u00a0/g, " ");
+    // Standard PDF fonts (Helvetica/Times) only cover the WinAnsi/Latin-1
+    // range and have no glyph for "→" (U+2192) - jsPDF has been observed
+    // rendering it as the garbled "!'" pair instead. Substitute the word
+    // "para" so a sequence phrase like "tráfego → diagnóstico → proposta"
+    // stays readable in the PDF. The web/HTML renderer keeps the real "→"
+    // (see reportBlocks.ts/normalizeReportText), since browser fonts render
+    // it correctly.
+    .replace(/\s*→\s*/g, " para ");
+  // Note: U+00A0 (non-breaking space) is intentionally NOT normalized
+  // away here - it glues the last two words of item titles together so
+  // a line wrap never strands a single short word alone (see
+  // reportBlocks.ts/preventOrphanWord). It is a valid WinAnsi character
+  // and renders identically to a plain space in jsPDF base fonts.
+}
+
+// --- PDF pagination measurement (pure, exported for testing) --------------
+//
+// Only the two jsPDF methods actually needed for text-wrapping measurement -
+// narrow on purpose so these functions can be exercised with a real jsPDF
+// document in a plain Node test, without any of downloadReportPdf's DOM/
+// canvas/image dependencies.
+type PdfTextMeasurer = {
+  setFontSize: (size: number) => unknown;
+  splitTextToSize: (text: string, width: number) => string[];
+};
+
+export function measureWrappedLineCount(
+  doc: PdfTextMeasurer,
+  text: string,
+  size: number,
+  width: number
+): number {
+  doc.setFontSize(size);
+  return doc.splitTextToSize(normalizePdfText(text), width).length;
+}
+
+// Mirrors writeSegment's exact layout math (see below): an unlabeled segment
+// is just a wrapped body paragraph; a labeled one adds the label's own
+// fixed-height line above it.
+export function measurePdfSegmentHeight(
+  doc: PdfTextMeasurer,
+  segment: { label: string; text: string },
+  contentWidth: number
+): number {
+  if (!segment.label) {
+    const lines = measureWrappedLineCount(doc, segment.text, 10.5, contentWidth);
+    return lines * (10.5 * 1.45) + 8;
+  }
+  const bodyLines = measureWrappedLineCount(doc, segment.text, 10.5, contentWidth);
+  return 15 + bodyLines * (10.5 * 1.45) + 10;
+}
+
+// Mirrors writeReportItem's exact layout math: title height plus every
+// segment's height plus the item's own trailing gap.
+export function measurePdfItemHeight(
+  doc: PdfTextMeasurer,
+  item: ReportBlockItem,
+  contentWidth: number
+): number {
+  const size = item.emphasis ? 12.5 : 10.5;
+  const titleLines = measureWrappedLineCount(doc, item.title, size, contentWidth);
+  const titleHeight = titleLines * size * 1.3 + 8;
+  const segmentsHeight = item.segments.reduce(
+    (sum, segment) => sum + measurePdfSegmentHeight(doc, segment, contentWidth),
+    0
+  );
+  return titleHeight + segmentsHeight + 6;
+}
+
+// Title height plus just the first field - used to decide whether a section
+// heading has enough room to start its first item, without requiring the
+// whole (possibly much longer) item to fit.
+export function measurePdfItemLeadHeight(
+  doc: PdfTextMeasurer,
+  item: ReportBlockItem,
+  contentWidth: number
+): number {
+  const size = item.emphasis ? 12.5 : 10.5;
+  const titleLines = measureWrappedLineCount(doc, item.title, size, contentWidth);
+  const titleHeight = titleLines * size * 1.3 + 8;
+  const firstSegmentHeight = item.segments[0]
+    ? measurePdfSegmentHeight(doc, item.segments[0], contentWidth)
+    : 0;
+  return titleHeight + firstSegmentHeight;
+}
+
+// A block (item, or heading + its first item's lead) is moved to a fresh
+// page only when it actually fits within a full page's usable height and
+// doesn't fit in what's left of the current one - never for a block bigger
+// than a page (that still breaks internally) and never adding blank space
+// beyond what already didn't fit.
+export function shouldBreakToKeepTogether({
+  estimatedHeight,
+  currentY,
+  pageUsableHeight,
+  bottomThreshold,
+}: {
+  estimatedHeight: number;
+  currentY: number;
+  pageUsableHeight: number;
+  bottomThreshold: number;
+}): boolean {
+  if (estimatedHeight > pageUsableHeight) return false;
+  return currentY + estimatedHeight > bottomThreshold;
 }
 
 type ReportImage = {
@@ -530,7 +691,35 @@ type ReportImage = {
   height: number;
 };
 
-export async function imageToDataUrl(src: string): Promise<ReportImage> {
+function findOpaqueBoundingBox(
+  context: CanvasRenderingContext2D,
+  width: number,
+  height: number
+) {
+  const { data } = context.getImageData(0, 0, width, height);
+  const alphaThreshold = 10;
+  let minX = width;
+  let minY = height;
+  let maxX = -1;
+  let maxY = -1;
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      if (data[(y * width + x) * 4 + 3] > alphaThreshold) {
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
+    }
+  }
+  if (maxX < minX || maxY < minY) return null;
+  return { x: minX, y: minY, width: maxX - minX + 1, height: maxY - minY + 1 };
+}
+
+export async function imageToDataUrl(
+  src: string,
+  options: { trimTransparentPadding?: boolean } = {}
+): Promise<ReportImage> {
   const image = await new Promise<HTMLImageElement>((resolve, reject) => {
     const img = new Image();
     img.crossOrigin = "anonymous";
@@ -544,6 +733,45 @@ export async function imageToDataUrl(src: string): Promise<ReportImage> {
   const context = canvas.getContext("2d");
   if (!context) throw new Error("canvas_context_unavailable");
   context.drawImage(image, 0, 0);
+
+  if (options.trimTransparentPadding) {
+    // Some brand assets (e.g. the signature PNG) are exported on a large
+    // canvas with mostly transparent padding around the actual artwork,
+    // which makes them render tiny at any reasonable bounding-box size.
+    // Crop to the actual opaque content (plus a small margin) so sizing it
+    // in the PDF/HTML actually controls its visible size.
+    const box = findOpaqueBoundingBox(context, canvas.width, canvas.height);
+    if (box) {
+      const margin = Math.round(Math.max(box.width, box.height) * 0.06);
+      const cropX = Math.max(0, box.x - margin);
+      const cropY = Math.max(0, box.y - margin);
+      const cropWidth = Math.min(canvas.width - cropX, box.width + margin * 2);
+      const cropHeight = Math.min(canvas.height - cropY, box.height + margin * 2);
+      const trimmed = document.createElement("canvas");
+      trimmed.width = cropWidth;
+      trimmed.height = cropHeight;
+      const trimmedContext = trimmed.getContext("2d");
+      if (trimmedContext) {
+        trimmedContext.drawImage(
+          canvas,
+          cropX,
+          cropY,
+          cropWidth,
+          cropHeight,
+          0,
+          0,
+          cropWidth,
+          cropHeight
+        );
+        return {
+          dataUrl: trimmed.toDataURL("image/png"),
+          width: trimmed.width,
+          height: trimmed.height,
+        };
+      }
+    }
+  }
+
   return {
     dataUrl: canvas.toDataURL("image/png"),
     width: canvas.width,
@@ -551,9 +779,12 @@ export async function imageToDataUrl(src: string): Promise<ReportImage> {
   };
 }
 
-export async function optionalImageToDataUrl(src: string): Promise<ReportImage | null> {
+export async function optionalImageToDataUrl(
+  src: string,
+  options: { trimTransparentPadding?: boolean } = {}
+): Promise<ReportImage | null> {
   try {
-    return await imageToDataUrl(src);
+    return await imageToDataUrl(src, options);
   } catch (error) {
     if (import.meta.env.DEV) {
       console.warn("[CGI] Asset do PDF não carregou.", { src, error });
@@ -563,30 +794,38 @@ export async function optionalImageToDataUrl(src: string): Promise<ReportImage |
 }
 
 export async function downloadReportPdf({
-  reportText,
-  companyName,
+  aiReport,
+  lead,
   result,
   t,
   lang,
 }: {
-  reportText: string;
-  companyName: string;
+  aiReport: ReturnType<typeof parseAiReport>;
+  lead: LeadForm;
   result: CgiScoreResult;
   t: (typeof cgiUi)[Language];
   lang: Language;
 }) {
+  const companyName = lead.company;
   const [{ jsPDF }, coverImage, signatureImage, logoImage] = await Promise.all([
     import("jspdf"),
     optionalImageToDataUrl(reportCover),
-    optionalImageToDataUrl(reportSignature),
+    optionalImageToDataUrl(reportSignature, { trimTransparentPadding: true }),
     optionalImageToDataUrl(footerLogo),
   ]);
   const doc = new jsPDF({ unit: "pt", format: "a4", compress: true });
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
-  const marginX = 56;
+  // Slightly narrower margins than before to widen the useful text column,
+  // one of the concrete PDF-quality asks (wider column reduces the ragged/
+  // gappy look that plain justification alone can create).
+  const marginX = 48;
   const contentWidth = pageWidth - marginX * 2;
   const footerTop = pageHeight - 62;
+  // Minimum trailing space a heading/item title must be able to share a
+  // page with before it's allowed to start - prevents an orphaned title at
+  // the bottom of a page with its own content pushed to the next one.
+  const KEEP_WITH_NEXT_MIN = 64;
   let y = 56;
 
   const drawPageBackground = () => {
@@ -629,6 +868,15 @@ export async function downloadReportPdf({
     addContentPage();
   };
 
+  // Like ensureSpace, but also requires room for a minimum amount of
+  // following content on the same page - used before headings/item titles
+  // so a title never gets stranded alone at the bottom of a page with its
+  // own content pushed to the next one.
+  const ensureSpaceWithFollowing = (height: number, followingMinHeight: number) => {
+    if (y + height + followingMinHeight <= footerTop - 18) return;
+    addContentPage();
+  };
+
   const writeWrappedText = (
     text: string,
     options: {
@@ -639,6 +887,7 @@ export async function downloadReportPdf({
       color?: [number, number, number];
       lineHeight?: number;
       after?: number;
+      justify?: boolean;
     } = {}
   ) => {
     const size = options.size ?? 10.5;
@@ -650,9 +899,19 @@ export async function downloadReportPdf({
     doc.setTextColor(...(options.color ?? [37, 43, 53]));
     const lines = doc.splitTextToSize(normalizePdfText(text), width) as string[];
     ensureSpace(lines.length * lineHeight + (options.after ?? 9));
+    // Justify body copy (jsPDF supports "justify" natively on an array of
+    // pre-wrapped lines, and leaves the final line of the block ragged as
+    // usual) - single-line text just renders left-aligned either way.
+    const justify = options.justify ?? lines.length > 1;
+    // charSpace is a persistent jsPDF graphics-state property, not a
+    // one-shot text() option - without resetting it here explicitly, body
+    // copy written right after a letter-spaced segment label (see
+    // writeSegment below) would silently inherit that label's spacing.
     doc.text(lines, marginX + indent, y, {
       baseline: "top",
       maxWidth: width,
+      align: justify ? "justify" : "left",
+      charSpace: 0,
     });
     y += lines.length * lineHeight + (options.after ?? 9);
   };
@@ -677,6 +936,7 @@ export async function downloadReportPdf({
       doc.text(lines, marginX + indent, y, {
         baseline: "top",
         maxWidth: width,
+        charSpace: 0,
       });
       y += lines.length * lineHeight + after;
       return;
@@ -687,13 +947,14 @@ export async function downloadReportPdf({
       const lineY = y + index * lineHeight;
       if (index === 0 && wrappedLine.startsWith(prefix)) {
         doc.setFont("helvetica", "bold");
-        doc.text(prefix, marginX + indent, lineY, { baseline: "top" });
+        doc.text(prefix, marginX + indent, lineY, { baseline: "top", charSpace: 0 });
         const prefixWidth = doc.getTextWidth(prefix);
         const suffix = wrappedLine.slice(prefix.length);
         if (suffix) {
           doc.setFont("helvetica", "normal");
           doc.text(suffix, marginX + indent + prefixWidth, lineY, {
             baseline: "top",
+            charSpace: 0,
           });
         }
         return;
@@ -702,22 +963,199 @@ export async function downloadReportPdf({
       doc.text(wrappedLine, marginX + indent, lineY, {
         baseline: "top",
         maxWidth: width,
+        charSpace: 0,
       });
     });
     y += lines.length * lineHeight + after;
   };
 
-  const writeHeading = (text: string, level: 2 | 3 = 2) => {
+  const writeHeading = (text: string, level: 2 | 3 = 2, followingMinHeight = KEEP_WITH_NEXT_MIN) => {
     const size = level === 2 ? 20 : 14;
-    ensureSpace(size * 2.2);
+    ensureSpaceWithFollowing(size * 2.2, followingMinHeight);
     doc.setFont("times", "bold");
     doc.setFontSize(size);
     doc.setTextColor(46, 51, 64);
     doc.text(normalizePdfText(text.replace(/:$/, "")), marginX, y, {
       baseline: "top",
       maxWidth: contentWidth,
+      charSpace: 0,
     });
     y += size * 1.45;
+  };
+
+  // --- Conservative "keep together" page-break helpers --------------------
+  //
+  // A section heading must stay with at least the start of its first item,
+  // an item's own title must stay with at least its first field, and an
+  // item that fits entirely on one page is moved there whole rather than
+  // split across two - but only when it actually fits within a full page's
+  // usable height; an item bigger than that still breaks internally exactly
+  // as before. These only ever move content that already didn't fit where
+  // it was - never add blank space beyond what naturally didn't fit. The
+  // pure measurement/decision math lives in standalone functions below
+  // (exported for testing); these closures just supply this document's
+  // doc/contentWidth/y and perform the actual page-break side effect.
+  const PAGE_USABLE_HEIGHT = footerTop - 18 - 56;
+
+  const wrappedLineCount = (text: string, size: number, width: number) =>
+    measureWrappedLineCount(doc, text, size, width);
+
+  const measureSegmentHeight = (segment: { label: string; text: string }) =>
+    measurePdfSegmentHeight(doc, segment, contentWidth);
+
+  const measureItemHeight = (item: ReportBlockItem) =>
+    measurePdfItemHeight(doc, item, contentWidth);
+
+  const measureItemLeadHeight = (item: ReportBlockItem) =>
+    measurePdfItemLeadHeight(doc, item, contentWidth);
+
+  const keepTogetherIfFits = (estimatedHeight: number) => {
+    if (
+      shouldBreakToKeepTogether({
+        estimatedHeight,
+        currentY: y,
+        pageUsableHeight: PAGE_USABLE_HEIGHT,
+        bottomThreshold: footerTop - 18,
+      })
+    ) {
+      addContentPage();
+    }
+  };
+
+  const writeSegment = (segment: { label: string; text: string }) => {
+    if (!segment.label) {
+      writeWrappedText(segment.text, { size: 10.5, after: 8 });
+      return;
+    }
+    ensureSpaceWithFollowing(13, 16);
+    y += 4;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7.5);
+    doc.setTextColor(91, 107, 133);
+    doc.text(normalizePdfText(segment.label).toUpperCase(), marginX, y, {
+      baseline: "top",
+      charSpace: 0.5,
+    });
+    y += 11;
+    writeWrappedText(segment.text, { size: 10.5, after: 10 });
+  };
+
+  const writeReportItem = (item: ReportBlockItem) => {
+    // If the whole item fits on one page, move it there entirely instead of
+    // starting it here and splitting it across two pages. An item bigger
+    // than a full page is left alone here and breaks internally below,
+    // exactly as before.
+    keepTogetherIfFits(measureItemHeight(item));
+    const size = item.emphasis ? 12.5 : 10.5;
+    const font = item.emphasis ? "times" : "helvetica";
+    doc.setFontSize(size);
+    const titleLines = doc.splitTextToSize(normalizePdfText(item.title), contentWidth) as string[];
+    const firstFieldHeight = item.segments[0]
+      ? measureSegmentHeight(item.segments[0])
+      : KEEP_WITH_NEXT_MIN;
+    ensureSpaceWithFollowing(titleLines.length * size * 1.3 + 8, firstFieldHeight);
+    doc.setFont(font, "bold");
+    doc.setFontSize(size);
+    doc.setTextColor(46, 51, 64);
+    doc.text(titleLines, marginX, y, { baseline: "top", maxWidth: contentWidth, charSpace: 0 });
+    y += titleLines.length * size * 1.3 + 8;
+    item.segments.forEach(writeSegment);
+    y += 6;
+  };
+
+  const writeReportBlocks = (blocks: ReportBlock[]) => {
+    blocks.forEach((block, index) => {
+      if (block.kind === "heading") {
+        // A section heading must stay with at least the start of its first
+        // item (title + first field), not just a generic minimum - so it's
+        // never left alone with the whole item pushed to the next page.
+        const next = blocks[index + 1];
+        const followingMinHeight =
+          next?.kind === "numbered" && next.items[0]
+            ? measureItemLeadHeight(next.items[0])
+            : KEEP_WITH_NEXT_MIN;
+        // "Recomendações finais" gets an explicit, additional check: measure
+        // the section title + Recomendação 1's title + its first field
+        // (label and content) as one group, and start a fresh page before
+        // drawing the heading at all if that group doesn't fit in what's
+        // left here - rather than only reserving a following minimum. Other
+        // sections keep only the generic check above.
+        if (
+          block.text === t.finalRecommendationsTitle &&
+          next?.kind === "numbered" &&
+          next.items[0]
+        ) {
+          const headingHeight = (block.level === 2 ? 20 : 14) * 1.45;
+          keepTogetherIfFits(headingHeight + followingMinHeight);
+        }
+        writeHeading(block.text, block.level, followingMinHeight);
+        return;
+      }
+      if (block.kind === "paragraph") {
+        writeWrappedText(block.text, { size: 10.5, after: 9 });
+        return;
+      }
+      block.items.forEach(writeReportItem);
+    });
+  };
+
+  const drawBackCover = () => {
+    // Close out the last content page's footer, then start a fresh page
+    // with its own deliberate navy closing design (no standard footer/rule)
+    // instead of trailing off into mostly-empty space.
+    drawFooter();
+    doc.addPage();
+    doc.setFillColor(51, 66, 87);
+    doc.rect(0, 0, pageWidth, pageHeight, "F");
+    doc.setTextColor(245, 247, 248);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.text("CALDEIRA GROWTH INDEX", marginX, 96, { charSpace: 1.6 });
+    doc.setFont("times", "bold");
+    doc.setFontSize(30);
+    doc.text(doc.splitTextToSize(normalizePdfText(t.contact), 420), marginX, 132, {
+      baseline: "top",
+    });
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(12.5);
+    doc.setTextColor(230, 233, 238);
+    const contactLines = doc.splitTextToSize(normalizePdfText(t.contactText), 440) as string[];
+    doc.text(contactLines, marginX, 190, { baseline: "top", maxWidth: 440, lineHeightFactor: 1.5 });
+
+    const cardY = pageHeight - 220;
+    const cardHeight = 160;
+    const textX = marginX + 190;
+    const textWidth = contentWidth - 190 - 24;
+    doc.setFillColor(247, 244, 239);
+    doc.rect(marginX, cardY, contentWidth, cardHeight, "F");
+    if (signatureImage) {
+      const signatureWidth = PDF_SIGNATURE_WIDTH_PT;
+      const signatureHeight = signatureWidth * (signatureImage.height / signatureImage.width);
+      doc.addImage(
+        signatureImage.dataUrl,
+        "PNG",
+        marginX + 24,
+        cardY + (cardHeight - signatureHeight) / 2,
+        signatureWidth,
+        signatureHeight
+      );
+    }
+    let cardTextY = cardY + 48;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.setTextColor(37, 43, 53);
+    doc.text("Denis Caldeira de Almeida", textX, cardTextY, { baseline: "top", maxWidth: textWidth });
+    cardTextY += 18;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    const founderLines = doc.splitTextToSize(normalizePdfText(t.founderLine), textWidth) as string[];
+    doc.text(founderLines, textX, cardTextY, { baseline: "top", maxWidth: textWidth });
+    cardTextY += founderLines.length * 12 + 6;
+    const contactLine = doc.splitTextToSize(
+      "contato@caldeiragrowth.com · www.caldeiragrowth.com",
+      textWidth
+    ) as string[];
+    doc.text(contactLine, textX, cardTextY, { baseline: "top", maxWidth: textWidth });
   };
 
   const drawCover = () => {
@@ -871,58 +1309,23 @@ export async function downloadReportPdf({
     y += boxHeight + 22;
   };
 
-  const drawReportBody = () => {
-    reportText
-      .split(/\n{2,}/)
-      .map((block) => block.trim())
-      .filter(Boolean)
-      .forEach((block) => {
-        const lines = block.split("\n").map((line) => line.trim()).filter(Boolean);
-        if (lines.length === 1 && /:$/.test(lines[0])) {
-          writeHeading(lines[0], 3);
-          return;
-        }
-        if (lines.length === 1 && lines[0].length <= 80) {
-          writeWrappedText(lines[0], { size: 10.5, style: "normal", after: 8 });
-          return;
-        }
-        if (lines.length > 1 && /:$/.test(lines[0])) {
-          writeHeading(lines[0], 3);
-          lines.slice(1).forEach((line) => {
-            if (line.startsWith("- ")) {
-              writePdfListItem(line, { indent: 12, after: 6 });
-            } else {
-              writeWrappedText(line);
-            }
-          });
-          return;
-        }
-        if (lines.every((line) => line.startsWith("- "))) {
-          lines.forEach((line) => writePdfListItem(line, { indent: 12, after: 6 }));
-          y += 6;
-          return;
-        }
-        if (lines[0] === "Denis Caldeira de Almeida") {
-          ensureSpace(250);
-          if (signatureImage) {
-            const signatureWidth = 450;
-            const signatureHeight = signatureWidth * (signatureImage.height / signatureImage.width);
-            doc.addImage(
-              signatureImage.dataUrl,
-              "PNG",
-              marginX - 105,
-              y - 78,
-              signatureWidth,
-              signatureHeight
-            );
-            y += 178;
-          }
-          writeWrappedText(lines.join("\n"), { style: "bold", after: 5 });
-          return;
-        }
-        writeWrappedText(block);
-      });
+  const drawAttentionPoints = () => {
+    if (!result.attentionPoints.length) return;
+    const listLines = result.attentionPoints.map((item) =>
+      wrappedLineCount(`• ${item.title}: ${item.score}/100`, 10.5, contentWidth - 12)
+    );
+    const listHeight = listLines.reduce((sum, lines) => sum + lines * (10.5 * 1.45) + 6, 0);
+    // This whole block (heading + all 3 points) is always small - move it
+    // together rather than leaving the heading alone if it doesn't fit here.
+    keepTogetherIfFits(20 * 1.45 + listHeight);
+    writeHeading(t.attentionTitle, 2, listLines[0] * (10.5 * 1.45) + 6);
+    result.attentionPoints.forEach((item) =>
+      writePdfListItem(`- ${item.title}: ${item.score}/100`, { indent: 12, after: 6 })
+    );
+    y += 6;
   };
+
+  const blocks = buildReportBlocks({ aiReport, result, t });
 
   drawCover();
   doc.addPage();
@@ -934,7 +1337,8 @@ export async function downloadReportPdf({
   drawFinalScore();
   drawScoreBars();
   drawMethodology();
-  drawReportBody();
-  drawFooter();
+  writeReportBlocks(blocks);
+  drawAttentionPoints();
+  drawBackCover();
   doc.save(safePdfFilename(companyName));
 }

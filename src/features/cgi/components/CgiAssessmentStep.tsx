@@ -8,6 +8,7 @@ import { ArrowLeft, ArrowRight, Target } from "lucide-react";
 import type { Dispatch, SetStateAction } from "react";
 import type { CgiUiText } from "../config";
 import type { LeadForm, Step } from "../types";
+import { CGI_COMMENTS_MAX_LENGTH } from "../utils/form";
 import { CgiProgress } from "./CgiProgress";
 import { CgiQuestion } from "./CgiQuestion";
 
@@ -46,17 +47,19 @@ export function CgiAssessmentStep({
   goToNextDimension,
   submitAssessment,
 }: CgiAssessmentStepProps) {
+  const remainingCount = Math.max(0, CGI_QUESTIONS.length - answeredCount);
+
   return (
     <div className="mx-auto max-w-4xl">
       <div className="mb-8">
         <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div>
-            <Badge variant="outline">{t.step2}</Badge>
+            <Badge variant="outline">{t.step3}</Badge>
             <h2 className="mt-4 text-3xl font-semibold tracking-tight">
-              {currentDimension.title}
+              {t.assessmentTitle}
             </h2>
             <p className="mt-2 text-muted-foreground">
-              {currentDimension.diagnostic}
+              {t.assessmentSubtitle}
             </p>
           </div>
           <CgiProgress
@@ -65,6 +68,40 @@ export function CgiAssessmentStep({
             progress={progress}
             answeredLabel={t.answered}
           />
+        </div>
+
+        <div className="mt-6 grid gap-3 sm:grid-cols-4">
+          <div className="rounded-lg border border-border bg-card p-3">
+            <p className="text-xs text-muted-foreground">{t.progressLabel}</p>
+            <p className="mt-1 text-lg font-semibold">{progress}%</p>
+          </div>
+          <div className="rounded-lg border border-border bg-card p-3">
+            <p className="text-xs text-muted-foreground">{t.currentStepLabel}</p>
+            <p className="mt-1 text-lg font-semibold">
+              {t.currentStep(dimensionIndex + 1, config.dimensions.length)}
+            </p>
+          </div>
+          <div className="rounded-lg border border-border bg-card p-3">
+            <p className="text-xs text-muted-foreground">{t.answeredLabel}</p>
+            <p className="mt-1 text-lg font-semibold">
+              {t.answered(answeredCount, CGI_QUESTIONS.length)}
+            </p>
+          </div>
+          <div className="rounded-lg border border-border bg-card p-3">
+            <p className="text-xs text-muted-foreground">{t.estimatedTime}</p>
+            <p className="mt-1 text-lg font-semibold">
+              {t.remaining(remainingCount)}
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-6">
+          <h3 className="text-xl font-semibold tracking-tight">
+            {currentDimension.title}
+          </h3>
+          <p className="mt-2 text-sm text-muted-foreground">
+            {currentDimension.diagnostic}
+          </p>
         </div>
 
         <div className="mt-6 grid gap-2 sm:grid-cols-5">
@@ -109,15 +146,20 @@ export function CgiAssessmentStep({
                   id="comments"
                   value={lead.comments}
                   onChange={(event) =>
-                    updateLead("comments", event.target.value)
+                    updateLead(
+                      "comments",
+                      event.target.value.slice(0, CGI_COMMENTS_MAX_LENGTH)
+                    )
                   }
                   placeholder={t.commentsPlaceholder}
+                  maxLength={CGI_COMMENTS_MAX_LENGTH}
                   rows={4}
                   className="resize-y bg-background"
                 />
-                <p className="text-xs leading-relaxed text-muted-foreground">
-                  {t.commentsHelp}
-                </p>
+                <div className="flex flex-col gap-1 text-xs leading-relaxed text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+                  <p>{t.commentsHelp}</p>
+                  <p>{t.commentsCounter(lead.comments.length, CGI_COMMENTS_MAX_LENGTH)}</p>
+                </div>
               </div>
             </div>
           )}
@@ -127,7 +169,7 @@ export function CgiAssessmentStep({
               variant="outline"
               onClick={() => {
                 if (dimensionIndex === 0) {
-                  setStep("lead");
+                  setStep("context");
                 } else {
                   setDimensionIndex((current) => current - 1);
                 }

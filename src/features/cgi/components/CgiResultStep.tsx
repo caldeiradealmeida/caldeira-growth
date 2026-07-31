@@ -22,6 +22,7 @@ type CgiResultStepProps = {
   aiReport: ReturnType<typeof parseAiReport>;
   aiStatus: string;
   submitError: string;
+  secondarySyncMessage: string;
   reportReady: boolean;
   isSubmitting: boolean;
   isGeneratingPdf: boolean;
@@ -29,7 +30,7 @@ type CgiResultStepProps = {
   reportProgress: number;
   openReport: () => void;
   downloadPdf: () => void;
-  openEmailDraft: () => void;
+  retryReport: () => void;
   regenerateSavedAssessment: () => void;
   onCtaClick: () => void;
 };
@@ -41,6 +42,7 @@ export function CgiResultStep({
   aiReport,
   aiStatus,
   submitError,
+  secondarySyncMessage,
   reportReady,
   isSubmitting,
   isGeneratingPdf,
@@ -48,7 +50,7 @@ export function CgiResultStep({
   reportProgress,
   openReport,
   downloadPdf,
-  openEmailDraft,
+  retryReport,
   regenerateSavedAssessment,
   onCtaClick,
 }: CgiResultStepProps) {
@@ -83,11 +85,12 @@ export function CgiResultStep({
               reportReady={reportReady}
               isGeneratingPdf={isGeneratingPdf}
               isSubmitting={isSubmitting}
+              submitError={submitError}
               hasSavedAssessment={hasSavedAssessment}
               reportProgress={reportProgress}
               openReport={openReport}
               downloadPdf={downloadPdf}
-              openEmailDraft={openEmailDraft}
+              retryReport={retryReport}
               regenerateSavedAssessment={regenerateSavedAssessment}
               onCtaClick={onCtaClick}
             />
@@ -98,8 +101,18 @@ export function CgiResultStep({
           {submitError && (
             <Alert variant="destructive">
               <AlertCircle className="h-4 w-4" />
-              <AlertTitle>{t.saveFailureTitle}</AlertTitle>
-              <AlertDescription>{submitError}</AlertDescription>
+              <AlertTitle>{t.primaryReportFailureTitle}</AlertTitle>
+              <AlertDescription>
+                {submitError || t.primaryReportFailureBody}
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {secondarySyncMessage && reportReady && (
+            <Alert className="border-amber-300 bg-amber-50 text-amber-950">
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle>{t.secondarySyncWarningTitle}</AlertTitle>
+              <AlertDescription>{secondarySyncMessage}</AlertDescription>
             </Alert>
           )}
 
@@ -110,9 +123,6 @@ export function CgiResultStep({
               <AlertDescription>
                 <span className="block">
                   {t.reportAlertBody}
-                </span>
-                <span className="mt-3 block">
-                  {t.reportIpBody}
                 </span>
                 <span className="mt-3 block">
                   {t.proprietaryBody}
@@ -132,7 +142,7 @@ export function CgiResultStep({
             </Alert>
           )}
 
-          {!isSubmitting && !submitError && (
+          {!isSubmitting && !submitError && reportReady && (
             <Alert className="border-primary/20">
               <CheckCircle2 className="h-4 w-4 text-primary" />
               <AlertTitle>{t.savedTitle}</AlertTitle>
@@ -141,6 +151,16 @@ export function CgiResultStep({
                 {aiStatus === "generated"
                   ? t.proprietaryBody
                   : result.diagnostic}
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {!isSubmitting && !submitError && !reportReady && (
+            <Alert className="border-primary/20">
+              <Sparkles className="h-4 w-4 text-primary" />
+              <AlertTitle>{t.reportAlertTitle}</AlertTitle>
+              <AlertDescription>
+                {t.savedPendingBody} {t.reportPending}
               </AlertDescription>
             </Alert>
           )}
@@ -225,6 +245,32 @@ export function CgiResultStep({
                     {aiReport.report_subtitle}
                   </p>
                 )}
+                {aiReport.methodology_note && (
+                  <div className="mt-4 rounded-lg border border-primary/20 bg-primary/5 p-4">
+                    <h4 className="font-semibold">{t.methodologyNoteTitle}</h4>
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      {aiReport.methodology_note}
+                    </p>
+                  </div>
+                )}
+                {aiReport.evidence_summary &&
+                  (Array.isArray(aiReport.evidence_summary) ? (
+                    <div className="mt-6">
+                      <h4 className="font-semibold">{t.evidenceSummaryTitle}</h4>
+                      <ul className="mt-3 space-y-2">
+                        {aiReport.evidence_summary.map((item) => (
+                          <li key={item} className="flex gap-2 text-sm">
+                            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                            <span>{item}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : (
+                    <p className="mt-4 text-sm text-muted-foreground">
+                      {aiReport.evidence_summary}
+                    </p>
+                  ))}
                 {aiReport.executive_summary && (
                   <p className="mt-4 leading-relaxed text-muted-foreground">
                     {aiReport.executive_summary}
@@ -278,6 +324,7 @@ export function CgiResultStep({
                     t.governanceTitle,
                     aiReport.governance_system,
                   ],
+                  [t.hypothesesTitle, aiReport.hypotheses_to_validate],
                   [
                     t.finalRecommendationsTitle,
                     aiReport.final_recommendations ||

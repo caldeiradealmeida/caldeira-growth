@@ -11,12 +11,20 @@ var ARTICLES_HEADERS = ['status', 'date', 'slug', 'title_pt', 'title_en', 'excer
 var MEDIA_HEADERS = ['status', 'date', 'title_pt', 'title_en', 'outlet', 'url', 'cover_url', 'featured'];
 var CGI_HEADERS = [
   'timestamp',
+  'completed_at',
+  'public_assessment_id',
+  'anonymous_session_id',
+  'completion_event_id',
+  'status',
+  'report_status',
+  'secondary_sync_status',
   'nome',
   'email',
   'telefone',
   'empresa',
   'cargo',
   'setor',
+  'modelo_comercial',
   'funcionarios',
   'faturamento_anual',
   'desafio_atual',
@@ -51,6 +59,16 @@ var CGI_HEADERS = [
   'email_domain_has_address_fallback',
   'email_domain_error',
   'comentarios',
+  'comentario_adicional',
+  'utm_source',
+  'utm_medium',
+  'utm_campaign',
+  'utm_content',
+  'utm_term',
+  'gclid',
+  'fbclid',
+  'li_fat_id',
+  'landing_page',
   'ip',
   'pais',
   'regiao',
@@ -204,6 +222,7 @@ function handleCgiAssessmentPost_(payload) {
   var enrichmentHeadings = Array.isArray(enrichment.headings) ? enrichment.headings : [];
   var emailValidation = payload.emailValidation || {};
   var requestContext = payload.requestContext || {};
+  var attribution = payload.attribution || {};
   var sheet = getOrCreateSheet_(CGI_SHEET_NAME, CGI_HEADERS);
   var timestamp = new Date();
 
@@ -225,59 +244,78 @@ function handleCgiAssessmentPost_(payload) {
     })
     .join(' | ');
 
-  var row = [
-    timestamp,
-    nome,
-    email,
-    String(lead.phone || '').trim(),
-    String(lead.company || '').trim(),
-    String(lead.role || '').trim(),
-    String(lead.sector || '').trim(),
-    String(lead.employeeCount || '').trim(),
-    String(lead.annualRevenue || '').trim(),
-    String(lead.currentChallenge || '').trim(),
-    String(lead.growthGoal || '').trim(),
-    String(lead.investmentIntent || '').trim(),
-    score.finalScore || '',
-    score.level ? String(score.level.title || '').trim() : '',
-    dimensionMap.strategy || '',
-    dimensionMap.market || '',
-    dimensionMap.growthMachine || '',
-    dimensionMap.execution || '',
-    dimensionMap.leadership || '',
-    attentionPoints,
-    String(score.diagnostic || '').trim(),
-    String(payload.aiStatus || '').trim(),
-    String(payload.aiReport || '').trim(),
-    String(payload.aiReportText || '').trim(),
-    JSON.stringify(answers),
-    String(payload.userAgent || '').trim(),
-    String(payload.referrer || '').trim(),
-    String(lead.companyWebsite || '').trim(),
-    String(enrichment.status || '').trim(),
-    String(enrichment.finalUrl || '').trim(),
-    String(enrichment.title || '').trim(),
-    String(enrichment.description || '').trim(),
-    enrichmentHeadings.join(' | '),
-    String(enrichment.observedText || '').trim(),
-    String(enrichment.error || '').trim(),
-    String(emailValidation.domain || '').trim(),
-    String(emailValidation.status || '').trim(),
-    String(emailValidation.hasMx || '').trim(),
-    String(emailValidation.hasAddressFallback || '').trim(),
-    String(emailValidation.error || '').trim(),
-    String(lead.comments || '').trim(),
-    String(requestContext.ip || '').trim(),
-    String(requestContext.country || '').trim(),
-    String(requestContext.region || '').trim(),
-    String(requestContext.city || '').trim(),
-    String(requestContext.latitude || '').trim(),
-    String(requestContext.longitude || '').trim(),
-    String(requestContext.timezone || '').trim(),
-    String(payload.language || '').trim()
-  ];
+  var comments = String(lead.comments || '').trim();
+  var row = {
+    timestamp: timestamp,
+    completed_at: timestamp.toISOString(),
+    public_assessment_id: String(payload.publicAssessmentId || payload.public_assessment_id || '').trim(),
+    anonymous_session_id: String(payload.anonymousSessionId || payload.anonymous_session_id || '').trim(),
+    completion_event_id: String(payload.completionEventId || payload.completion_event_id || '').trim(),
+    status: 'completed',
+    report_status: String(payload.reportStatus || payload.report_status || '').trim(),
+    secondary_sync_status: String(payload.secondarySyncStatus || payload.secondary_sync_status || '').trim(),
+    nome: nome,
+    email: email,
+    telefone: String(lead.phone || '').trim(),
+    empresa: String(lead.company || '').trim(),
+    cargo: String(lead.role || '').trim(),
+    setor: String(lead.sector || '').trim(),
+    modelo_comercial: String(lead.commercialRelationshipModel || lead.commercial_relationship_model || '').trim(),
+    funcionarios: String(lead.employeeCount || lead.employee_count || '').trim(),
+    faturamento_anual: String(lead.annualRevenue || lead.annual_revenue_range || '').trim(),
+    desafio_atual: String(lead.currentChallenge || lead.current_challenge || '').trim(),
+    meta_crescimento_12m: String(lead.growthGoal || lead.growth_goal || '').trim(),
+    intencao_investimento: String(lead.investmentIntent || lead.investment_intent || '').trim(),
+    cgi_final: score.finalScore || '',
+    nivel: score.level ? String(score.level.title || '').trim() : '',
+    estrategia: dimensionMap.strategy || '',
+    mercado_cliente: dimensionMap.market || '',
+    maquina_crescimento: dimensionMap.growthMachine || '',
+    execucao_gestao: dimensionMap.execution || '',
+    lideranca_cultura: dimensionMap.leadership || '',
+    pontos_atencao: attentionPoints,
+    diagnostico_deterministico: String(score.diagnostic || '').trim(),
+    ai_status: String(payload.aiStatus || '').trim(),
+    ai_report: String(payload.aiReport || '').trim(),
+    ai_report_text: String(payload.aiReportText || '').trim(),
+    respostas_json: JSON.stringify(answers),
+    user_agent: String(payload.userAgent || '').trim(),
+    referrer: String(payload.referrer || '').trim(),
+    site_empresa: String(lead.companyWebsite || lead.company_website || '').trim(),
+    enrichment_status: String(enrichment.status || '').trim(),
+    enrichment_url_final: String(enrichment.finalUrl || '').trim(),
+    enrichment_title: String(enrichment.title || '').trim(),
+    enrichment_description: String(enrichment.description || '').trim(),
+    enrichment_headings: enrichmentHeadings.join(' | '),
+    enrichment_text: String(enrichment.observedText || '').trim(),
+    enrichment_error: String(enrichment.error || '').trim(),
+    email_domain: String(emailValidation.domain || '').trim(),
+    email_domain_status: String(emailValidation.status || '').trim(),
+    email_domain_has_mx: String(emailValidation.hasMx || '').trim(),
+    email_domain_has_address_fallback: String(emailValidation.hasAddressFallback || '').trim(),
+    email_domain_error: String(emailValidation.error || '').trim(),
+    comentarios: comments,
+    comentario_adicional: comments,
+    utm_source: String(attribution.utm_source || '').trim(),
+    utm_medium: String(attribution.utm_medium || '').trim(),
+    utm_campaign: String(attribution.utm_campaign || '').trim(),
+    utm_content: String(attribution.utm_content || '').trim(),
+    utm_term: String(attribution.utm_term || '').trim(),
+    gclid: String(attribution.gclid || '').trim(),
+    fbclid: String(attribution.fbclid || '').trim(),
+    li_fat_id: String(attribution.li_fat_id || '').trim(),
+    landing_page: String(attribution.landing_page || '').trim(),
+    ip: String(requestContext.ip || '').trim(),
+    pais: String(requestContext.country || '').trim(),
+    regiao: String(requestContext.region || '').trim(),
+    cidade: String(requestContext.city || '').trim(),
+    latitude: String(requestContext.latitude || '').trim(),
+    longitude: String(requestContext.longitude || '').trim(),
+    timezone: String(requestContext.timezone || '').trim(),
+    idioma: String(payload.language || '').trim()
+  };
 
-  sheet.appendRow(row);
+  appendMappedRow_(sheet, CGI_HEADERS, row);
   sendCgiNotification_(lead, score, attentionPoints, payload);
   sendCgiLeadReport_(lead, score, attentionPoints, payload);
 
@@ -457,6 +495,18 @@ function ensureHeaders_(sheet, headers) {
   headerRange.setFontWeight('bold');
   headerRange.setBackground('#111827');
   headerRange.setFontColor('#ffffff');
+}
+
+function appendMappedRow_(sheet, headers, rowObject) {
+  ensureHeaders_(sheet, headers);
+  var lastColumn = sheet.getLastColumn();
+  var currentHeaders = sheet.getRange(1, 1, 1, lastColumn).getValues()[0].map(function (value) {
+    return String(value || '').trim();
+  });
+  var row = currentHeaders.map(function (header) {
+    return Object.prototype.hasOwnProperty.call(rowObject, header) ? rowObject[header] : '';
+  });
+  sheet.appendRow(row);
 }
 
 function getSheetCsv_(name, headers) {

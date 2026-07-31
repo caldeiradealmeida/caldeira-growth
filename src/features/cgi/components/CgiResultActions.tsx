@@ -5,7 +5,6 @@ import {
   CalendarDays,
   FileText,
   Loader2,
-  Mail,
   Printer,
   Sparkles,
 } from "lucide-react";
@@ -17,11 +16,12 @@ type CgiResultActionsProps = {
   reportReady: boolean;
   isGeneratingPdf: boolean;
   isSubmitting: boolean;
+  submitError: string;
   hasSavedAssessment: boolean;
   reportProgress: number;
   openReport: () => void;
   downloadPdf: () => void;
-  openEmailDraft: () => void;
+  retryReport: () => void;
   regenerateSavedAssessment: () => void;
   onCtaClick: () => void;
 };
@@ -32,11 +32,12 @@ export function CgiResultActions({
   reportReady,
   isGeneratingPdf,
   isSubmitting,
+  submitError,
   hasSavedAssessment,
   reportProgress,
   openReport,
   downloadPdf,
-  openEmailDraft,
+  retryReport,
   regenerateSavedAssessment,
   onCtaClick,
 }: CgiResultActionsProps) {
@@ -70,15 +71,17 @@ export function CgiResultActions({
         )}
         {isGeneratingPdf ? t.generatingPdf : t.downloadPdf}
       </Button>
-      <Button
-        size="lg"
-        variant="outline"
-        onClick={openEmailDraft}
-        disabled={!reportReady}
-      >
-        <Mail className="mr-2 h-4 w-4" />
-        {t.emailReport}
-      </Button>
+      {!reportReady && submitError && (
+        <Button
+          size="lg"
+          variant="outline"
+          onClick={retryReport}
+          disabled={isSubmitting}
+        >
+          <Sparkles className="mr-2 h-4 w-4" />
+          {t.retryReport}
+        </Button>
+      )}
       {import.meta.env.DEV && hasSavedAssessment && (
         <Button
           size="lg"

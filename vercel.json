@@ -1,6 +1,11 @@
 {
   "redirects": [
     {
+      "source": "/650",
+      "destination": "/",
+      "statusCode": 301
+    },
+    {
       "source": "/path-to-grow",
       "destination": "/desenvolvimento-executivo",
       "permanent": true
