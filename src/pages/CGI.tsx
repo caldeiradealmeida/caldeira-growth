@@ -14,6 +14,7 @@ import {
 } from "@/features/cgi/scoring";
 import {
   CGI_ASSESSMENT_ENDPOINT,
+  CGI_REPORT_POLL_TIMEOUT_MS,
   cgiUi,
   dimensionOrder,
   initialLead,
@@ -389,6 +390,12 @@ export default function CGI() {
       const pollResult = await pollCgiReport({
         publicAssessmentId: assessmentId,
         signal: controller.signal,
+        // Must comfortably exceed the backend's worst-case processing time
+        // (one primary attempt + one transient retry + non-OpenAI overhead,
+        // ~170s today) - otherwise the frontend gives up and hides the
+        // progress bar while a legitimate, still-running attempt is
+        // orphaned server-side.
+        timeoutMs: CGI_REPORT_POLL_TIMEOUT_MS,
       });
 
       if (pollResult.status === "ready") {

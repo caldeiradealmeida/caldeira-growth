@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 import { cgiUi } from "../config";
 import { buildReportBlocks, parseLabeledSegments } from "./reportBlocks";
 
+const NBSP = " ";
+const stripNbsp = (value: string) => value.replace(new RegExp(NBSP, "g"), " ");
+
 describe("parseLabeledSegments", () => {
   it("splits a labeled-contract string into its individual label/text segments", () => {
     const raw =
@@ -140,6 +143,18 @@ describe("buildReportBlocks", () => {
     expect(paragraphTexts.join(" ")).not.toContain(".:");
   });
 
+  it("capitalizes a paragraph that came back starting with a lowercase letter", () => {
+    const blocks = buildReportBlocks({
+      result,
+      t,
+      aiReport: {
+        executive_summary: "a empresa demonstra repertório técnico elevado.",
+      },
+    });
+    const paragraph = blocks.find((block) => block.kind === "paragraph") as { text: string };
+    expect(paragraph.text).toBe("A empresa demonstra repertório técnico elevado.");
+  });
+
   it("numbers labeled-contract items and promotes the Título/Ritual/etc. field to the item heading", () => {
     const blocks = buildReportBlocks({
       result,
@@ -159,7 +174,7 @@ describe("buildReportBlocks", () => {
 
     expect(numberedBlock.items).toHaveLength(2);
     expect(numberedBlock.items[0].number).toBe(1);
-    expect(numberedBlock.items[0].title).toBe(
+    expect(stripNbsp(numberedBlock.items[0].title)).toBe(
       "Gargalo 1 — Baixa clareza de proposta de valor"
     );
     expect(numberedBlock.items[0].segments.map((segment) => segment.label)).toEqual([
@@ -167,7 +182,26 @@ describe("buildReportBlocks", () => {
       "Causa provável",
       "Impacto estratégico",
     ]);
-    expect(numberedBlock.items[1].title).toBe("Gargalo 2 — Máquina de crescimento artesanal");
+    expect(stripNbsp(numberedBlock.items[1].title)).toBe(
+      "Gargalo 2 — Máquina de crescimento artesanal"
+    );
+  });
+
+  it("keeps the last two words of an item title glued with a non-breaking space, to avoid an orphaned last word", () => {
+    const blocks = buildReportBlocks({
+      result,
+      t,
+      aiReport: {
+        critical_bottlenecks: [
+          "Título: Baixa clareza de proposta de valor. Sinal observado: x. Causa provável: y. Impacto estratégico: z.",
+        ],
+      },
+    });
+    const numberedBlock = blocks.find((block) => block.kind === "numbered") as {
+      items: { title: string }[];
+    };
+    expect(numberedBlock.items[0].title).toContain(`de${NBSP}valor`);
+    expect(numberedBlock.items[0].title.includes("de valor")).toBe(false);
   });
 
   it("numbers plain (unlabeled) items like hypotheses without inventing sub-labels", () => {
@@ -186,12 +220,30 @@ describe("buildReportBlocks", () => {
       items: { title: string; segments: unknown[] }[];
     };
 
-    expect(numberedBlock.items[0].title).toBe(
+    expect(stripNbsp(numberedBlock.items[0].title)).toBe(
       "Hipótese 1 — A principal trava está na clareza de segmento e proposta de valor"
     );
     expect(numberedBlock.items[0].segments).toHaveLength(0);
-    expect(numberedBlock.items[1].title).toBe(
+    expect(stripNbsp(numberedBlock.items[1].title)).toBe(
       "Hipótese 2 — O CGI tem maior potencial quando segmentado por estágio"
     );
+  });
+
+  it("strips a redundant leading label that duplicates the ordinal (e.g. 'Hipótese: ...' inside a hypothesis item)", () => {
+    const blocks = buildReportBlocks({
+      result,
+      t,
+      aiReport: {
+        hypotheses_to_validate: [
+          "Hipótese: A maior alavanca é a clareza de segmento.",
+        ],
+      },
+    });
+    const numberedBlock = blocks.find((block) => block.kind === "numbered") as {
+      items: { title: string }[];
+    };
+    const title = stripNbsp(numberedBlock.items[0].title);
+    expect(title).toBe("Hipótese 1 — A maior alavanca é a clareza de segmento");
+    expect(title).not.toContain("Hipótese 1 — Hipótese:");
   });
 });

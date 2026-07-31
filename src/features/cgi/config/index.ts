@@ -27,6 +27,12 @@ export const CGI_LEAD_ENDPOINT = "/api/cgi/lead";
 export const CGI_PROGRESS_ENDPOINT = "/api/cgi/progress";
 export const CGI_EVENT_ENDPOINT = "/api/cgi/event";
 export const CGI_LAST_ASSESSMENT_KEY = "caldeira-growth:cgi:last-assessment";
+// Must comfortably exceed the backend's worst-case report generation time
+// (api/cgi-assessment.ts: one primary OpenAI attempt + one transient retry +
+// non-OpenAI overhead, ~170s today) - otherwise the frontend gives up
+// polling and hides the progress bar while a legitimate attempt is still
+// running server-side.
+export const CGI_REPORT_POLL_TIMEOUT_MS = 210000;
 export const CGI_SESSION_KEY = "caldeira-growth:cgi:tab-session";
 export const CGI_ASSESSMENT_STATE_KEY = "caldeira-growth:cgi:assessment-state";
 export const CGI_PRIVACY_POLICY_VERSION = "2026-07-17";

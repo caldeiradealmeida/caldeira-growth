@@ -427,8 +427,8 @@ export function buildReportHtml(
       .report-item { break-inside: avoid; page-break-inside: avoid; margin: 0 0 22px; }
       .report-item h3 { margin-top: 0; }
       .numbered-item { font-weight: 700; margin: 0 0 8px; text-align: left; }
-      .segment { margin: 0 0 10px; }
-      .segment-label { color: #344763; display: block; font-size: 11px; font-weight: 800; letter-spacing: .1em; margin-bottom: 2px; text-transform: uppercase; }
+      .segment { margin: 0 0 12px; }
+      .segment-label { color: #5b6b85; display: block; font-size: 9.5px; font-weight: 700; letter-spacing: .08em; margin: 6px 0 3px; text-transform: uppercase; }
       .final-score { align-items: center; background: #344763; color: #f7f4ef; display: grid; gap: 28px; grid-template-columns: 180px 1fr; margin: 0 0 34px; padding: 28px 32px; break-inside: avoid; }
       .final-score-label { font-size: 13px; font-weight: 800; letter-spacing: .16em; margin: 0 0 2px; text-align: left; text-transform: uppercase; }
       .final-score-number { font-family: Georgia, serif; font-size: 88px; font-weight: 700; line-height: .95; margin: 0; text-align: left; }
@@ -567,8 +567,12 @@ export function normalizePdfText(value: string) {
     .replace(/[“”]/g, '"')
     .replace(/[‘’]/g, "'")
     .replace(/—/g, "-")
-    .replace(/–/g, "-")
-    .replace(/\u00a0/g, " ");
+    .replace(/–/g, "-");
+  // Note: U+00A0 (non-breaking space) is intentionally NOT normalized
+  // away here - it glues the last two words of item titles together so
+  // a line wrap never strands a single short word alone (see
+  // reportBlocks.ts/preventOrphanWord). It is a valid WinAnsi character
+  // and renders identically to a plain space in jsPDF base fonts.
 }
 
 type ReportImage = {
@@ -577,7 +581,35 @@ type ReportImage = {
   height: number;
 };
 
-export async function imageToDataUrl(src: string): Promise<ReportImage> {
+function findOpaqueBoundingBox(
+  context: CanvasRenderingContext2D,
+  width: number,
+  height: number
+) {
+  const { data } = context.getImageData(0, 0, width, height);
+  const alphaThreshold = 10;
+  let minX = width;
+  let minY = height;
+  let maxX = -1;
+  let maxY = -1;
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      if (data[(y * width + x) * 4 + 3] > alphaThreshold) {
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
+    }
+  }
+  if (maxX < minX || maxY < minY) return null;
+  return { x: minX, y: minY, width: maxX - minX + 1, height: maxY - minY + 1 };
+}
+
+export async function imageToDataUrl(
+  src: string,
+  options: { trimTransparentPadding?: boolean } = {}
+): Promise<ReportImage> {
   const image = await new Promise<HTMLImageElement>((resolve, reject) => {
     const img = new Image();
     img.crossOrigin = "anonymous";
@@ -591,6 +623,45 @@ export async function imageToDataUrl(src: string): Promise<ReportImage> {
   const context = canvas.getContext("2d");
   if (!context) throw new Error("canvas_context_unavailable");
   context.drawImage(image, 0, 0);
+
+  if (options.trimTransparentPadding) {
+    // Some brand assets (e.g. the signature PNG) are exported on a large
+    // canvas with mostly transparent padding around the actual artwork,
+    // which makes them render tiny at any reasonable bounding-box size.
+    // Crop to the actual opaque content (plus a small margin) so sizing it
+    // in the PDF/HTML actually controls its visible size.
+    const box = findOpaqueBoundingBox(context, canvas.width, canvas.height);
+    if (box) {
+      const margin = Math.round(Math.max(box.width, box.height) * 0.06);
+      const cropX = Math.max(0, box.x - margin);
+      const cropY = Math.max(0, box.y - margin);
+      const cropWidth = Math.min(canvas.width - cropX, box.width + margin * 2);
+      const cropHeight = Math.min(canvas.height - cropY, box.height + margin * 2);
+      const trimmed = document.createElement("canvas");
+      trimmed.width = cropWidth;
+      trimmed.height = cropHeight;
+      const trimmedContext = trimmed.getContext("2d");
+      if (trimmedContext) {
+        trimmedContext.drawImage(
+          canvas,
+          cropX,
+          cropY,
+          cropWidth,
+          cropHeight,
+          0,
+          0,
+          cropWidth,
+          cropHeight
+        );
+        return {
+          dataUrl: trimmed.toDataURL("image/png"),
+          width: trimmed.width,
+          height: trimmed.height,
+        };
+      }
+    }
+  }
+
   return {
     dataUrl: canvas.toDataURL("image/png"),
     width: canvas.width,
@@ -598,9 +669,12 @@ export async function imageToDataUrl(src: string): Promise<ReportImage> {
   };
 }
 
-export async function optionalImageToDataUrl(src: string): Promise<ReportImage | null> {
+export async function optionalImageToDataUrl(
+  src: string,
+  options: { trimTransparentPadding?: boolean } = {}
+): Promise<ReportImage | null> {
   try {
-    return await imageToDataUrl(src);
+    return await imageToDataUrl(src, options);
   } catch (error) {
     if (import.meta.env.DEV) {
       console.warn("[CGI] Asset do PDF não carregou.", { src, error });
@@ -626,7 +700,7 @@ export async function downloadReportPdf({
   const [{ jsPDF }, coverImage, signatureImage, logoImage] = await Promise.all([
     import("jspdf"),
     optionalImageToDataUrl(reportCover),
-    optionalImageToDataUrl(reportSignature),
+    optionalImageToDataUrl(reportSignature, { trimTransparentPadding: true }),
     optionalImageToDataUrl(footerLogo),
   ]);
   const doc = new jsPDF({ unit: "pt", format: "a4", compress: true });
@@ -795,15 +869,16 @@ export async function downloadReportPdf({
       writeWrappedText(segment.text, { size: 10.5, after: 8 });
       return;
     }
-    ensureSpaceWithFollowing(11, 16);
+    ensureSpaceWithFollowing(13, 16);
+    y += 4;
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(8.5);
-    doc.setTextColor(52, 71, 99);
+    doc.setFontSize(7.5);
+    doc.setTextColor(91, 107, 133);
     doc.text(normalizePdfText(segment.label).toUpperCase(), marginX, y, {
       baseline: "top",
-      charSpace: 0.6,
+      charSpace: 0.5,
     });
-    y += 12;
+    y += 11;
     writeWrappedText(segment.text, { size: 10.5, after: 10 });
   };
 
@@ -858,14 +933,14 @@ export async function downloadReportPdf({
     const contactLines = doc.splitTextToSize(normalizePdfText(t.contactText), 440) as string[];
     doc.text(contactLines, marginX, 190, { baseline: "top", maxWidth: 440, lineHeightFactor: 1.5 });
 
-    const cardY = pageHeight - 210;
-    const cardHeight = 150;
+    const cardY = pageHeight - 220;
+    const cardHeight = 160;
     const textX = marginX + 190;
     const textWidth = contentWidth - 190 - 24;
     doc.setFillColor(247, 244, 239);
     doc.rect(marginX, cardY, contentWidth, cardHeight, "F");
     if (signatureImage) {
-      const signatureWidth = 130;
+      const signatureWidth = 150;
       const signatureHeight = signatureWidth * (signatureImage.height / signatureImage.width);
       doc.addImage(
         signatureImage.dataUrl,

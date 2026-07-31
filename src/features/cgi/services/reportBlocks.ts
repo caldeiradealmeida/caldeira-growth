@@ -42,6 +42,24 @@ function stripTrailingPeriod(value: string) {
   return value.replace(/\.\s*$/, "");
 }
 
+// Capitalizes the first letter of AI-generated text so a sentence that
+// happened to start lowercase doesn't read as unpolished. Purely a display
+// normalization - never changes the words themselves.
+function capitalizeFirst(value: string): string {
+  if (!value) return value;
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+// Glues the last two words of a short heading-like string together with a
+// non-breaking space, so a line wrap never strands a single short word
+// alone on its own line. Only applied to titles/headings - long body
+// paragraphs wrap normally.
+function preventOrphanWord(value: string): string {
+  const lastSpace = value.lastIndexOf(" ");
+  if (lastSpace === -1) return value;
+  return `${value.slice(0, lastSpace)}\u00A0${value.slice(lastSpace + 1)}`;
+}
+
 function toStringArray(value?: string[] | string): string[] {
   if (Array.isArray(value)) {
     return value.filter((item): item is string => typeof item === "string" && item.trim().length > 0);
@@ -74,17 +92,25 @@ function buildLabeledItems(rawItems: string[], ordinalLabel: string): ReportBloc
   return rawItems.map((raw, index) => {
     const segments = parseLabeledSegments(raw);
     const [first, ...rest] = segments;
+    const capitalizedRest = rest.map((segment) => ({
+      ...segment,
+      text: capitalizeFirst(segment.text),
+    }));
     if (first?.label) {
       return {
         number: index + 1,
-        title: `${ordinalLabel} ${index + 1} — ${stripTrailingPeriod(first.text)}`,
-        segments: rest,
+        title: preventOrphanWord(
+          `${ordinalLabel} ${index + 1} — ${capitalizeFirst(stripTrailingPeriod(first.text))}`
+        ),
+        segments: capitalizedRest,
         emphasis: true,
       };
     }
     return {
       number: index + 1,
-      title: `${ordinalLabel} ${index + 1} — ${stripTrailingPeriod(raw.trim())}`,
+      title: preventOrphanWord(
+        `${ordinalLabel} ${index + 1} — ${capitalizeFirst(stripTrailingPeriod(raw.trim()))}`
+      ),
       segments: [],
       emphasis: true,
     };
@@ -92,14 +118,27 @@ function buildLabeledItems(rawItems: string[], ordinalLabel: string): ReportBloc
 }
 
 function buildPlainItems(rawItems: string[], ordinalLabel: string): ReportBlockItem[] {
-  return rawItems.map((raw, index) => ({
-    number: index + 1,
-    title: ordinalLabel
-      ? `${ordinalLabel} ${index + 1} — ${stripTrailingPeriod(raw.trim())}`
-      : `${index + 1}. ${stripTrailingPeriod(raw.trim())}`,
-    segments: [],
-    emphasis: Boolean(ordinalLabel),
-  }));
+  return rawItems.map((raw, index) => {
+    // A raw item can arrive with its own redundant leading label (e.g. the
+    // model writes "Hipótese: A maior alavanca…"), which combined with our
+    // own ordinal prefix produced "Hipótese 1 — Hipótese: A maior…". If the
+    // text is a single leading label with nothing else after it, drop that
+    // label and keep only its content.
+    const segments = parseLabeledSegments(raw);
+    const content = capitalizeFirst(
+      stripTrailingPeriod(
+        segments.length === 1 && segments[0].label ? segments[0].text : raw.trim()
+      )
+    );
+    return {
+      number: index + 1,
+      title: preventOrphanWord(
+        ordinalLabel ? `${ordinalLabel} ${index + 1} — ${content}` : `${index + 1}. ${content}`
+      ),
+      segments: [],
+      emphasis: Boolean(ordinalLabel),
+    };
+  });
 }
 
 export function buildReportBlocks({
@@ -116,7 +155,7 @@ export function buildReportBlocks({
   const paragraphs = (value?: string) =>
     String(value || "")
       .split(/\n\s*\n/)
-      .map((paragraph) => paragraph.trim())
+      .map((paragraph) => capitalizeFirst(paragraph.trim()))
       .filter(Boolean);
 
   if (aiReport.executive_summary) {
@@ -152,8 +191,12 @@ export function buildReportBlocks({
       });
       // Rendered as two independent paragraphs, never joined with ": " -
       // that join is exactly what produced the "foco.: O risco…" artifact.
-      if (item.analysis) blocks.push({ kind: "paragraph", text: item.analysis });
-      if (item.implication) blocks.push({ kind: "paragraph", text: item.implication });
+      if (item.analysis) {
+        blocks.push({ kind: "paragraph", text: capitalizeFirst(item.analysis) });
+      }
+      if (item.implication) {
+        blocks.push({ kind: "paragraph", text: capitalizeFirst(item.implication) });
+      }
     });
   }
 
