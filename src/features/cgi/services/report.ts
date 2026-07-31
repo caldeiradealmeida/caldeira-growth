@@ -9,12 +9,13 @@ import { buildReportBlocks, type ReportBlock, type ReportBlockItem } from "./rep
 
 // Web and PDF signature sizes are deliberately two independent constants,
 // not one shared value scaled per output - they're tuned separately for
-// each medium's layout. Web was doubled (+100%) from its previous 220px;
-// PDF was halved (-50%) from its previous 150pt. Both preserve the source
-// image's aspect ratio (height is always derived from width), and neither
-// changes the card/name/role/contact layout around it or how the image
-// itself is loaded/cropped.
-export const WEB_SIGNATURE_WIDTH_PX = 440;
+// each medium's layout. Web is now 572px (+30% over the prior 440px, which
+// was itself +100% over the original 220px); PDF stays exactly 75pt - it was
+// already approved at its current size/position and is untouched here. Both
+// preserve the source image's aspect ratio (height is always derived from
+// width), and neither changes the card/name/role/contact layout around it or
+// how the image itself is loaded/cropped.
+export const WEB_SIGNATURE_WIDTH_PX = 572;
 export const PDF_SIGNATURE_WIDTH_PT = 75;
 
 export function parseAiReport(value: string): {
@@ -462,7 +463,7 @@ export function buildReportHtml(
       .back-cover-eyebrow { color: rgba(255,255,255,.72); font-size: 13px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; }
       .back-cover h2 { color: #ffffff; font-size: 34px; margin: 16px 0 18px; }
       .back-cover-content p { color: rgba(255,255,255,.88); font-size: 16px; max-width: 480px; text-align: left; }
-      .back-cover-signature { align-items: flex-end; display: flex; gap: 24px; }
+      .back-cover-signature { align-items: center; display: flex; gap: 14px; justify-content: center; }
       .back-cover-signature img { filter: brightness(0) invert(1); height: auto; width: ${WEB_SIGNATURE_WIDTH_PX}px; }
       .back-cover-signature p { color: rgba(255,255,255,.88); font-size: 13px; margin: 0; text-align: left; }
       footer { border-top: 1px solid #c8cdd4; padding-top: 8px; text-align: center; background: #f7f4ef; }
@@ -1073,6 +1074,20 @@ export async function downloadReportPdf({
           next?.kind === "numbered" && next.items[0]
             ? measureItemLeadHeight(next.items[0])
             : KEEP_WITH_NEXT_MIN;
+        // "Recomendações finais" gets an explicit, additional check: measure
+        // the section title + Recomendação 1's title + its first field
+        // (label and content) as one group, and start a fresh page before
+        // drawing the heading at all if that group doesn't fit in what's
+        // left here - rather than only reserving a following minimum. Other
+        // sections keep only the generic check above.
+        if (
+          block.text === t.finalRecommendationsTitle &&
+          next?.kind === "numbered" &&
+          next.items[0]
+        ) {
+          const headingHeight = (block.level === 2 ? 20 : 14) * 1.45;
+          keepTogetherIfFits(headingHeight + followingMinHeight);
+        }
         writeHeading(block.text, block.level, followingMinHeight);
         return;
       }

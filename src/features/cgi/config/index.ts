@@ -97,7 +97,6 @@ export const cgiUi: Record<
     finalScore: string;
     openReport: string;
     printReport: string;
-    emailReport: string;
     reportPending: string;
     retryReport: string;
     reportPollingBody: string;
@@ -105,7 +104,6 @@ export const cgiUi: Record<
     reportStages: string[];
     reportAlertTitle: string;
     reportAlertBody: string;
-    reportIpBody: string;
     proprietaryBody: string;
     savedTitle: string;
     savedBody: string;
@@ -288,7 +286,6 @@ export const cgiUi: Record<
     finalScore: "CGI final",
     openReport: "Abrir versão para impressão",
     printReport: "Baixar PDF",
-    emailReport: "Abrir e-mail com relatório",
     reportPending: "O parecer completo será liberado quando a aplicação dos critérios do CGI terminar.",
     retryReport: "Tentar novamente",
     reportPollingBody: "Seu relatório está sendo preparado. Isso pode levar alguns instantes.",
@@ -304,10 +301,7 @@ export const cgiUi: Record<
     reportAlertTitle: "Seu índice já foi calculado",
     reportAlertBody:
       "Estamos aplicando a lógica do CGI às respostas da sua organização.",
-    reportIpBody:
-      "A inteligência artificial apoia a consolidação dos dados e a personalização do parecer.",
-    proprietaryBody:
-      "Método Caldeira Growth. Inteligência artificial aplicada à personalização do parecer.",
+    proprietaryBody: "Método Caldeira Growth.",
     savedTitle: "Resultado registrado",
     savedBody: "O parecer foi preparado.",
     savedPendingBody: "Seus dados foram salvos. O parecer está sendo preparado.",
@@ -500,7 +494,6 @@ export const cgiUi: Record<
     finalScore: "Final CGI",
     openReport: "Open print version",
     printReport: "Download PDF",
-    emailReport: "Open email with report",
     reportPending: "The full report will be released when the CGI criteria have been applied.",
     retryReport: "Try again",
     reportPollingBody: "Your report is being prepared. This may take a few moments.",
@@ -516,10 +509,7 @@ export const cgiUi: Record<
     reportAlertTitle: "Your index has already been calculated",
     reportAlertBody:
       "We are applying the CGI logic to your organization's answers.",
-    reportIpBody:
-      "Artificial intelligence supports data consolidation and report personalization.",
-    proprietaryBody:
-      "Caldeira Growth methodology. Artificial intelligence applied to report personalization.",
+    proprietaryBody: "Caldeira Growth methodology.",
     savedTitle: "Result registered",
     savedBody: "The report is ready.",
     savedPendingBody: "Your data has been saved. The report is being prepared.",
@@ -712,7 +702,6 @@ export const cgiUi: Record<
     finalScore: "CGI final",
     openReport: "Abrir versión para imprimir",
     printReport: "Descargar PDF",
-    emailReport: "Abrir email con informe",
     reportPending: "El informe completo se liberará cuando termine la aplicación de los criterios del CGI.",
     retryReport: "Intentar nuevamente",
     reportPollingBody: "Su informe se está preparando. Esto puede tardar unos instantes.",
@@ -728,10 +717,7 @@ export const cgiUi: Record<
     reportAlertTitle: "Su índice ya fue calculado",
     reportAlertBody:
       "Estamos aplicando la lógica del CGI a las respuestas de su organización.",
-    reportIpBody:
-      "La inteligencia artificial apoya la consolidación de los datos y la personalización del informe.",
-    proprietaryBody:
-      "Método Caldeira Growth. Inteligencia artificial aplicada a la personalización del informe.",
+    proprietaryBody: "Método Caldeira Growth.",
     savedTitle: "Resultado registrado",
     savedBody: "El informe fue preparado.",
     savedPendingBody: "Sus datos fueron guardados. El informe se está preparando.",

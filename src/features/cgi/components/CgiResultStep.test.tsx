@@ -40,7 +40,6 @@ const baseProps = {
   reportProgress: 0,
   openReport: vi.fn(),
   downloadPdf: vi.fn(),
-  openEmailDraft: vi.fn(),
   retryReport: vi.fn(),
   regenerateSavedAssessment: vi.fn(),
   onCtaClick: vi.fn(),
@@ -77,4 +76,31 @@ describe("CgiResultStep", () => {
 
     expect(text).toContain("O parecer foi preparado.");
   });
+
+  it.each(["pt", "en", "es"] as const)(
+    "keeps the progress copy to just the CGI-logic line and 'Método Caldeira Growth', dropping the redundant AI mentions (%s)",
+    (lang) => {
+      const t = cgiUi[lang];
+      const text = textContent(
+        CgiResultStep({ ...baseProps, t, isSubmitting: true, reportProgress: 0 })
+      );
+
+      // Title, the one kept body line, and the brand line all still render.
+      expect(text).toContain(t.reportAlertTitle);
+      expect(text).toContain(t.reportAlertBody);
+      expect(text).toContain(t.proprietaryBody);
+      expect(t.proprietaryBody.toLowerCase()).not.toMatch(/intelig|artificial/);
+
+      // The two removed sentences must never appear, in any language.
+      expect(text.toLowerCase()).not.toMatch(
+        /apoia a consolida|consolidation and (report )?personali[sz]ation|apoya la consolidaci/
+      );
+      expect(text.toLowerCase()).not.toMatch(
+        /aplicada [àa] personaliza|applied to (report )?personali[sz]ation|aplicada a la personalizaci/
+      );
+
+      // Progress stages (percentage-driven copy) still render untouched.
+      expect(text).toContain(t.reportStages[0]);
+    }
+  );
 });

@@ -901,23 +901,6 @@ export default function CGI() {
     }
   };
 
-  const openEmailDraft = () => {
-    if (!reportReady || !result) return;
-    void sendCgiClientEvent({
-      eventName: "cgi_report_requested",
-      anonymousSessionId,
-      publicAssessmentId: publicAssessmentId || null,
-      metadata: {
-        destination_type: "email_draft",
-      },
-    });
-    const subject = encodeURIComponent(
-      `CGI - Caldeira Growth Index - ${lead.company || "Caldeira Growth"}`
-    );
-    const body = encodeURIComponent(reportText);
-    window.location.href = `mailto:${lead.email}?subject=${subject}&body=${body}`;
-  };
-
   const submitAssessmentWithData = async (
     assessmentLead: LeadForm,
     assessmentAnswers: Record<string, number>,
@@ -1288,7 +1271,6 @@ export default function CGI() {
               reportProgress={reportProgress}
               openReport={openReport}
               downloadPdf={downloadPdf}
-              openEmailDraft={openEmailDraft}
               retryReport={retryReport}
               regenerateSavedAssessment={regenerateSavedAssessment}
               onCtaClick={trackCtaClick}

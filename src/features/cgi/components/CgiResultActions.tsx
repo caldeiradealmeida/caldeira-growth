@@ -5,7 +5,6 @@ import {
   CalendarDays,
   FileText,
   Loader2,
-  Mail,
   Printer,
   Sparkles,
 } from "lucide-react";
@@ -22,7 +21,6 @@ type CgiResultActionsProps = {
   reportProgress: number;
   openReport: () => void;
   downloadPdf: () => void;
-  openEmailDraft: () => void;
   retryReport: () => void;
   regenerateSavedAssessment: () => void;
   onCtaClick: () => void;
@@ -39,7 +37,6 @@ export function CgiResultActions({
   reportProgress,
   openReport,
   downloadPdf,
-  openEmailDraft,
   retryReport,
   regenerateSavedAssessment,
   onCtaClick,
@@ -73,15 +70,6 @@ export function CgiResultActions({
           <FileText className="mr-2 h-4 w-4" />
         )}
         {isGeneratingPdf ? t.generatingPdf : t.downloadPdf}
-      </Button>
-      <Button
-        size="lg"
-        variant="outline"
-        onClick={openEmailDraft}
-        disabled={!reportReady}
-      >
-        <Mail className="mr-2 h-4 w-4" />
-        {t.emailReport}
       </Button>
       {!reportReady && submitError && (
         <Button

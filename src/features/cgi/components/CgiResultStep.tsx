@@ -30,7 +30,6 @@ type CgiResultStepProps = {
   reportProgress: number;
   openReport: () => void;
   downloadPdf: () => void;
-  openEmailDraft: () => void;
   retryReport: () => void;
   regenerateSavedAssessment: () => void;
   onCtaClick: () => void;
@@ -51,7 +50,6 @@ export function CgiResultStep({
   reportProgress,
   openReport,
   downloadPdf,
-  openEmailDraft,
   retryReport,
   regenerateSavedAssessment,
   onCtaClick,
@@ -92,7 +90,6 @@ export function CgiResultStep({
               reportProgress={reportProgress}
               openReport={openReport}
               downloadPdf={downloadPdf}
-              openEmailDraft={openEmailDraft}
               retryReport={retryReport}
               regenerateSavedAssessment={regenerateSavedAssessment}
               onCtaClick={onCtaClick}
@@ -126,9 +123,6 @@ export function CgiResultStep({
               <AlertDescription>
                 <span className="block">
                   {t.reportAlertBody}
-                </span>
-                <span className="mt-3 block">
-                  {t.reportIpBody}
                 </span>
                 <span className="mt-3 block">
                   {t.proprietaryBody}
