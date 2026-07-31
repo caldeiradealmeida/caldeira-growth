@@ -46,7 +46,11 @@ import {
   writeReportDocument,
 } from "@/features/cgi/services/report";
 import { pollCgiReport } from "@/features/cgi/services/reportPolling";
-import { shouldAutoResumeReportPolling } from "@/features/cgi/services/reportLifecycle";
+import {
+  shouldAutoResumeReportPolling,
+  shouldEvaluateAutoResume,
+  shouldFinalizePollAttempt,
+} from "@/features/cgi/services/reportLifecycle";
 import { useCgiReportProgress } from "@/features/cgi/hooks/useCgiReportProgress";
 import { CgiAssessmentStep } from "@/features/cgi/components/CgiAssessmentStep";
 import { CgiContextStep } from "@/features/cgi/components/CgiContextStep";
@@ -132,6 +136,7 @@ export default function CGI() {
   const reportPollAbortRef = useRef<AbortController | null>(null);
   const reportPollAssessmentRef = useRef("");
   const assessmentSubmitStartedRef = useRef(false);
+  const autoResumeAttemptedRef = useRef(false);
   const assessmentStartedSentRef = useRef(
     Boolean(readAssessmentState()?.sent_events.cgi_assessment_started)
   );
@@ -424,11 +429,16 @@ export default function CGI() {
         });
       }
 
-      if (reportPollAbortRef.current === controller) {
+      if (
+        shouldFinalizePollAttempt({
+          activeAbortController: reportPollAbortRef.current,
+          thisAttemptController: controller,
+        })
+      ) {
         reportPollAbortRef.current = null;
         reportPollAssessmentRef.current = "";
+        setIsSubmitting(false);
       }
-      setIsSubmitting(false);
     },
     [
       restoreReadyReport,
@@ -447,6 +457,19 @@ export default function CGI() {
   }, []);
 
   useEffect(() => {
+    // Auto-resume must only ever be evaluated once per page mount - it exists
+    // to pick a genuinely orphaned report_generating attempt back up after a
+    // reload/remount. A brand-new submission moves reportStatus and
+    // publicAssessmentId through the exact same values a resumed reload does,
+    // so without this guard this effect (which depends on both) would replay
+    // on every fresh submission too, racing ahead of that submission's own
+    // POST and stealing its step/isSubmitting transitions before the backend
+    // even knows the assessment exists.
+    if (!shouldEvaluateAutoResume({ alreadyAttempted: autoResumeAttemptedRef.current })) {
+      return;
+    }
+    autoResumeAttemptedRef.current = true;
+
     const savedState = readAssessmentState();
     const saved = readSavedCgiAssessment();
     const assessmentId = savedState?.public_assessment_id || publicAssessmentId;

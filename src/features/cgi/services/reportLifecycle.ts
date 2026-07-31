@@ -24,3 +24,41 @@ export function shouldAutoResumeReportPolling({
   if (!hasSavedAnswers) return false;
   return true;
 }
+
+/**
+ * The auto-resume check above must only ever run once per page mount. A
+ * brand-new submission moves reportStatus/publicAssessmentId through the
+ * exact same values a resumed reload does, so if the resume effect were
+ * allowed to re-evaluate on every such change, it would race ahead of that
+ * submission's own request - stealing its step/isSubmitting transitions
+ * before the backend even knows the assessment exists. Call this once at
+ * the top of the effect, guarded by a ref that starts at `false` and is
+ * flipped to `true` right after the first evaluation (whether or not it
+ * actually resumed).
+ */
+export function shouldEvaluateAutoResume({
+  alreadyAttempted,
+}: {
+  alreadyAttempted: boolean;
+}): boolean {
+  return !alreadyAttempted;
+}
+
+/**
+ * A beginReportPolling invocation can be superseded by a newer one (for the
+ * same or a different assessment id) before its own poll settles. Only the
+ * attempt whose AbortController is still the one the page is currently
+ * tracking is allowed to finalize - i.e. clear isSubmitting and release the
+ * poll refs. A stale/superseded attempt resolving later (ready, failed,
+ * timeout, or otherwise) must never clear state that a newer, still-running
+ * attempt already owns.
+ */
+export function shouldFinalizePollAttempt({
+  activeAbortController,
+  thisAttemptController,
+}: {
+  activeAbortController: AbortController | null;
+  thisAttemptController: AbortController;
+}): boolean {
+  return activeAbortController === thisAttemptController;
+}
