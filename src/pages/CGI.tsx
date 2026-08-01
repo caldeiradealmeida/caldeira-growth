@@ -1146,7 +1146,7 @@ export default function CGI() {
     const saved = readSavedCgiAssessment();
     if (!saved) {
       toast({
-        title: "Nenhum assessment salvo",
+        title: "Nenhum diagnóstico salvo",
         description:
           "Gere um CGI uma vez nesta máquina para habilitar a regeneração local.",
         variant: "destructive",
