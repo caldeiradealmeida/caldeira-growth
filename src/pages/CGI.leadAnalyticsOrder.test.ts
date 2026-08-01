@@ -66,4 +66,30 @@ describe("CGI.tsx - lead dataLayer event fires only after persistence", () => {
     // try block, so a thrown/rejected submitCgiLead call skips the push.
     expect(submitIdentification).toMatch(/try\s*{[\s\S]*await persistLead\(/);
   });
+
+  it("shows an error and stops on a generic lead persistence failure, instead of silently advancing", () => {
+    const submitIdentification = extractFunctionBody(
+      cgiPageSource,
+      "const submitIdentification = async"
+    );
+
+    // A failed persistLead() call that isn't the two specifically-handled
+    // validation errors must surface saveFailureTitle/saveFailureBody and
+    // return before reaching setStep("context") - otherwise the UI moves
+    // the visitor to step 2 while their lead was never actually saved.
+    expect(submitIdentification).toMatch(
+      /lead_submit_failed"\);[\s\S]*?saveFailureTitle[\s\S]*?saveFailureBody[\s\S]*?return;/
+    );
+  });
+
+  it("shows an error and stops on a generic company-context persistence failure", () => {
+    const submitCompanyContext = extractFunctionBody(
+      cgiPageSource,
+      "const submitCompanyContext = async"
+    );
+
+    expect(submitCompanyContext).toMatch(
+      /context_submit_failed"\);[\s\S]*?saveFailureTitle[\s\S]*?saveFailureBody[\s\S]*?return;/
+    );
+  });
 });

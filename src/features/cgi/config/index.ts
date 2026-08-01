@@ -123,6 +123,7 @@ export const cgiUi: Record<
     incompleteAssessmentTitle: string;
     incompleteAssessmentBody: string;
     saveFailureTitle: string;
+    saveFailureBody: string;
     reportDocTitle: string;
     reportSubtitle: string;
     dimensionReadingTitle: string;
@@ -329,6 +330,8 @@ export const cgiUi: Record<
     incompleteAssessmentTitle: "Diagnóstico incompleto",
     incompleteAssessmentBody: "Responda as 40 perguntas para gerar seu CGI.",
     saveFailureTitle: "Falha ao salvar",
+    saveFailureBody:
+      "Não foi possível salvar seus dados agora. Verifique sua conexão e tente novamente.",
     reportDocTitle: "Relatório CGI",
     reportSubtitle: "Diagnóstico executivo de maturidade de crescimento",
     dimensionReadingTitle: "Leitura por dimensão",
@@ -545,6 +548,8 @@ export const cgiUi: Record<
     incompleteAssessmentTitle: "Incomplete assessment",
     incompleteAssessmentBody: "Answer all 40 questions to generate your CGI.",
     saveFailureTitle: "Save failure",
+    saveFailureBody:
+      "We could not save your data right now. Check your connection and try again.",
     reportDocTitle: "CGI Report",
     reportSubtitle: "Executive diagnosis of growth maturity",
     dimensionReadingTitle: "Reading by dimension",
@@ -761,6 +766,8 @@ export const cgiUi: Record<
     incompleteAssessmentTitle: "Diagnóstico incompleto",
     incompleteAssessmentBody: "Responda las 40 preguntas para generar su CGI.",
     saveFailureTitle: "Error al guardar",
+    saveFailureBody:
+      "No pudimos guardar sus datos en este momento. Verifique su conexión e intente de nuevo.",
     reportDocTitle: "Informe CGI",
     reportSubtitle: "Diagnóstico ejecutivo de madurez de crecimiento",
     dimensionReadingTitle: "Lectura por dimensión",

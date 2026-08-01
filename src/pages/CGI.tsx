@@ -748,6 +748,13 @@ export default function CGI() {
         console.error("[CGI] lead submit error", error);
       }
       trackInternalError("cgi_system_error", "lead_submit_failed");
+      toast({
+        title: t.saveFailureTitle,
+        description: t.saveFailureBody,
+        variant: "destructive",
+      });
+      setIsLeadSubmitting(false);
+      return;
     } finally {
       setIsLeadSubmitting(false);
     }
@@ -784,6 +791,13 @@ export default function CGI() {
         console.error("[CGI] context submit error", error);
       }
       trackInternalError("cgi_system_error", "context_submit_failed");
+      toast({
+        title: t.saveFailureTitle,
+        description: t.saveFailureBody,
+        variant: "destructive",
+      });
+      setIsLeadSubmitting(false);
+      return;
     } finally {
       setIsLeadSubmitting(false);
     }
