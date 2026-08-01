@@ -13,14 +13,45 @@ import { describe, expect, it } from "vitest";
 const currentDir = dirname(fileURLToPath(import.meta.url));
 const cgiPageSource = readFileSync(join(currentDir, "CGI.tsx"), "utf-8");
 
+// Two signature shapes appear in this file, and each needs its own way to
+// locate the function's own opening brace:
+//  - `const name = async (...) => {`, possibly wrapped in a call like
+//    useCallback(...) - here the first "=>" reachable from `start` always
+//    belongs to this function (nothing in its own param list uses "=>" in
+//    this codebase), so the brace right after that arrow is the body start.
+//  - `function name(...) {` (or `export function name(...) {`) - there is
+//    no "=>" in the signature itself, and the body may define its own arrow
+//    functions later, so searching for "=>" would overshoot into unrelated
+//    code. Instead, the body's brace is the first "{" reached while
+//    parenthesis depth is back to 0, i.e. past the parameter list (which
+//    correctly skips any type-annotation braces inside it, since only
+//    "(" / ")" affect the depth count).
 function extractFunctionBody(source: string, signature: string): string {
   const start = source.indexOf(signature);
   if (start === -1) throw new Error(`Could not find "${signature}" in CGI.tsx`);
-  // Jump past the arrow first, so a destructured-params brace (e.g.
-  // `async ({ ... }) => {`) isn't mistaken for the function body's opening
-  // brace - it would close early and truncate the captured body.
-  const arrowIndex = source.indexOf("=>", start);
-  const bodyStart = source.indexOf("{", arrowIndex);
+
+  const isPlainFunctionDeclaration = /(^|\s)function\s/.test(signature);
+  let bodyStart: number;
+  if (isPlainFunctionDeclaration) {
+    let parenDepth = 0;
+    bodyStart = -1;
+    for (let i = start; i < source.length; i += 1) {
+      const char = source[i];
+      if (char === "(") parenDepth += 1;
+      else if (char === ")") parenDepth -= 1;
+      else if (char === "{" && parenDepth === 0) {
+        bodyStart = i;
+        break;
+      }
+    }
+  } else {
+    const arrowIndex = source.indexOf("=>", start);
+    bodyStart = arrowIndex === -1 ? -1 : source.indexOf("{", arrowIndex);
+  }
+  if (bodyStart === -1) {
+    throw new Error(`Could not find body start for "${signature}" in CGI.tsx`);
+  }
+
   let depth = 0;
   for (let i = bodyStart; i < source.length; i += 1) {
     if (source[i] === "{") {
