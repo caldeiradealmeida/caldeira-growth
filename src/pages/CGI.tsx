@@ -1185,7 +1185,10 @@ export default function CGI() {
 
       <CgiLanding t={t} config={config} onStartClick={handleStartClick} />
 
-      <section id="cgi-assessment" className={`${sectionLayout.sectionY} scroll-mt-24`}>
+      <section
+        id="cgi-assessment"
+        className="pt-8 pb-20 scroll-mt-20 md:pt-16 md:pb-28 md:scroll-mt-24 lg:pt-20 lg:pb-32"
+      >
         <div className={sectionLayout.container}>
           {step === "lead" && (
             <CgiLeadStep

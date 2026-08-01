@@ -4,6 +4,7 @@ import { sectionLayout } from "@/lib/sectionLayout";
 import { ArrowRight, BarChart3, ShieldCheck, Sparkles } from "lucide-react";
 import type { getCgiConfig } from "@/data/cgiConfig";
 import type { CgiUiText } from "../config";
+import { scrollToAssessment } from "../services/report";
 
 type CgiLandingProps = {
   t: CgiUiText;
@@ -33,9 +34,7 @@ export function CgiLanding({ t, config, onStartClick }: CgiLandingProps) {
                   className="bg-accent text-accent-foreground hover:bg-accent/90"
                   onClick={() => {
                     onStartClick();
-                    document
-                      .getElementById("cgi-assessment")
-                      ?.scrollIntoView({ behavior: "smooth" });
+                    scrollToAssessment({ focusId: "name" });
                   }}
                 >
                   {t.start}

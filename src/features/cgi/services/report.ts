@@ -118,11 +118,23 @@ export function getSaveErrorMessage(save: unknown, t = cgiUi.pt): string {
   return t.savedBody;
 }
 
-export function scrollToAssessment() {
+export function scrollToAssessment(options?: { focusId?: string }) {
   window.setTimeout(() => {
+    const prefersReducedMotion =
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     document
       .getElementById("cgi-assessment")
-      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+      ?.scrollIntoView({ behavior: prefersReducedMotion ? "auto" : "smooth", block: "start" });
+
+    if (options?.focusId) {
+      window.setTimeout(
+        () => {
+          document.getElementById(options.focusId!)?.focus({ preventScroll: true });
+        },
+        prefersReducedMotion ? 50 : 500
+      );
+    }
   }, 0);
 }
 
