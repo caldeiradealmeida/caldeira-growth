@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { sectionLayout } from "@/lib/sectionLayout";
-import { ArrowRight, Sparkles } from "lucide-react";
+import { ArrowRight, Clock, Sparkles } from "lucide-react";
 import type { CgiUiText } from "../config";
 import type { CgiConsentState, LeadForm } from "../types";
 
@@ -64,14 +64,30 @@ export function CgiLeadStep({
   }, [onLeadFormView]);
 
   return (
-    <div className="grid gap-10 lg:grid-cols-[0.8fr_1.2fr]">
+    <div className="grid gap-6 lg:grid-cols-[0.8fr_1.2fr] lg:gap-10">
       <div className={sectionLayout.prose}>
         <Badge variant="outline">{t.step1}</Badge>
-        <h2 className="mt-5 text-3xl font-semibold tracking-tight md:text-4xl">
+        <h2 className="mt-3 text-2xl font-semibold tracking-tight md:text-3xl lg:text-4xl">
           {t.contextTitle}
         </h2>
-        <p className={sectionLayout.subtitle}>{t.contextBody}</p>
-        <div className="mt-8 rounded-lg border border-primary/15 bg-primary/5 p-5">
+        <p className="mt-2 text-base leading-relaxed text-muted-foreground md:text-lg">
+          {t.contextBody}
+        </p>
+        <p className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-primary">
+          <Clock className="h-4 w-4" />
+          {t.leadTimeEstimate}
+        </p>
+        <ul className="mt-3 flex flex-wrap gap-2">
+          {t.leadDeliverables.map((item) => (
+            <li
+              key={item}
+              className="rounded-full border border-primary/20 bg-primary/5 px-3 py-1 text-xs font-medium text-primary"
+            >
+              {item}
+            </li>
+          ))}
+        </ul>
+        <div className="mt-6 hidden rounded-lg border border-primary/15 bg-primary/5 p-5 lg:block">
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">
             {t.methodEyebrow}
           </p>

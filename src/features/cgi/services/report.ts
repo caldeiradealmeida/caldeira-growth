@@ -118,11 +118,88 @@ export function getSaveErrorMessage(save: unknown, t = cgiUi.pt): string {
   return t.savedBody;
 }
 
-export function scrollToAssessment() {
+const SCROLL_VISUAL_MARGIN_PX = 16;
+// If a smooth window.scrollTo hasn't moved the page at all shortly after
+// being issued, force an instant jump. element.scrollIntoView/window.scrollTo
+// with behavior:"smooth" is known to silently no-op under some browser/tab
+// timing conditions (e.g. a backgrounded tab, or a scroll requested from a
+// deferred callback) - this guarantees the user is never left stranded on
+// the hero with no visible movement.
+const SCROLL_START_CHECK_MS = 250;
+const FOCUS_POLL_INTERVAL_MS = 100;
+const FOCUS_MAX_WAIT_MS = 1500;
+
+export function prefersReducedMotion(): boolean {
+  return (
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  );
+}
+
+function getFixedHeaderHeight(): number {
+  const header = document.querySelector("header");
+  return header && typeof header.getBoundingClientRect === "function"
+    ? header.getBoundingClientRect().height
+    : 0;
+}
+
+// Absolute document position, not the viewport-relative rect scrollIntoView
+// uses internally - computed fresh on every call so it reflects whatever
+// just rendered (e.g. a step change committed the same tick). Exported so
+// the header-offset/margin math can be unit-tested without needing a full
+// DOM + fake-timer harness for the scroll/focus orchestration around it.
+export function computeScrollDestination(target: HTMLElement): number {
+  const absoluteTop = target.getBoundingClientRect().top + window.scrollY;
+  return Math.max(0, absoluteTop - getFixedHeaderHeight() - SCROLL_VISUAL_MARGIN_PX);
+}
+
+export function scrollToAssessment(options?: { focusId?: string }) {
   window.setTimeout(() => {
-    document
-      .getElementById("cgi-assessment")
-      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    const target =
+      (options?.focusId && document.getElementById(options.focusId)) ||
+      document.getElementById("cgi-assessment");
+    if (!target) return;
+
+    const destination = computeScrollDestination(target);
+    const reducedMotion = prefersReducedMotion();
+    const startY = window.scrollY;
+
+    window.scrollTo({ top: destination, behavior: reducedMotion ? "auto" : "smooth" });
+
+    if (!reducedMotion) {
+      window.setTimeout(() => {
+        const barelyMoved = Math.abs(window.scrollY - startY) < 2;
+        const shouldHaveMoved = Math.abs(destination - startY) > 2;
+        if (barelyMoved && shouldHaveMoved) {
+          window.scrollTo({ top: destination, behavior: "auto" });
+        }
+      }, SCROLL_START_CHECK_MS);
+    }
+
+    if (!options?.focusId) return;
+
+    const focusField = () => {
+      document.getElementById(options.focusId!)?.focus({ preventScroll: true });
+    };
+
+    if (reducedMotion) {
+      focusField();
+      return;
+    }
+
+    // Focus only once the scroll has actually settled near its destination
+    // (or a max wait elapses, as a safety net) - never on a fixed guessed
+    // delay, and never before the scroll has had a chance to complete.
+    const deadline = Date.now() + FOCUS_MAX_WAIT_MS;
+    const pollUntilSettled = () => {
+      const settled = Math.abs(window.scrollY - destination) < 2;
+      if (settled || Date.now() >= deadline) {
+        focusField();
+        return;
+      }
+      window.setTimeout(pollUntilSettled, FOCUS_POLL_INTERVAL_MS);
+    };
+    window.setTimeout(pollUntilSettled, FOCUS_POLL_INTERVAL_MS);
   }, 0);
 }
 

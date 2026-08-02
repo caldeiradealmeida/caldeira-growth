@@ -73,6 +73,8 @@ export const cgiUi: Record<
     answeredLabel: string;
     methodIntroTitle: string;
     methodIntroBody: string[];
+    leadTimeEstimate: string;
+    leadDeliverables: string[];
     labels: Record<keyof LeadForm, string>;
     sectorHelp: string;
     sectorOptions: string[];
@@ -121,6 +123,7 @@ export const cgiUi: Record<
     incompleteAssessmentTitle: string;
     incompleteAssessmentBody: string;
     saveFailureTitle: string;
+    saveFailureBody: string;
     reportDocTitle: string;
     reportSubtitle: string;
     dimensionReadingTitle: string;
@@ -167,14 +170,14 @@ export const cgiUi: Record<
   }
 > = {
   pt: {
-    metaTitle: "CGI - Caldeira Growth Index | Assessment de crescimento",
+    metaTitle: "CGI - Caldeira Growth Index | Diagnóstico de crescimento",
     metaDescription:
-      "Assessment gratuito de maturidade de crescimento empresarial da Caldeira Growth. Descubra gargalos e prioridades em menos de 10 minutos.",
+      "Diagnóstico gratuito de maturidade de crescimento empresarial da Caldeira Growth. Descubra gargalos e prioridades em menos de 10 minutos.",
     badge: "CGI - Caldeira Growth Index",
-    heroTitle: "Avalie a capacidade de crescimento da sua organização.",
+    heroTitle: "Descubra o que está limitando o crescimento da sua empresa.",
     heroText:
-      "O Caldeira Growth Index analisa cinco dimensões que sustentam o crescimento e produz uma leitura executiva sobre gargalos, prioridades e capacidades organizacionais.",
-    start: "Iniciar assessment",
+      "O Caldeira Growth Index avalia cinco dimensões da sua organização, identifica os principais gargalos de crescimento e aponta as prioridades estratégicas em uma leitura executiva objetiva.",
+    start: "Iniciar diagnóstico",
     stats: [["5", "dimensões críticas"], ["40", "perguntas executivas"], ["0-100", "score de maturidade"]],
     trust: [
       { title: "Consultivo", body: "Perguntas orientadas a decisões de crescimento, não um quiz genérico." },
@@ -185,9 +188,9 @@ export const cgiUi: Record<
     step2: "Etapa 2 de 4",
     step3: "Etapa 3 de 4",
     step4: "Etapa final",
-    contextTitle: "Vamos começar pelo essencial.",
+    contextTitle: "Vamos começar seu diagnóstico",
     contextBody:
-      "Informe seus dados para iniciar o diagnóstico e receber seu resultado ao final.",
+      "Preencha seus dados para iniciar o diagnóstico e receber uma leitura executiva personalizada sobre os principais gargalos e prioridades de crescimento da sua empresa.",
     companyContextTitle: "Agora, conte-nos sobre a empresa.",
     companyContextBody:
       "Essas informações ajudam a interpretar suas respostas e tornar o diagnóstico mais relevante para o contexto da organização.",
@@ -209,6 +212,14 @@ export const cgiUi: Record<
     methodIntroTitle: "Um diagnóstico estruturado das capacidades que sustentam o crescimento.",
     methodIntroBody: [
       "O CGI avalia cinco dimensões organizacionais e transforma suas respostas em uma leitura personalizada de forças, gargalos e prioridades estratégicas.",
+    ],
+    leadTimeEstimate: "Tempo estimado: cerca de 12 minutos",
+    leadDeliverables: [
+      "Score de 0 a 100",
+      "Leitura das 5 dimensões",
+      "Principais gargalos",
+      "Prioridades estratégicas",
+      "Relatório executivo personalizado",
     ],
     labels: {
       name: "Nome",
@@ -278,7 +289,7 @@ export const cgiUi: Record<
     secondarySyncWarningTitle: "Seu relatório está pronto",
     secondarySyncWarningBody:
       "Tivemos uma dificuldade ao registrar uma informação complementar, mas isso não afeta o resultado.",
-    begin: "Começar assessment",
+    begin: "Começar diagnóstico",
     answered: (answered, total) => `${answered} de ${total}`,
     back: "Voltar",
     nextDimension: "Próxima dimensão",
@@ -310,15 +321,17 @@ export const cgiUi: Record<
     attentionBody:
       "Essa dimensão aparece entre as menores notas e deve ser priorizada em uma conversa estratégica.",
     invalidRequiredTitle: "Campos obrigatórios",
-    invalidRequiredBody: "Preencha todos os dados antes de iniciar o assessment.",
+    invalidRequiredBody: "Preencha todos os dados antes de iniciar o diagnóstico.",
     invalidEmailTitle: "E-mail inválido",
     invalidEmailBody: "Informe um e-mail corporativo válido para continuar.",
     invalidPhoneBody: "Informe um número de telefone válido.",
     incompleteDimensionTitle: "Dimensão incompleta",
     incompleteDimensionBody: "Responda todas as perguntas desta dimensão para continuar.",
-    incompleteAssessmentTitle: "Assessment incompleto",
+    incompleteAssessmentTitle: "Diagnóstico incompleto",
     incompleteAssessmentBody: "Responda as 40 perguntas para gerar seu CGI.",
     saveFailureTitle: "Falha ao salvar",
+    saveFailureBody:
+      "Não foi possível salvar seus dados agora. Verifique sua conexão e tente novamente.",
     reportDocTitle: "Relatório CGI",
     reportSubtitle: "Diagnóstico executivo de maturidade de crescimento",
     dimensionReadingTitle: "Leitura por dimensão",
@@ -417,6 +430,14 @@ export const cgiUi: Record<
     methodIntroTitle: "A structured diagnosis of the capabilities that sustain growth.",
     methodIntroBody: [
       "CGI evaluates five organizational dimensions and turns your answers into a personalized reading of strengths, bottlenecks and strategic priorities.",
+    ],
+    leadTimeEstimate: "Estimated time: about 12 minutes",
+    leadDeliverables: [
+      "0-100 score",
+      "Reading across 5 dimensions",
+      "Key bottlenecks",
+      "Strategic priorities",
+      "Personalized executive report",
     ],
     labels: {
       name: "Name",
@@ -527,6 +548,8 @@ export const cgiUi: Record<
     incompleteAssessmentTitle: "Incomplete assessment",
     incompleteAssessmentBody: "Answer all 40 questions to generate your CGI.",
     saveFailureTitle: "Save failure",
+    saveFailureBody:
+      "We could not save your data right now. Check your connection and try again.",
     reportDocTitle: "CGI Report",
     reportSubtitle: "Executive diagnosis of growth maturity",
     dimensionReadingTitle: "Reading by dimension",
@@ -625,6 +648,14 @@ export const cgiUi: Record<
     methodIntroTitle: "Un diagnóstico estructurado de las capacidades que sostienen el crecimiento.",
     methodIntroBody: [
       "El CGI evalúa cinco dimensiones organizacionales y transforma sus respuestas en una lectura personalizada de fortalezas, cuellos de botella y prioridades estratégicas.",
+    ],
+    leadTimeEstimate: "Tiempo estimado: unos 12 minutos",
+    leadDeliverables: [
+      "Score de 0 a 100",
+      "Lectura de las 5 dimensiones",
+      "Principales cuellos de botella",
+      "Prioridades estratégicas",
+      "Informe ejecutivo personalizado",
     ],
     labels: {
       name: "Nombre",
@@ -735,6 +766,8 @@ export const cgiUi: Record<
     incompleteAssessmentTitle: "Diagnóstico incompleto",
     incompleteAssessmentBody: "Responda las 40 preguntas para generar su CGI.",
     saveFailureTitle: "Error al guardar",
+    saveFailureBody:
+      "No pudimos guardar sus datos en este momento. Verifique su conexión e intente de nuevo.",
     reportDocTitle: "Informe CGI",
     reportSubtitle: "Diagnóstico ejecutivo de madurez de crecimiento",
     dimensionReadingTitle: "Lectura por dimensión",

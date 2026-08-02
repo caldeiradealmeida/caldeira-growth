@@ -748,6 +748,13 @@ export default function CGI() {
         console.error("[CGI] lead submit error", error);
       }
       trackInternalError("cgi_system_error", "lead_submit_failed");
+      toast({
+        title: t.saveFailureTitle,
+        description: t.saveFailureBody,
+        variant: "destructive",
+      });
+      setIsLeadSubmitting(false);
+      return;
     } finally {
       setIsLeadSubmitting(false);
     }
@@ -784,6 +791,13 @@ export default function CGI() {
         console.error("[CGI] context submit error", error);
       }
       trackInternalError("cgi_system_error", "context_submit_failed");
+      toast({
+        title: t.saveFailureTitle,
+        description: t.saveFailureBody,
+        variant: "destructive",
+      });
+      setIsLeadSubmitting(false);
+      return;
     } finally {
       setIsLeadSubmitting(false);
     }
@@ -1146,7 +1160,7 @@ export default function CGI() {
     const saved = readSavedCgiAssessment();
     if (!saved) {
       toast({
-        title: "Nenhum assessment salvo",
+        title: "Nenhum diagnóstico salvo",
         description:
           "Gere um CGI uma vez nesta máquina para habilitar a regeneração local.",
         variant: "destructive",
@@ -1185,7 +1199,10 @@ export default function CGI() {
 
       <CgiLanding t={t} config={config} onStartClick={handleStartClick} />
 
-      <section id="cgi-assessment" className={`${sectionLayout.sectionY} scroll-mt-24`}>
+      <section
+        id="cgi-assessment"
+        className="pt-8 pb-20 scroll-mt-20 md:pt-16 md:pb-28 md:scroll-mt-24 lg:pt-20 lg:pb-32"
+      >
         <div className={sectionLayout.container}>
           {step === "lead" && (
             <CgiLeadStep
