@@ -129,7 +129,17 @@ export const SECTION_SPECS = {
     fields: [
       {
         key: "observedSignal",
-        variants: ["Sinal observado", "Observed signal", "Señal observada"],
+        // "Observed sign" (missing "al") and the masculine "Señal observado"
+        // (grammatically it should agree as "observada", but the model has
+        // been observed producing the masculine form) are both real model
+        // output confirmed in a live-generated report, not just guesses.
+        variants: [
+          "Sinal observado",
+          "Observed signal",
+          "Observed sign",
+          "Señal observada",
+          "Señal observado",
+        ],
       },
       {
         key: "probableCause",
@@ -156,11 +166,23 @@ export const SECTION_SPECS = {
     ],
   },
   renunciations: {
-    titleMarkers: ["Escolha", "Choice"],
+    // "Elección" (Spanish for "Escolha"/"Choice") is a real, confirmed gap -
+    // without it, "Elección:" was left un-stripped at the start of the item
+    // title in a live-generated Spanish report.
+    titleMarkers: ["Escolha", "Choice", "Elección"],
     fields: [
       {
         key: "whatToStop",
-        variants: ["O que deixar de fazer", "What to stop doing", "What to stop", "Qué dejar de hacer"],
+        // "Lo que se debe dejar de hacer" is the longer phrasing the model
+        // actually used in a live Spanish report, alongside the shorter
+        // "Qué dejar de hacer" already covered here.
+        variants: [
+          "O que deixar de fazer",
+          "What to stop doing",
+          "What to stop",
+          "Qué dejar de hacer",
+          "Lo que se debe dejar de hacer",
+        ],
       },
       {
         key: "protectedResource",
@@ -169,6 +191,10 @@ export const SECTION_SPECS = {
           "Protected resource or capability",
           "Protected resource",
           "Protected capability",
+          // Reversed word order the model actually used in a live English
+          // report ("Resource or capability protected:"), as opposed to
+          // the "Protected resource or capability" phrasing already above.
+          "Resource or capability protected",
           "Recurso o capacidad protegida",
         ],
       },
@@ -191,7 +217,11 @@ export const SECTION_SPECS = {
     ],
   },
   finalRecommendations: {
-    titleMarkers: ["Recomendação", "Recommendation"],
+    // "Recomendación" (Spanish) added proactively alongside the confirmed
+    // renunciations/"Elección" fix above - same missing-Spanish-marker
+    // pattern, not yet directly observed failing here, but a zero-risk,
+    // purely additive alias.
+    titleMarkers: ["Recomendação", "Recommendation", "Recomendación"],
     fields: [
       { key: "priority", variants: ["Prioridade", "Priority", "Prioridad"] },
       {

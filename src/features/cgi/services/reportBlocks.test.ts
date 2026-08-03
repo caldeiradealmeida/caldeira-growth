@@ -660,3 +660,91 @@ describe("pt output is unchanged (regression guard)", () => {
     expect(items[0].segments[0].text).toBe("A principal alavanca é a clareza de segmento.");
   });
 });
+
+// Fixtures below use the exact raw wording a live-generated report actually
+// produced (captured during manual QA against a real Preview deployment,
+// 2026-08-03) - real model output varies from the "textbook" contract
+// phrasing in ways synthetic fixtures don't anticipate, and each of these
+// was a confirmed miss before the corresponding SECTION_SPECS entry above
+// was extended to recognize it.
+describe("field label recognition covers real model wording variance, not just the textbook contract phrasing", () => {
+  it("EN: recognizes 'Observed sign:' (missing 'al'), not just 'Observed signal:'", () => {
+    const t = cgiUi.en;
+    const raw =
+      "Bottleneck 1 — Strategic sharpness and trade-offs still being consolidated. Observed sign: Strategy scores show partial agreement with at least one neutral item (q5) and internal contrast, while Market and Customer remains only moderately strong. Probable cause: Criteria for ideal client, segment prioritization and explicit trade-offs between opportunities appear not to be fully codified. Strategic impact: Risk of growth with dispersion, higher cost to serve and leadership bandwidth consumed by initiatives with limited economic quality.";
+    const blocks = buildReportBlocks({
+      result: MINIMAL_RESULT,
+      t,
+      aiReport: { critical_bottlenecks: [raw] },
+    });
+    const items = numberedItems(blocks, t.criticalBottlenecksTitle);
+    expect(items[0].segments.map((segment) => segment.label)).toEqual([
+      t.reportFieldLabels.observedSignal,
+      t.reportFieldLabels.probableCause,
+      t.reportFieldLabels.strategicImpact,
+    ]);
+    expect(items[0].title).not.toContain("Observed sign");
+    expect(items[0].title).not.toContain("Strategy scores show partial agreement");
+  });
+
+  it("ES: recognizes the masculine 'Señal observado:', not just the grammatically-correct 'Señal observada:'", () => {
+    const t = cgiUi.es;
+    const raw =
+      'Cuello de botella 3 — Gestión reactiva y baja disciplina de ejecución. Señal observado: En Ejecución y Gestión, q25 y q27 en "totalmente en desacuerdo" contrastan con q32 en nivel neutral. Causa probable: Falta de un Growth OS mínimo. Impacto estratégico: Perpetuación de un ciclo de urgencias.';
+    const blocks = buildReportBlocks({
+      result: MINIMAL_RESULT,
+      t,
+      aiReport: { critical_bottlenecks: [raw] },
+    });
+    const items = numberedItems(blocks, t.criticalBottlenecksTitle);
+    expect(items[0].segments.map((segment) => segment.label)).toEqual([
+      t.reportFieldLabels.observedSignal,
+      t.reportFieldLabels.probableCause,
+      t.reportFieldLabels.strategicImpact,
+    ]);
+    expect(items[0].title).not.toContain("Señal observado");
+  });
+
+  it("ES: strips the 'Elección:' title marker and recognizes the longer 'Lo que se debe dejar de hacer:' phrasing", () => {
+    const t = cgiUi.es;
+    const raw =
+      "Elección: Simplificar la agenda estratégica. Lo que se debe dejar de hacer: Abrir múltiples nuevas iniciativas de productos o canales en paralelo antes de estabilizar la máquina comercial básica. Recurso o capacidad protegida: Capacidad de ejecución de un equipo de 11-50 personas. Racional estratégico: Evitar dispersión para construir primero un sistema repetible de adquisición y conversión.";
+    const blocks = buildReportBlocks({
+      result: MINIMAL_RESULT,
+      t,
+      aiReport: { renunciations: [raw] },
+    });
+    const items = numberedItems(blocks, t.renunciationsTitle);
+    expect(items[0].title).not.toContain("Elección");
+    expect(items[0].title).not.toContain("Lo que se debe dejar de hacer");
+    // The title's last two words are glued with a non-breaking space
+    // (preventOrphanWord), so check the leading part only.
+    expect(items[0].title).toContain("Simplificar la agenda");
+    expect(items[0].segments.map((segment) => segment.label)).toEqual([
+      t.reportFieldLabels.whatToStop,
+      t.reportFieldLabels.protectedResource,
+      t.reportFieldLabels.strategicRationale,
+    ]);
+  });
+
+  it("EN: recognizes the reversed word order 'Resource or capability protected:', not just 'Protected resource or capability:'", () => {
+    const t = cgiUi.en;
+    const raw =
+      "Protect focus on priority B2B agribusiness segments. What to stop doing: Stop or drastically reduce the pursuit of opportunistic clients outside the defined ideal profile, even when revenue is tempting. Resource or capability protected: Leadership time, commercial bandwidth and delivery capacity. Strategic rationale: Concentrating energy on higher-margin clients increases the quality of growth.";
+    const blocks = buildReportBlocks({
+      result: MINIMAL_RESULT,
+      t,
+      aiReport: { renunciations: [raw] },
+    });
+    const items = numberedItems(blocks, t.renunciationsTitle);
+    expect(items[0].segments.map((segment) => segment.label)).toEqual([
+      t.reportFieldLabels.whatToStop,
+      t.reportFieldLabels.protectedResource,
+      t.reportFieldLabels.strategicRationale,
+    ]);
+    expect(items[0].segments[0].text).not.toContain("Resource or capability protected");
+    expect(items[0].segments[1].text).toBe(
+      "Leadership time, commercial bandwidth and delivery capacity."
+    );
+  });
+});
