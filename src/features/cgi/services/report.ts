@@ -9,13 +9,17 @@ import { buildReportBlocks, type ReportBlock, type ReportBlockItem } from "./rep
 
 // Web and PDF signature sizes are deliberately two independent constants,
 // not one shared value scaled per output - they're tuned separately for
-// each medium's layout. Web is now 572px (+30% over the prior 440px, which
-// was itself +100% over the original 220px); PDF stays exactly 75pt - it was
-// already approved at its current size/position and is untouched here. Both
+// each medium's layout. Web is now 645px (+~13% over the prior 572px, per a
+// web-only visual polish pass); PDF stays exactly 75pt - it was already
+// approved at its current size/position and is untouched here. Both
 // preserve the source image's aspect ratio (height is always derived from
-// width), and neither changes the card/name/role/contact layout around it or
-// how the image itself is loaded/cropped.
-export const WEB_SIGNATURE_WIDTH_PX = 572;
+// width). The PDF signature is pre-cropped to its visible ink before being
+// loaded (see optionalImageToDataUrl's trimTransparentPadding below); the
+// web <img> uses the raw asset directly and relies on the negative margins
+// on .back-cover-signature img (below) to visually crop the same
+// transparent padding instead, so the signature and the contact text read
+// as one block rather than two.
+export const WEB_SIGNATURE_WIDTH_PX = 645;
 export const PDF_SIGNATURE_WIDTH_PT = 75;
 
 export function parseAiReport(value: string): {
@@ -540,8 +544,14 @@ export function buildReportHtml(
       .back-cover-eyebrow { color: rgba(255,255,255,.72); font-size: 13px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; }
       .back-cover h2 { color: #ffffff; font-size: 34px; margin: 16px 0 18px; }
       .back-cover-content p { color: rgba(255,255,255,.88); font-size: 16px; max-width: 480px; text-align: left; }
-      .back-cover-signature { align-items: center; display: flex; gap: 14px; justify-content: center; }
-      .back-cover-signature img { filter: brightness(0) invert(1); height: auto; width: ${WEB_SIGNATURE_WIDTH_PX}px; }
+      .back-cover-signature { align-items: center; display: flex; gap: 10px; justify-content: center; }
+      /* The source PNG has a large transparent margin around the actual
+         signature stroke (the PDF path crops this via trimTransparentPadding
+         before embedding it; this <img> renders the raw asset). These
+         negative margins crop that same empty space visually so the
+         signature and the contact text read as one block instead of two,
+         and align-items:center centers against the now ink-hugging box. */
+      .back-cover-signature img { filter: brightness(0) invert(1); height: auto; width: ${WEB_SIGNATURE_WIDTH_PX}px; margin: -117px -223px; }
       .back-cover-signature p { color: rgba(255,255,255,.88); font-size: 13px; margin: 0; text-align: left; }
       footer { border-top: 1px solid #c8cdd4; padding-top: 8px; text-align: center; background: #f7f4ef; }
       footer img { width: 112px; height: auto; }

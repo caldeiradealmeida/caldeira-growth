@@ -1,4 +1,4 @@
-import type { cgiUi } from "../config";
+import type { cgiUi, ReportFieldKey } from "../config";
 import type { Language } from "@/lib/routing";
 import type { CgiScoreResult } from "@/lib/cgiScore";
 import type { parseAiReport } from "./report";
@@ -21,8 +21,38 @@ function escapeRegExp(value: string): string {
 // be present.
 const ARROW_LIKE_RE = /\s*(?:→|➜|⇒|⟶|->|!['’])\s*/g;
 
+// C0/C1 control characters (e.g. a stray U+0011) occasionally leak into
+// AI-generated JSON strings. They're invisible but not whitespace, and
+// standard PDF fonts have no glyph for them, so they show up as layout
+// artifacts. Tab, newline and carriage return are left alone - they're
+// meaningful whitespace, not corruption. Iterates by code point (not
+// UTF-16 code unit) so this never splits a surrogate pair.
+function stripInvisibleControlChars(value: string): string {
+  return Array.from(value)
+    .filter((char) => {
+      const code = char.codePointAt(0) ?? 0;
+      const isControl = code <= 31 || (code >= 127 && code <= 159);
+      const isPreservedWhitespace = code === 9 || code === 10 || code === 13;
+      return !isControl || isPreservedWhitespace;
+    })
+    .join("");
+}
+
+// Soft hyphen (U+00AD) is an invisible line-break hint with no purpose in
+// this rendering pipeline (no manual hyphenation) - some renderers show it
+// as a stray visible hyphen instead of hiding it, so it's dropped outright.
+const SOFT_HYPHEN_RE = /­/g;
+// Hyphen (U+2010) and non-breaking hyphen (U+2011) are typographically
+// identical to a plain ASCII hyphen but fall outside the WinAnsi/Latin-1
+// range standard PDF fonts cover, and have been observed producing missing-
+// glyph gaps in compound words like "non‑negotiable". Convert both to the
+// plain ASCII hyphen every renderer can display correctly.
+const HYPHEN_VARIANTS_RE = /[‐‑]/g;
+
 export function normalizeReportText(value: string): string {
-  return String(value || "")
+  return stripInvisibleControlChars(String(value || ""))
+    .replace(SOFT_HYPHEN_RE, "")
+    .replace(HYPHEN_VARIANTS_RE, "-")
     .replace(ARROW_LIKE_RE, " → ")
     .replace(/[ \t]+/g, " ")
     .trim();
@@ -90,23 +120,33 @@ export type ReportBlock =
 // this fixed canonical order and casing, regardless of how (or whether) the
 // model capitalized, punctuated or ordered them.
 
-type SectionField = { canonical: string; variants: string[] };
-type SectionSpec = { titleMarkers: string[]; fields: SectionField[] };
+type SectionField = { key: ReportFieldKey; variants: string[] };
+export type SectionSpec = { titleMarkers: string[]; fields: SectionField[] };
 
-const SECTION_SPECS = {
+export const SECTION_SPECS = {
   criticalBottlenecks: {
     titleMarkers: ["Título", "Title"],
     fields: [
       {
-        canonical: "Sinal observado",
-        variants: ["Sinal observado", "Observed signal", "Señal observada"],
+        key: "observedSignal",
+        // "Observed sign" (missing "al") and the masculine "Señal observado"
+        // (grammatically it should agree as "observada", but the model has
+        // been observed producing the masculine form) are both real model
+        // output confirmed in a live-generated report, not just guesses.
+        variants: [
+          "Sinal observado",
+          "Observed signal",
+          "Observed sign",
+          "Señal observada",
+          "Señal observado",
+        ],
       },
       {
-        canonical: "Causa provável",
+        key: "probableCause",
         variants: ["Causa provável", "Probable cause", "Causa probable"],
       },
       {
-        canonical: "Impacto estratégico",
+        key: "strategicImpact",
         variants: ["Impacto estratégico", "Strategic impact"],
       },
     ],
@@ -115,35 +155,51 @@ const SECTION_SPECS = {
     titleMarkers: ["Título", "Title"],
     fields: [
       {
-        canonical: "Ação prioritária",
+        key: "priorityAction",
         variants: ["Ação prioritária", "Priority action", "Acción prioritaria"],
       },
       {
-        canonical: "Resultado esperado",
+        key: "expectedResult",
         variants: ["Resultado esperado", "Expected result", "Expected outcome"],
       },
-      { canonical: "Horizonte", variants: ["Horizonte", "Horizon"] },
+      { key: "horizon", variants: ["Horizonte", "Horizon"] },
     ],
   },
   renunciations: {
-    titleMarkers: ["Escolha", "Choice"],
+    // "Elección" (Spanish for "Escolha"/"Choice") is a real, confirmed gap -
+    // without it, "Elección:" was left un-stripped at the start of the item
+    // title in a live-generated Spanish report.
+    titleMarkers: ["Escolha", "Choice", "Elección"],
     fields: [
       {
-        canonical: "O que deixar de fazer",
-        variants: ["O que deixar de fazer", "What to stop doing", "What to stop", "Qué dejar de hacer"],
+        key: "whatToStop",
+        // "Lo que se debe dejar de hacer" is the longer phrasing the model
+        // actually used in a live Spanish report, alongside the shorter
+        // "Qué dejar de hacer" already covered here.
+        variants: [
+          "O que deixar de fazer",
+          "What to stop doing",
+          "What to stop",
+          "Qué dejar de hacer",
+          "Lo que se debe dejar de hacer",
+        ],
       },
       {
-        canonical: "Recurso ou capacidade protegida",
+        key: "protectedResource",
         variants: [
           "Recurso ou capacidade protegida",
           "Protected resource or capability",
           "Protected resource",
           "Protected capability",
+          // Reversed word order the model actually used in a live English
+          // report ("Resource or capability protected:"), as opposed to
+          // the "Protected resource or capability" phrasing already above.
+          "Resource or capability protected",
           "Recurso o capacidad protegida",
         ],
       },
       {
-        canonical: "Racional estratégico",
+        key: "strategicRationale",
         variants: ["Racional estratégico", "Strategic rationale"],
       },
     ],
@@ -151,25 +207,29 @@ const SECTION_SPECS = {
   governanceSystem: {
     titleMarkers: ["Ritual"],
     fields: [
-      { canonical: "Frequência", variants: ["Frequência", "Frequency", "Frecuencia"] },
-      { canonical: "Participantes", variants: ["Participantes", "Participants"] },
-      { canonical: "Indicadores", variants: ["Indicadores", "Indicators", "Metrics"] },
+      { key: "frequency", variants: ["Frequência", "Frequency", "Frecuencia"] },
+      { key: "participants", variants: ["Participantes", "Participants"] },
+      { key: "indicators", variants: ["Indicadores", "Indicators", "Metrics"] },
       {
-        canonical: "Decisão esperada",
+        key: "expectedDecision",
         variants: ["Decisão esperada", "Expected decision", "Decisión esperada"],
       },
     ],
   },
   finalRecommendations: {
-    titleMarkers: ["Recomendação", "Recommendation"],
+    // "Recomendación" (Spanish) added proactively alongside the confirmed
+    // renunciations/"Elección" fix above - same missing-Spanish-marker
+    // pattern, not yet directly observed failing here, but a zero-risk,
+    // purely additive alias.
+    titleMarkers: ["Recomendação", "Recommendation", "Recomendación"],
     fields: [
-      { canonical: "Prioridade", variants: ["Prioridade", "Priority", "Prioridad"] },
+      { key: "priority", variants: ["Prioridade", "Priority", "Prioridad"] },
       {
-        canonical: "Próximo passo",
+        key: "nextStep",
         variants: ["Próximo passo", "Next step", "Próximo paso"],
       },
       {
-        canonical: "Condição de validação",
+        key: "validationCondition",
         variants: ["Condição de validação", "Validation condition", "Condición de validación"],
       },
     ],
@@ -192,19 +252,27 @@ function buildFieldRegex(fields: SectionField[]): RegExp {
   return new RegExp(`\\b(${alternatives.join("|")})\\s*:\\s*`, "gi");
 }
 
-function canonicalFieldFor(matchedVariant: string, fields: SectionField[]): string {
+function fieldKeyFor(matchedVariant: string, fields: SectionField[]): ReportFieldKey {
   const normalized = matchedVariant.trim().toLowerCase();
   const found = fields.find((field) =>
     field.variants.some((variant) => variant.toLowerCase() === normalized)
   );
-  return found ? found.canonical : matchedVariant.trim();
+  // buildFieldRegex only ever matches text drawn from `fields.variants`, so
+  // `found` is always defined in practice - this fallback exists purely so
+  // the function stays total without a non-null assertion.
+  return found ? found.key : fields[0].key;
 }
 
 // Splits one raw AI string into its short title plus its section's known
-// labeled fields, using only that section's own fixed field contract.
+// labeled fields, using only that section's own fixed field contract. The
+// parser recognizes a field regardless of which language's variant the raw
+// text used (see SECTION_SPECS above); the label actually shown always
+// comes from t.reportFieldLabels, keyed by the report's own language - so a
+// stored item is rendered identically however its raw label was written.
 function splitBySectionSpec(
   raw: string,
-  spec: SectionSpec
+  spec: SectionSpec,
+  t: (typeof cgiUi)[Language]
 ): { title: string; fields: LabeledSegment[] } {
   const text = stripTitleMarker(normalizeReportText(raw), spec.titleMarkers);
   const regex = buildFieldRegex(spec.fields);
@@ -214,12 +282,12 @@ function splitBySectionSpec(
   }
 
   const title = text.slice(0, matches[0].index ?? 0).trim();
-  const fields: LabeledSegment[] = matches
+  const keyedFields = matches
     .map((match, index) => {
       const start = (match.index ?? 0) + match[0].length;
       const end = matches[index + 1]?.index ?? text.length;
       return {
-        label: canonicalFieldFor(match[1], spec.fields),
+        key: fieldKeyFor(match[1], spec.fields),
         text: text.slice(start, end).trim(),
       };
     })
@@ -227,19 +295,47 @@ function splitBySectionSpec(
 
   // Always render fields in the section's own canonical order, regardless
   // of the order the model happened to write them in.
-  const orderIndex = new Map(spec.fields.map((field, index) => [field.canonical, index]));
-  fields.sort((a, b) => (orderIndex.get(a.label) ?? 0) - (orderIndex.get(b.label) ?? 0));
+  const orderIndex = new Map(spec.fields.map((field, index) => [field.key, index]));
+  keyedFields.sort((a, b) => (orderIndex.get(a.key) ?? 0) - (orderIndex.get(b.key) ?? 0));
+
+  const fields: LabeledSegment[] = keyedFields.map((field) => ({
+    label: t.reportFieldLabels[field.key],
+    text: field.text,
+  }));
 
   return { title: title || text, fields };
+}
+
+// Used by CgiResultStep's raw (unparsed, single-line-per-item) list
+// rendering - the same section field contract buildReportBlocks uses above,
+// but applied as an in-place label substitution on the original string
+// instead of splitting it into a separate title and bold segments. This
+// keeps that screen's exact existing layout (one plain string per bullet)
+// while still never showing a field label in the wrong language: the title
+// marker ("Título:"/"Title:") is stripped - exactly as it already is,
+// invisibly, in the structured renderer - and every recognized field
+// variant is swapped for t.reportFieldLabels' current-language text.
+export function localizeRawSectionItem(
+  raw: string,
+  spec: SectionSpec,
+  t: (typeof cgiUi)[Language]
+): string {
+  const withoutTitleMarker = stripTitleMarker(normalizeReportText(raw), spec.titleMarkers);
+  const regex = buildFieldRegex(spec.fields);
+  return withoutTitleMarker.replace(regex, (_match, variant: string) => {
+    const key = fieldKeyFor(variant, spec.fields);
+    return `${t.reportFieldLabels[key]}: `;
+  });
 }
 
 function buildSectionItems(
   rawItems: string[],
   ordinalLabel: string,
-  spec: SectionSpec
+  spec: SectionSpec,
+  t: (typeof cgiUi)[Language]
 ): ReportBlockItem[] {
   return rawItems.map((raw, index) => {
-    const { title, fields } = splitBySectionSpec(raw, spec);
+    const { title, fields } = splitBySectionSpec(raw, spec, t);
     const capitalizedFields = fields.map((field) => ({
       ...field,
       text: capitalizeFirst(field.text),
@@ -258,11 +354,14 @@ function buildSectionItems(
 // The model sometimes prefixes its own hypothesis sentence with the literal
 // word "Hipótese:" (marking it "clearly as a hypothesis", per the prompt) -
 // redundant once we already render "Hipótese N" as the title, producing
-// "Hipótese N / Hipótese: <text>". Strip only that literal leading word; the
-// rest of the sentence is never shortened or otherwise touched.
-const HYPOTHESIS_PREFIX_RE = /^\s*(?:Hip[oó]tese|Hip[oó]tesis|Hypothesis)\s*:\s*/i;
+// "Hipótese N / Hipótese: <text>". It sometimes also repeats the ordinal
+// number itself ("Hypothesis 1: ..."), producing "Hypothesis 1 / Hypothesis
+// 1: <text>" - the optional \d* here strips that case too, in pt/en/es.
+// Strip only that literal leading prefix; the rest of the sentence is never
+// shortened or otherwise touched.
+const HYPOTHESIS_PREFIX_RE = /^\s*(?:Hip[oó]tese|Hip[oó]tesis|Hypothesis)\s*\d*\s*:\s*/i;
 
-function stripHypothesisPrefix(text: string): string {
+export function stripHypothesisPrefix(text: string): string {
   return text.replace(HYPOTHESIS_PREFIX_RE, "");
 }
 
@@ -417,7 +516,7 @@ export function buildReportBlocks({
     const items =
       section.kind === "hypothesis"
         ? buildHypothesisItems(rawItems, section.ordinal)
-        : buildSectionItems(rawItems, section.ordinal, section.spec);
+        : buildSectionItems(rawItems, section.ordinal, section.spec, t);
     blocks.push({ kind: "numbered", items });
   });
 

@@ -104,3 +104,76 @@ describe("CgiResultStep", () => {
     }
   );
 });
+
+describe("CgiResultStep - AI list items show localized field labels, not raw pt-BR", () => {
+  // The AI's raw text always uses the pt-BR contract labels regardless of
+  // report language (see the investigation notes in reportBlocks.ts) - this
+  // is the worst case, and exactly what reached production in English.
+  const criticalBottleneckRaw =
+    "Título: Baixa clareza de proposta de valor. Sinal observado: dispersão de oferta. Causa provável: falta de tese explícita. Impacto estratégico: menor conversão.";
+
+  it.each(["en", "es"] as const)(
+    "never shows a Portuguese field label in the on-screen result view (%s)",
+    (lang) => {
+      const t = cgiUi[lang];
+      const text = textContent(
+        CgiResultStep({
+          ...baseProps,
+          t,
+          reportReady: true,
+          aiStatus: "generated",
+          aiReport: {
+            critical_bottlenecks: [criticalBottleneckRaw],
+          } as never,
+        })
+      );
+
+      expect(text).not.toContain("Sinal observado");
+      expect(text).not.toContain("Causa provável");
+      // "Impacto estratégico" is spelled identically in pt and es - only
+      // assert its absence for en, where the translation actually differs.
+      if (lang === "en") {
+        expect(text).not.toContain("Impacto estratégico");
+      }
+      expect(text).not.toContain("Título:");
+      expect(text).toContain(t.reportFieldLabels.observedSignal);
+      expect(text).toContain(t.reportFieldLabels.probableCause);
+      expect(text).toContain(t.reportFieldLabels.strategicImpact);
+    }
+  );
+
+  it("keeps the pt-BR labels unchanged when the report language is pt", () => {
+    const text = textContent(
+      CgiResultStep({
+        ...baseProps,
+        t: cgiUi.pt,
+        reportReady: true,
+        aiStatus: "generated",
+        aiReport: {
+          critical_bottlenecks: [criticalBottleneckRaw],
+        } as never,
+      })
+    );
+
+    expect(text).toContain("Sinal observado");
+    expect(text).toContain("Causa provável");
+    expect(text).toContain("Impacto estratégico");
+  });
+
+  it("strips a numbered hypothesis prefix on-screen too, in en", () => {
+    const text = textContent(
+      CgiResultStep({
+        ...baseProps,
+        t: cgiUi.en,
+        reportReady: true,
+        aiStatus: "generated",
+        aiReport: {
+          hypotheses_to_validate: ["Hypothesis 1: The main lever is segment clarity."],
+        } as never,
+      })
+    );
+
+    expect(text).not.toMatch(/Hypothesis\s*1\s*:/);
+    expect(text).toContain("The main lever is segment clarity.");
+  });
+});

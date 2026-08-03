@@ -12,6 +12,12 @@ import {
 } from "lucide-react";
 import type { CgiUiText } from "../config";
 import type { parseAiReport } from "../services/report";
+import {
+  localizeRawSectionItem,
+  normalizeReportText,
+  SECTION_SPECS,
+  stripHypothesisPrefix,
+} from "../services/reportBlocks";
 import { getScoreTone } from "../utils/form";
 import { CgiResultActions } from "./CgiResultActions";
 
@@ -261,26 +267,29 @@ export function CgiResultStep({
                         {aiReport.evidence_summary.map((item) => (
                           <li key={item} className="flex gap-2 text-sm">
                             <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-                            <span>{item}</span>
+                            <span>{normalizeReportText(item)}</span>
                           </li>
                         ))}
                       </ul>
                     </div>
                   ) : (
                     <p className="mt-4 text-sm text-muted-foreground">
-                      {aiReport.evidence_summary}
+                      {normalizeReportText(aiReport.evidence_summary)}
                     </p>
                   ))}
                 {aiReport.executive_summary && (
                   <p className="mt-4 leading-relaxed text-muted-foreground">
-                    {aiReport.executive_summary}
+                    {normalizeReportText(aiReport.executive_summary)}
                   </p>
                 )}
                 {(aiReport.strategic_diagnosis ||
                   aiReport.priority_diagnosis) && (
                   <p className="mt-4 leading-relaxed">
-                    {aiReport.strategic_diagnosis ||
-                      aiReport.priority_diagnosis}
+                    {normalizeReportText(
+                      aiReport.strategic_diagnosis ||
+                        aiReport.priority_diagnosis ||
+                        ""
+                    )}
                   </p>
                 )}
                 {Array.isArray(aiReport.dimension_reading) &&
@@ -295,7 +304,9 @@ export function CgiResultStep({
                           className="rounded-lg border border-border p-4"
                         >
                           <div className="flex items-center justify-between gap-4">
-                            <p className="font-medium">{item.dimension}</p>
+                            <p className="font-medium">
+                              {item.dimension && normalizeReportText(item.dimension)}
+                            </p>
                             {item.score !== undefined && (
                               <Badge variant="outline">
                                 {item.score}/100
@@ -304,12 +315,12 @@ export function CgiResultStep({
                           </div>
                           {item.analysis && (
                             <p className="mt-2 text-sm text-muted-foreground">
-                              {item.analysis}
+                              {normalizeReportText(item.analysis)}
                             </p>
                           )}
                           {item.implication && (
                             <p className="mt-2 text-sm">
-                              {item.implication}
+                              {normalizeReportText(item.implication)}
                             </p>
                           )}
                         </div>
@@ -317,28 +328,51 @@ export function CgiResultStep({
                     </div>
                   )}
                 {[
-                  [t.criticalBottlenecksTitle, aiReport.critical_bottlenecks],
-                  [t.strategicBetsTitle, aiReport.strategic_bets],
-                  [t.renunciationsTitle, aiReport.renunciations],
-                  [
-                    t.governanceTitle,
-                    aiReport.governance_system,
-                  ],
-                  [t.hypothesesTitle, aiReport.hypotheses_to_validate],
-                  [
-                    t.finalRecommendationsTitle,
-                    aiReport.final_recommendations ||
+                  {
+                    title: t.criticalBottlenecksTitle,
+                    items: aiReport.critical_bottlenecks,
+                    spec: SECTION_SPECS.criticalBottlenecks,
+                  },
+                  {
+                    title: t.strategicBetsTitle,
+                    items: aiReport.strategic_bets,
+                    spec: SECTION_SPECS.strategicBets,
+                  },
+                  {
+                    title: t.renunciationsTitle,
+                    items: aiReport.renunciations,
+                    spec: SECTION_SPECS.renunciations,
+                  },
+                  {
+                    title: t.governanceTitle,
+                    items: aiReport.governance_system,
+                    spec: SECTION_SPECS.governanceSystem,
+                  },
+                  {
+                    title: t.hypothesesTitle,
+                    items: aiReport.hypotheses_to_validate,
+                    spec: null,
+                  },
+                  {
+                    title: t.finalRecommendationsTitle,
+                    items:
+                      aiReport.final_recommendations ||
                       aiReport.recommended_next_steps,
-                  ],
-                ].map(([title, items]) =>
+                    spec: SECTION_SPECS.finalRecommendations,
+                  },
+                ].map(({ title, items, spec }) =>
                   Array.isArray(items) && items.length > 0 ? (
-                    <div key={title as string} className="mt-6">
-                      <h4 className="font-semibold">{title as string}</h4>
+                    <div key={title} className="mt-6">
+                      <h4 className="font-semibold">{title}</h4>
                       <ul className="mt-3 space-y-2">
                         {(items as string[]).map((item) => (
                           <li key={item} className="flex gap-2 text-sm">
                             <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-                            <span>{item}</span>
+                            <span>
+                              {spec
+                                ? localizeRawSectionItem(item, spec, t)
+                                : normalizeReportText(stripHypothesisPrefix(item))}
+                            </span>
                           </li>
                         ))}
                       </ul>

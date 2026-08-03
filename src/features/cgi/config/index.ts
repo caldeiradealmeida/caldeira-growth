@@ -2,6 +2,30 @@ import { CGI_QUESTIONS, type CgiDimensionId } from "@/data/cgiConfig";
 import { localizedPath, type Language } from "@/lib/routing";
 import type { LeadForm } from "../types";
 
+// Semantic keys for the AI report's per-section field labels (e.g. the
+// "Causa provável" / "Probable cause" line inside a Gargalo item). The
+// parser (reportBlocks.ts) recognizes pt/en/es aliases of each field in the
+// AI's raw text regardless of report language; the label actually shown to
+// the reader always comes from here, keyed by the report's own language -
+// see reportFieldLabels below.
+export type ReportFieldKey =
+  | "observedSignal"
+  | "probableCause"
+  | "strategicImpact"
+  | "priorityAction"
+  | "expectedResult"
+  | "horizon"
+  | "whatToStop"
+  | "protectedResource"
+  | "strategicRationale"
+  | "frequency"
+  | "participants"
+  | "indicators"
+  | "expectedDecision"
+  | "priority"
+  | "nextStep"
+  | "validationCondition";
+
 export const initialLead: LeadForm = {
   name: "",
   email: "",
@@ -143,6 +167,7 @@ export const cgiUi: Record<
       hypotheses: string;
       finalRecommendations: string;
     };
+    reportFieldLabels: Record<ReportFieldKey, string>;
     methodEyebrow: string;
     methodReportTitle: string;
     methodReportBody: string[];
@@ -350,6 +375,24 @@ export const cgiUi: Record<
       governanceSystem: "Ritual",
       hypotheses: "Hipótese",
       finalRecommendations: "Recomendação",
+    },
+    reportFieldLabels: {
+      observedSignal: "Sinal observado",
+      probableCause: "Causa provável",
+      strategicImpact: "Impacto estratégico",
+      priorityAction: "Ação prioritária",
+      expectedResult: "Resultado esperado",
+      horizon: "Horizonte",
+      whatToStop: "O que deixar de fazer",
+      protectedResource: "Recurso ou capacidade protegida",
+      strategicRationale: "Racional estratégico",
+      frequency: "Frequência",
+      participants: "Participantes",
+      indicators: "Indicadores",
+      expectedDecision: "Decisão esperada",
+      priority: "Prioridade",
+      nextStep: "Próximo passo",
+      validationCondition: "Condição de validação",
     },
     methodEyebrow: "Método proprietário Caldeira Growth",
     methodReportTitle: "Sobre este diagnóstico",
@@ -569,12 +612,30 @@ export const cgiUi: Record<
       hypotheses: "Hypothesis",
       finalRecommendations: "Recommendation",
     },
+    reportFieldLabels: {
+      observedSignal: "Observed signal",
+      probableCause: "Likely cause",
+      strategicImpact: "Strategic impact",
+      priorityAction: "Priority action",
+      expectedResult: "Expected result",
+      horizon: "Horizon",
+      whatToStop: "What to stop doing",
+      protectedResource: "Resource or capability protected",
+      strategicRationale: "Strategic rationale",
+      frequency: "Frequency",
+      participants: "Participants",
+      indicators: "Indicators",
+      expectedDecision: "Expected decision",
+      priority: "Priority",
+      nextStep: "Next step",
+      validationCondition: "Validation condition",
+    },
     methodEyebrow: "Proprietary Caldeira Growth methodology",
     methodReportTitle: "About this assessment",
     methodReportBody: [
       "This report was produced from the Caldeira Growth Index, a proprietary methodology developed to evaluate the capabilities that sustain an organization's growth.",
       "The CGI combines 40 questions distributed across five dimensions: Strategy, Market and Customer, Growth Machine, Execution and Management, and Leadership and Growth Culture.",
-      "The selection of questions, the structure of the dimensions and the interpretation criteria were built from Caldeira Growth's experience in consulting projects, strategic opinions, executive development programs, work with leaders and the principles developed in the book Cresça ou Desapareça.",
+      "The selection of questions, the structure of the dimensions and the interpretation criteria were built from Caldeira Growth's experience in consulting projects, strategic assessments, executive development programs, work with leaders and the principles developed in the book Cresça ou Desapareça.",
       "Artificial intelligence is used as a support tool to consolidate answers, identify patterns and personalize the report's writing. It does not replace the methodology or independently define the diagnosis criteria.",
       "The result should be understood as an initial executive reading. It does not replace an in-depth analysis of the organization's context, choices and specific constraints.",
     ],
@@ -786,6 +847,24 @@ export const cgiUi: Record<
       governanceSystem: "Ritual",
       hypotheses: "Hipótesis",
       finalRecommendations: "Recomendación",
+    },
+    reportFieldLabels: {
+      observedSignal: "Señal observada",
+      probableCause: "Causa probable",
+      strategicImpact: "Impacto estratégico",
+      priorityAction: "Acción prioritaria",
+      expectedResult: "Resultado esperado",
+      horizon: "Horizonte",
+      whatToStop: "Qué dejar de hacer",
+      protectedResource: "Recurso o capacidad protegida",
+      strategicRationale: "Racional estratégico",
+      frequency: "Frecuencia",
+      participants: "Participantes",
+      indicators: "Indicadores",
+      expectedDecision: "Decisión esperada",
+      priority: "Prioridad",
+      nextStep: "Próximo paso",
+      validationCondition: "Condición de validación",
     },
     methodEyebrow: "Método propietario de Caldeira Growth",
     methodReportTitle: "Sobre este diagnóstico",
