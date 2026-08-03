@@ -165,8 +165,11 @@ describe("signature sizing (web vs. PDF are independent constants)", () => {
     expect(PDF_SIGNATURE_WIDTH_PT).toBe(75);
   });
 
-  it("web signature width is exactly 130% of its previous 440px", () => {
-    expect(WEB_SIGNATURE_WIDTH_PX).toBe(572);
+  it("web signature width is ~13% larger than its previous 572px (web-only visual polish pass)", () => {
+    expect(WEB_SIGNATURE_WIDTH_PX).toBe(645);
+    const growth = WEB_SIGNATURE_WIDTH_PX / 572;
+    expect(growth).toBeGreaterThanOrEqual(1.1);
+    expect(growth).toBeLessThanOrEqual(1.15);
   });
 
   it("web and PDF sizes are independent - changing one must never imply the other", () => {
@@ -183,9 +186,28 @@ describe("signature sizing (web vs. PDF are independent constants)", () => {
     } as never;
     const lead = { company: "Acme" } as never;
     const html = buildReportHtml(null, lead, result, cgiUi.pt, "pt");
-    expect(html).toContain(`.back-cover-signature img { filter: brightness(0) invert(1); height: auto; width: ${WEB_SIGNATURE_WIDTH_PX}px; }`);
+    expect(html).toContain(
+      `.back-cover-signature img { filter: brightness(0) invert(1); height: auto; width: ${WEB_SIGNATURE_WIDTH_PX}px; margin: -117px -223px; }`
+    );
+    expect(html).not.toContain("width: 572px");
     expect(html).not.toContain("width: 440px");
     expect(html).not.toContain("width: 220px");
+  });
+
+  it("crops the web signature's own transparent padding so it reads as one block with the contact text, not two", () => {
+    const result = {
+      finalScore: 68,
+      level: { title: "x", summary: "" },
+      diagnostic: "",
+      dimensionScores: [],
+      attentionPoints: [],
+    } as never;
+    const lead = { company: "Acme" } as never;
+    const html = buildReportHtml(null, lead, result, cgiUi.pt, "pt");
+    // The negative margins crop most (not all - a safety margin against
+    // clipping the actual ink) of the source PNG's transparent padding;
+    // the PDF's own signature crop (trimTransparentPadding) is untouched.
+    expect(html).toContain("margin: -117px -223px;");
   });
 
   it("keeps the web signature+text group centered and vertically aligned, not stuck to the left", () => {
@@ -199,8 +221,12 @@ describe("signature sizing (web vs. PDF are independent constants)", () => {
     const lead = { company: "Acme" } as never;
     const html = buildReportHtml(null, lead, result, cgiUi.pt, "pt");
     expect(html).toContain(
-      ".back-cover-signature { align-items: center; display: flex; gap: 14px; justify-content: center; }"
+      ".back-cover-signature { align-items: center; display: flex; gap: 10px; justify-content: center; }"
     );
+  });
+
+  it("does not touch the PDF signature at all - same width, same lack of CSS margin cropping (it's pre-cropped at the pixel level instead)", () => {
+    expect(PDF_SIGNATURE_WIDTH_PT).toBe(75);
   });
 });
 

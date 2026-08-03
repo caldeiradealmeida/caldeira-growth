@@ -635,7 +635,7 @@ export const cgiUi: Record<
     methodReportBody: [
       "This report was produced from the Caldeira Growth Index, a proprietary methodology developed to evaluate the capabilities that sustain an organization's growth.",
       "The CGI combines 40 questions distributed across five dimensions: Strategy, Market and Customer, Growth Machine, Execution and Management, and Leadership and Growth Culture.",
-      "The selection of questions, the structure of the dimensions and the interpretation criteria were built from Caldeira Growth's experience in consulting projects, strategic opinions, executive development programs, work with leaders and the principles developed in the book Cresça ou Desapareça.",
+      "The selection of questions, the structure of the dimensions and the interpretation criteria were built from Caldeira Growth's experience in consulting projects, strategic assessments, executive development programs, work with leaders and the principles developed in the book Cresça ou Desapareça.",
       "Artificial intelligence is used as a support tool to consolidate answers, identify patterns and personalize the report's writing. It does not replace the methodology or independently define the diagnosis criteria.",
       "The result should be understood as an initial executive reading. It does not replace an in-depth analysis of the organization's context, choices and specific constraints.",
     ],
