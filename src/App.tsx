@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -21,6 +22,14 @@ import Campaign from "./pages/Campaign";
 import AmazonRedirect from "./pages/AmazonRedirect";
 import CGI from "./pages/CGI";
 import NotFound from "./pages/NotFound";
+
+// Lazy: keeps @supabase/supabase-js and the whole CRM module out of the
+// public site's bundle -- only fetched when someone actually visits /admin/crm.
+const CrmApp = lazy(() => import("@/features/crm/CrmApp"));
+
+function CrmLoadingFallback() {
+  return <div className="flex min-h-screen items-center justify-center bg-background" />;
+}
 
 const queryClient = new QueryClient();
 
@@ -64,6 +73,14 @@ const App = () => (
             <Route path="/qr" element={<AmazonRedirect />} />
             <Route path="/amazon" element={<AmazonRedirect />} />
             <Route path="/cgi" element={<CGI />} />
+            <Route
+              path="/admin/crm/*"
+              element={
+                <Suspense fallback={<CrmLoadingFallback />}>
+                  <CrmApp />
+                </Suspense>
+              }
+            />
 
             <Route path="/en" element={<Index />} />
             <Route path="/en/consulting" element={<Consultoria />} />
