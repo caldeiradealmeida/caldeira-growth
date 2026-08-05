@@ -11,7 +11,8 @@
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "verify:crm-bundle": "node scripts/check-crm-bundle-safety.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
