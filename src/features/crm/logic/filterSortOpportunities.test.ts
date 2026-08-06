@@ -56,7 +56,7 @@ function row(overrides: {
     bestScore: overrides.score ?? null,
     lastActivityAt: overrides.lastActivityAt ?? overrides.createdAt ?? null,
     latestReport: overrides.reportStatus
-      ? { public_assessment_id: "pub", report_status: overrides.reportStatus, language: "pt", ai_report_text: null, report_json: null, created_at: "2026-07-02T00:00:00Z" }
+      ? { id: "report_pub", public_assessment_id: "pub", report_status: overrides.reportStatus, language: "pt", ai_report_text: null, report_json: null, version: 1, created_at: "2026-07-02T00:00:00Z" }
       : null,
     originAttribution: null,
   };

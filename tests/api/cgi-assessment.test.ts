@@ -10,6 +10,7 @@ const supabaseMocks = vi.hoisted(() => ({
   saveCompletedCgiReport: vi.fn(),
   tryCreateCgiReportGenerationLock: vi.fn(),
   updateCgiReportSecondarySyncStatus: vi.fn(),
+  updateLeadComments: vi.fn(),
   upsertAnswers: vi.fn(),
   upsertAssessment: vi.fn(),
 }));
@@ -177,6 +178,7 @@ describe("POST /api/cgi-assessment Supabase completion best-effort", () => {
     supabaseMocks.saveCompletedCgiReport.mockResolvedValue(true);
     supabaseMocks.tryCreateCgiReportGenerationLock.mockResolvedValue({ status: "acquired" });
     supabaseMocks.updateCgiReportSecondarySyncStatus.mockResolvedValue(true);
+    supabaseMocks.updateLeadComments.mockResolvedValue(true);
     supabaseMocks.upsertAnswers.mockResolvedValue(undefined);
     supabaseMocks.upsertAssessment.mockRejectedValue(
       new Error("unexpected_supabase_failure")
@@ -216,6 +218,43 @@ describe("POST /api/cgi-assessment Supabase completion best-effort", () => {
         public_assessment_id: "assessment_1",
       })
     );
+  });
+
+  it("persists the final comment to cgi_leads on successful completion", async () => {
+    supabaseMocks.upsertAssessment.mockResolvedValue({
+      id: "assessment_row_1",
+      lead_id: "lead_row_1",
+      public_assessment_id: "assessment_1",
+      status: "completed",
+    });
+    const response = createResponse();
+    const payload = createValidPayload();
+    payload.lead.comments = "Comentário final digitado na última etapa.";
+
+    await handler({ method: "POST", headers: {}, body: payload } as never, response as never);
+
+    expect(response.statusCode).toBe(200);
+    expect(supabaseMocks.updateLeadComments).toHaveBeenCalledWith(
+      "lead_row_1",
+      "Comentário final digitado na última etapa."
+    );
+  });
+
+  it("does not attempt to persist a comment when the assessment has no lead_id", async () => {
+    supabaseMocks.upsertAssessment.mockResolvedValue({
+      id: "assessment_row_1",
+      lead_id: null,
+      public_assessment_id: "assessment_1",
+      status: "completed",
+    });
+    const response = createResponse();
+
+    await handler(
+      { method: "POST", headers: {}, body: createValidPayload() } as never,
+      response as never
+    );
+
+    expect(supabaseMocks.updateLeadComments).not.toHaveBeenCalled();
   });
 
   it("blocks abusive professional content before generation or secondary sync", async () => {

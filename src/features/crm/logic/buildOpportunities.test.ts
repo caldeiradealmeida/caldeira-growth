@@ -133,11 +133,13 @@ describe("buildOpportunities", () => {
       attribution: [],
       reports: [
         {
+          id: "report1",
           public_assessment_id: "pub1",
           report_status: "report_ready",
           language: "pt",
           ai_report_text: null,
           report_json: null,
+          version: 1,
           created_at: "2026-07-06T00:00:00Z",
         },
       ],

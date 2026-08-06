@@ -21,6 +21,7 @@ type LeadRow = {
 };
 
 type CgiReportRow = {
+  id?: string;
   public_assessment_id?: string | null;
   anonymous_session_id?: string | null;
   completion_event_id?: string | null;
@@ -38,6 +39,10 @@ type CgiReportRow = {
   website_enrichment_json?: unknown;
   request_context_json?: unknown;
   language?: string | null;
+  model?: string | null;
+  version?: number;
+  generation_completed_at?: string | null;
+  created_at?: string | null;
   error_code?: string | null;
   error_message?: string | null;
 };
@@ -118,7 +123,13 @@ export function createEventId(): string {
 
 export function logSupabaseFailure(
   operation: string,
-  detail: { status?: number; error?: unknown; publicAssessmentId?: string | null; eventName?: string } = {}
+  detail: {
+    status?: number;
+    error?: unknown;
+    publicAssessmentId?: string | null;
+    eventName?: string;
+    leadId?: string | null;
+  } = {}
 ) {
   console.error("[CGI Supabase]", {
     operation,
@@ -126,6 +137,7 @@ export function logSupabaseFailure(
     error: detail.error instanceof Error ? detail.error.message : String(detail.error || ""),
     public_assessment_id: detail.publicAssessmentId || undefined,
     event_name: detail.eventName || undefined,
+    lead_id: detail.leadId || undefined,
   });
 }
 
@@ -292,7 +304,7 @@ function mapCgiReportState(row: CgiReportRow | null | undefined): CgiReportState
 
 async function getCgiReportStateByFilter(filter: string): Promise<CgiReportState | null> {
   const result = await supabaseRequest<CgiReportRow[]>(
-    `cgi_reports?${filter}&select=${CGI_REPORT_SELECT}&limit=1`,
+    `cgi_reports?${filter}&select=${CGI_REPORT_SELECT}&order=version.desc&limit=1`,
     { method: "GET" }
   );
   if (!result.ok) {
@@ -309,7 +321,7 @@ async function getCgiReportStateByFilter(filter: string): Promise<CgiReportState
 
 async function getReadyCgiReportByFilter(filter: string): Promise<StoredCgiReport | null> {
   const result = await supabaseRequest<CgiReportRow[]>(
-    `cgi_reports?${filter}&report_status=in.(report_ready,report_ready_with_warnings)&select=${CGI_REPORT_SELECT}&limit=1`,
+    `cgi_reports?${filter}&report_status=in.(report_ready,report_ready_with_warnings)&select=${CGI_REPORT_SELECT}&order=version.desc&limit=1`,
     { method: "GET" }
   );
   if (!result.ok) {
@@ -367,11 +379,12 @@ export async function tryCreateCgiReportGenerationLock(input: {
   if (!input.publicAssessmentId) return { status: "unavailable", error: "missing_public_assessment_id" };
   const now = new Date().toISOString();
   const result = await supabaseRequest<CgiReportRow[]>(
-    `cgi_reports?on_conflict=public_assessment_id&select=${CGI_REPORT_SELECT}`,
+    `cgi_reports?on_conflict=public_assessment_id,version&select=${CGI_REPORT_SELECT}`,
     {
       method: "POST",
       body: JSON.stringify({
         public_assessment_id: input.publicAssessmentId,
+        version: 1,
         anonymous_session_id: input.anonymousSessionId || null,
         completion_event_id: input.completionEventId || null,
         status: "generating",
@@ -429,11 +442,12 @@ export async function saveCompletedCgiReport(input: {
 }): Promise<boolean> {
   if (!input.publicAssessmentId) return false;
   const result = await supabaseRequest(
-    "cgi_reports?on_conflict=public_assessment_id",
+    "cgi_reports?on_conflict=public_assessment_id,version",
     {
       method: "POST",
       body: JSON.stringify({
         public_assessment_id: input.publicAssessmentId,
+        version: 1,
         anonymous_session_id: input.anonymousSessionId || null,
         completion_event_id: input.completionEventId || null,
         status: "ready",
@@ -476,7 +490,7 @@ export async function markCgiReportFailed(input: {
 }): Promise<boolean> {
   if (!input.publicAssessmentId) return false;
   const result = await supabaseRequest(
-    `cgi_reports?public_assessment_id=${eqFilter(input.publicAssessmentId)}`,
+    `cgi_reports?public_assessment_id=${eqFilter(input.publicAssessmentId)}&version=eq.1`,
     {
       method: "PATCH",
       body: JSON.stringify({
@@ -505,7 +519,7 @@ export async function updateCgiReportSecondarySyncStatus(input: {
 }): Promise<boolean> {
   if (!input.publicAssessmentId) return false;
   const result = await supabaseRequest(
-    `cgi_reports?public_assessment_id=${eqFilter(input.publicAssessmentId)}`,
+    `cgi_reports?public_assessment_id=${eqFilter(input.publicAssessmentId)}&version=eq.1`,
     {
       method: "PATCH",
       body: JSON.stringify({
@@ -524,6 +538,119 @@ export async function updateCgiReportSecondarySyncStatus(input: {
     });
   }
   return result.ok;
+}
+
+// --- Manual report regeneration (CGI Pipe, admin-only) ---
+// version=1 rows belong exclusively to the automatic completion flow above
+// (tryCreateCgiReportGenerationLock / saveCompletedCgiReport, both pinned to
+// version 1). Regeneration only ever appends version = max(version) + 1 via
+// a plain INSERT -- it never updates or deletes an existing row.
+
+export async function getMaxCgiReportVersion(publicAssessmentId: string): Promise<number> {
+  const result = await supabaseRequest<{ version: number }[]>(
+    `cgi_reports?public_assessment_id=${eqFilter(publicAssessmentId)}&select=version&order=version.desc&limit=1`,
+    { method: "GET" }
+  );
+  if (!result.ok || !Array.isArray(result.data) || result.data.length === 0) return 0;
+  return Number(result.data[0]?.version) || 0;
+}
+
+export type RegeneratedCgiReport = {
+  id: string;
+  version: number;
+  aiReportText: string;
+  reportJson: unknown;
+  model: string | null;
+  language: "pt" | "en" | "es";
+  generationCompletedAt: string;
+};
+
+const REGENERATED_REPORT_SELECT = [
+  "id",
+  "version",
+  "ai_report_text",
+  "report_json",
+  "model",
+  "language",
+  "generation_completed_at",
+].join(",");
+
+export async function insertRegeneratedCgiReport(input: {
+  publicAssessmentId: string;
+  version: number;
+  aiReport: string;
+  aiReportText: string;
+  model: string | null;
+  lead: unknown;
+  answers: unknown;
+  score: unknown;
+  websiteEnrichment: unknown;
+  requestContext: unknown;
+  language: "pt" | "en" | "es";
+}): Promise<
+  | { ok: true; report: RegeneratedCgiReport }
+  | { ok: false; reason: "conflict" | "invalid_version" | "unknown" }
+> {
+  if (!input.publicAssessmentId || input.version < 1) {
+    return { ok: false, reason: "invalid_version" };
+  }
+  const now = new Date().toISOString();
+  const result = await supabaseRequest<CgiReportRow[]>(
+    `cgi_reports?select=${REGENERATED_REPORT_SELECT}`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        public_assessment_id: input.publicAssessmentId,
+        version: input.version,
+        status: "ready",
+        report_status: "report_ready",
+        secondary_sync_status: "secondary_sync_pending",
+        ai_status: "generated",
+        ai_generation_status: "generated",
+        ai_report: input.aiReport,
+        ai_report_text: input.aiReportText,
+        report_json: parseReportJson(input.aiReport),
+        lead_json: input.lead,
+        answers_json: input.answers,
+        score_json: input.score,
+        website_enrichment_json: input.websiteEnrichment,
+        request_context_json: input.requestContext,
+        model: input.model,
+        language: input.language,
+        generation_completed_at: now,
+        created_at: now,
+        updated_at: now,
+      }),
+      prefer: "return=representation",
+    }
+  );
+  if (!result.ok || !Array.isArray(result.data) || !result.data[0]) {
+    logSupabaseFailure("insert_regenerated_cgi_report", {
+      status: result.status,
+      error: result.error,
+      publicAssessmentId: input.publicAssessmentId,
+    });
+    // 409 here means the legacy single-row-per-assessment unique constraint
+    // (cgi_reports_public_assessment_id_key) is still in place and this
+    // public_assessment_id already has a row -- i.e. the versioning
+    // migration's Phase 3 (drop of that constraint) has not run yet. This
+    // is a clean, expected rejection, not data corruption: the INSERT never
+    // touched the existing row.
+    return { ok: false, reason: result.status === 409 ? "conflict" : "unknown" };
+  }
+  const row = result.data[0];
+  return {
+    ok: true,
+    report: {
+      id: String(row.id),
+      version: Number(row.version),
+      aiReportText: String(row.ai_report_text || ""),
+      reportJson: row.report_json ?? null,
+      model: row.model ?? null,
+      language: row.language === "en" || row.language === "es" ? row.language : "pt",
+      generationCompletedAt: String(row.generation_completed_at || now),
+    },
+  };
 }
 
 export function isReusableStartAssessment(row: AssessmentRow | null, now = new Date()): boolean {
@@ -640,6 +767,87 @@ export async function getAssessmentByPublicId(publicAssessmentId: string): Promi
   );
   if (!result.ok) return null;
   return Array.isArray(result.data) ? result.data[0] ?? null : null;
+}
+
+export type CompletedAssessmentRow = {
+  id: string;
+  lead_id: string | null;
+  public_assessment_id: string;
+  status: string;
+  cgi_score: number | null;
+  strategy_score: number | null;
+  market_customer_score: number | null;
+  growth_engine_score: number | null;
+  execution_management_score: number | null;
+  leadership_culture_score: number | null;
+  cgi_level: string | null;
+  lowest_dimension: string | null;
+  highest_dimension: string | null;
+};
+
+const COMPLETED_ASSESSMENT_SELECT = [
+  "id",
+  "lead_id",
+  "public_assessment_id",
+  "status",
+  "cgi_score",
+  "strategy_score",
+  "market_customer_score",
+  "growth_engine_score",
+  "execution_management_score",
+  "leadership_culture_score",
+  "cgi_level",
+  "lowest_dimension",
+  "highest_dimension",
+].join(",");
+
+export async function getAssessmentById(assessmentId: string): Promise<CompletedAssessmentRow | null> {
+  const result = await supabaseRequest<CompletedAssessmentRow[]>(
+    `cgi_assessments?id=${eqFilter(assessmentId)}&select=${COMPLETED_ASSESSMENT_SELECT}&limit=1`,
+    { method: "GET" }
+  );
+  if (!result.ok) return null;
+  return Array.isArray(result.data) ? result.data[0] ?? null : null;
+}
+
+export type CgiLeadRow = {
+  id: string;
+  name: string;
+  email: string;
+  phone: string | null;
+  company: string;
+  company_website: string | null;
+  role: string;
+  sector: string | null;
+  commercial_relationship_model: string | null;
+  employee_count: string | null;
+  annual_revenue_range: string | null;
+  current_challenge: string | null;
+  growth_goal: string | null;
+  investment_intent: string | null;
+  comments: string | null;
+};
+
+export async function getLeadById(leadId: string): Promise<CgiLeadRow | null> {
+  const result = await supabaseRequest<CgiLeadRow[]>(
+    `cgi_leads?id=${eqFilter(leadId)}&select=id,name,email,phone,company,company_website,role,sector,commercial_relationship_model,employee_count,annual_revenue_range,current_challenge,growth_goal,investment_intent,comments&limit=1`,
+    { method: "GET" }
+  );
+  if (!result.ok) return null;
+  return Array.isArray(result.data) ? result.data[0] ?? null : null;
+}
+
+export async function getAnswersByAssessmentId(assessmentId: string): Promise<Record<string, number>> {
+  const result = await supabaseRequest<{ question_id: string; answer_value: number }[]>(
+    `cgi_answers?assessment_id=${eqFilter(assessmentId)}&select=question_id,answer_value`,
+    { method: "GET" }
+  );
+  if (!result.ok || !Array.isArray(result.data)) return {};
+  const answers: Record<string, number> = {};
+  for (const row of result.data) {
+    answers[row.question_id] = row.answer_value;
+  }
+  return answers;
 }
 
 export async function upsertAttribution(
@@ -785,6 +993,34 @@ export async function persistLeadForAssessment(input: {
   }
 
   return { leadId, assessmentId: assessment.id };
+}
+
+// Fixes a gap where the comments textarea (rendered on the final
+// assessment step) is validated right before completion but never
+// re-saved: persistLeadForAssessment only fires on the earlier
+// cgi_lead_submitted / cgi_company_context_submitted / cgi_phone_submitted
+// events, so a comment typed on the last step never reached cgi_leads.
+// Only writes when there is actual text, so an empty completion payload
+// can never blank out a comment saved by an earlier step.
+export async function updateLeadComments(leadId: string, comments: string | null | undefined): Promise<boolean> {
+  const trimmed = String(comments || "").trim();
+  if (!leadId || !trimmed) return false;
+  const result = await supabaseRequest(
+    `cgi_leads?id=${eqFilter(leadId)}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({ comments: trimmed }),
+      prefer: "return=minimal",
+    }
+  );
+  if (!result.ok) {
+    logSupabaseFailure("update_lead_comments", {
+      status: result.status,
+      error: result.error,
+      leadId,
+    });
+  }
+  return result.ok;
 }
 
 export async function upsertAnswers(assessmentId: string, answers: Record<string, number>) {

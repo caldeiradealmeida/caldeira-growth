@@ -18,6 +18,7 @@ import {
   saveCompletedCgiReport,
   tryCreateCgiReportGenerationLock,
   updateCgiReportSecondarySyncStatus,
+  updateLeadComments,
   upsertAnswers,
   upsertAssessment,
   type StoredCgiReport,
@@ -29,7 +30,7 @@ import {
   validateProfessionalContent,
 } from "./_cgi-validation.js";
 
-type CgiLead = {
+export type CgiLead = {
   name?: string;
   email?: string;
   phone?: string;
@@ -66,7 +67,7 @@ type CgiPayload = {
   attribution?: Record<string, unknown>;
 };
 
-type AiResult = {
+export type AiResult = {
   status: "generated" | "not_configured" | "error";
   text: string;
   plainText: string;
@@ -87,7 +88,7 @@ type OpenAiResponseMeta = {
   isTruncated: boolean;
 };
 
-type WebsiteEnrichment = {
+export type WebsiteEnrichment = {
   status: "not_provided" | "ok" | "error";
   requestedUrl: string;
   finalUrl: string;
@@ -98,7 +99,7 @@ type WebsiteEnrichment = {
   error?: string;
 };
 
-type RequestContext = {
+export type RequestContext = {
   ip: string;
   country: string;
   region: string;
@@ -212,7 +213,7 @@ function getAppsScriptUrl(): string {
   );
 }
 
-function getConfiguredOpenAiModel(): string {
+export function getConfiguredOpenAiModel(): string {
   return process.env[CGI_OPENAI_MODEL_ENV]?.trim() || "";
 }
 
@@ -538,7 +539,7 @@ function extractWebsiteContent(html: string): Pick<
   return { title, description, headings, observedText };
 }
 
-async function enrichCompanyWebsite(rawUrl: string | undefined): Promise<WebsiteEnrichment> {
+export async function enrichCompanyWebsite(rawUrl: string | undefined): Promise<WebsiteEnrichment> {
   const requestedUrl = String(rawUrl || "").trim();
   if (!requestedUrl) {
     return {
@@ -1969,7 +1970,7 @@ function logCgiAiAttempt(input: {
   );
 }
 
-async function generateAiDiagnostic({
+export async function generateAiDiagnostic({
   lead,
   answers,
   score,
@@ -2365,6 +2366,10 @@ async function persistCompletedAssessmentBestEffort({
 
   if (assessment?.id) {
     await upsertAnswers(assessment.id, answers);
+  }
+
+  if (assessment?.lead_id) {
+    await updateLeadComments(assessment.lead_id, payload.lead?.comments);
   }
 
   const completionEventId = String(payload.completion_event_id || createEventId());

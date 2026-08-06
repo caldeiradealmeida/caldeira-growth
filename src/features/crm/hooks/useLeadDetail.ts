@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { fetchLeadDetail } from "../api/leadDetail";
 import { saveOpportunity } from "../api/updateOpportunity";
+import { regenerateCgiReport } from "../api/regenerateReport";
 import { createPerson, linkPersonToLead, unlinkPersonFromLead, searchPeople } from "../api/people";
 import { buildOpportunityUpdatePayload, type OpportunityUpdateInput } from "../logic/opportunityUpdate";
 
@@ -23,6 +24,16 @@ export function useSaveOpportunity(leadId: string) {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: detailKey(leadId) });
       void queryClient.invalidateQueries({ queryKey: ["crm", "opportunities"] });
+    },
+  });
+}
+
+export function useRegenerateReport(leadId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (assessmentId: string) => regenerateCgiReport(assessmentId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: detailKey(leadId) });
     },
   });
 }

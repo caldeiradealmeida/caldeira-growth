@@ -18,9 +18,15 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { useLeadDetail, useUnlinkPerson } from "../hooks/useLeadDetail";
+import { downloadReportPdf, parseAiReport } from "@/features/cgi/services/report";
+import { cgiUi } from "@/features/cgi/config";
+import type { LeadForm } from "@/features/cgi/types";
+import type { CgiScoreResult } from "@/lib/cgiScore";
+import { useLeadDetail, useRegenerateReport, useUnlinkPerson } from "../hooks/useLeadDetail";
 import { OpportunityForm } from "../components/OpportunityForm";
 import { PersonLinkDialog } from "../components/PersonLinkDialog";
+import { pickLatestReport, canRegenerateReport } from "../logic/reportVersion";
+import { hasLeadComment, NO_COMMENT_MESSAGE } from "../logic/commentTab";
 import { ASSESSMENT_STATUS_LABELS, DIMENSION_LABELS, LEVEL_LABELS, REPORT_STATUS_LABELS } from "../constants";
 
 function formatDateTime(value: string | null | undefined): string {
@@ -32,7 +38,9 @@ export function CrmDetail() {
   const { leadId } = useParams<{ leadId: string }>();
   const { data, isLoading, isError, error } = useLeadDetail(leadId);
   const unlinkPerson = useUnlinkPerson(leadId ?? "");
+  const regenerateReport = useRegenerateReport(leadId ?? "");
   const [selectedAssessmentId, setSelectedAssessmentId] = useState<string | null>(null);
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
 
   if (isLoading) {
     return (
@@ -61,8 +69,11 @@ export function CrmDetail() {
     ? attribution.find((a) => a.assessment_id === activeAssessment.id)
     : null;
   const activeReport = activeAssessment
-    ? reports.find((r) => r.public_assessment_id === activeAssessment.public_assessment_id)
+    ? pickLatestReport(reports, activeAssessment.public_assessment_id)
     : null;
+  const canRegenerate = Boolean(
+    activeAssessment && canRegenerateReport({ assessmentStatus: activeAssessment.status, isAdmin: true })
+  );
 
   async function handleUnlink() {
     try {
@@ -70,6 +81,34 @@ export function CrmDetail() {
       toast.success("Pessoa desvinculada desta oportunidade.");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Falha ao desvincular.");
+    }
+  }
+
+  async function handleRegenerate() {
+    if (!activeAssessment) return;
+    try {
+      await regenerateReport.mutateAsync(activeAssessment.id);
+      toast.success("Nova versão do relatório gerada.");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha ao regenerar relatório.");
+    }
+  }
+
+  async function handleDownloadPdf(report: NonNullable<typeof activeReport>) {
+    setIsDownloadingPdf(true);
+    try {
+      const language = report.language ?? "pt";
+      await downloadReportPdf({
+        aiReport: report.report_json as ReturnType<typeof parseAiReport>,
+        lead: report.lead_json as LeadForm,
+        result: report.score_json as CgiScoreResult,
+        t: cgiUi[language],
+        lang: language,
+      });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha ao gerar PDF.");
+    } finally {
+      setIsDownloadingPdf(false);
     }
   }
 
@@ -215,6 +254,7 @@ export function CrmDetail() {
               <TabsList>
                 <TabsTrigger value="scores">Dimensões</TabsTrigger>
                 <TabsTrigger value="answers">Respostas ({activeAnswers.length})</TabsTrigger>
+                <TabsTrigger value="comment">Comentário</TabsTrigger>
                 <TabsTrigger value="report">Relatório</TabsTrigger>
               </TabsList>
 
@@ -258,20 +298,77 @@ export function CrmDetail() {
                 </Card>
               </TabsContent>
 
+              <TabsContent value="comment">
+                <Card>
+                  <CardContent className="pt-6 text-sm">
+                    {hasLeadComment(lead.comments) ? (
+                      <p className="whitespace-pre-wrap">{lead.comments}</p>
+                    ) : (
+                      <p className="text-muted-foreground">{NO_COMMENT_MESSAGE}</p>
+                    )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
               <TabsContent value="report">
                 <Card>
                   <CardContent className="space-y-3 pt-6 text-sm">
-                    {!activeReport && <p className="text-muted-foreground">Nenhum relatório para este assessment.</p>}
-                    {activeReport && (
-                      <>
-                        <Badge variant="outline">
-                          {REPORT_STATUS_LABELS[activeReport.report_status] ?? activeReport.report_status}
-                          {activeReport.language ? ` · ${activeReport.language}` : ""}
-                        </Badge>
-                        {activeReport.ai_report_text && (
-                          <p className="whitespace-pre-wrap text-muted-foreground">{activeReport.ai_report_text}</p>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        {activeReport && (
+                          <>
+                            <Badge variant="outline">
+                              {REPORT_STATUS_LABELS[activeReport.report_status] ?? activeReport.report_status}
+                              {activeReport.language ? ` · ${activeReport.language}` : ""}
+                            </Badge>
+                            <Badge variant="outline">
+                              Versão {activeReport.version} · {formatDateTime(activeReport.generation_completed_at ?? activeReport.created_at)}
+                              {activeReport.model ? ` · ${activeReport.model}` : ""}
+                            </Badge>
+                          </>
                         )}
-                      </>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {activeReport?.report_json != null && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={isDownloadingPdf}
+                            onClick={() => void handleDownloadPdf(activeReport)}
+                          >
+                            {isDownloadingPdf ? "Gerando PDF..." : "Baixar PDF"}
+                          </Button>
+                        )}
+                        {canRegenerate && (
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button size="sm" disabled={regenerateReport.isPending}>
+                                {regenerateReport.isPending ? "Gerando..." : "Regenerar relatório"}
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Regenerar relatório?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Isso cria uma nova versão do relatório usando as respostas e o score originais
+                                  deste assessment, com o modelo e o prompt atuais. Nenhum e-mail é enviado ao
+                                  participante e a versão anterior é preservada.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                <AlertDialogAction onClick={() => void handleRegenerate()}>
+                                  Regenerar
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        )}
+                      </div>
+                    </div>
+                    {!activeReport && <p className="text-muted-foreground">Nenhum relatório para este assessment.</p>}
+                    {activeReport?.ai_report_text && (
+                      <p className="whitespace-pre-wrap text-muted-foreground">{activeReport.ai_report_text}</p>
                     )}
                   </CardContent>
                 </Card>

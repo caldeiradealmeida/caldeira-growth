@@ -1,6 +1,6 @@
 import { crmSupabase } from "../lib/supabaseClient";
 import { buildOpportunities } from "../logic/buildOpportunities";
-import type { CgiAssessment, CgiAttribution, CgiLead, CgiReport, CrmOpportunity, CrmPersonLink } from "../types";
+import type { CgiAssessment, CgiAttribution, CgiLead, CgiReportSummary, CrmOpportunity, CrmPersonLink } from "../types";
 
 function unwrap<T>(result: { data: T | null; error: { message: string } | null }): T {
   if (result.error) throw new Error(result.error.message);
@@ -39,13 +39,13 @@ export async function fetchOpportunityRows() {
     publicAssessmentIds.length
       ? crmSupabase
           .from("cgi_reports")
-          .select("public_assessment_id,report_status,language,ai_report_text,report_json,created_at")
+          .select("id,public_assessment_id,report_status,language,ai_report_text,report_json,version,created_at")
           .in("public_assessment_id", publicAssessmentIds)
       : Promise.resolve({ data: [], error: null }),
   ]);
 
   const attribution = unwrap<CgiAttribution[]>(attributionRes);
-  const reports = unwrap<CgiReport[]>(reportsRes);
+  const reports = unwrap<CgiReportSummary[]>(reportsRes);
 
   return buildOpportunities({ leads, opportunities, assessments, attribution, reports, personLinks });
 }

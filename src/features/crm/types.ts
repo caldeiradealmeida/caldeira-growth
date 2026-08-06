@@ -60,13 +60,27 @@ export type CgiAttribution = {
 };
 
 export type CgiReport = {
+  id: string;
   public_assessment_id: string;
   report_status: "report_generating" | "report_ready" | "report_failed";
   language: "pt" | "en" | "es" | null;
   ai_report_text: string | null;
   report_json: unknown;
+  lead_json: unknown;
+  score_json: unknown;
+  model: string | null;
+  version: number;
+  generation_completed_at: string | null;
   created_at: string;
 };
+
+/** Lean projection used by the opportunities list (CrmList), which only ever
+ * renders report_status -- avoids pulling lead_json/score_json/answers_json
+ * for every row in the list. */
+export type CgiReportSummary = Pick<
+  CgiReport,
+  "id" | "public_assessment_id" | "report_status" | "language" | "ai_report_text" | "report_json" | "version" | "created_at"
+>;
 
 export type CrmOpportunityStatus =
   | "novo"
@@ -120,6 +134,6 @@ export type OpportunityRow = {
   latestAssessment: CgiAssessment | null;
   bestScore: number | null;
   lastActivityAt: string | null;
-  latestReport: CgiReport | null;
+  latestReport: CgiReportSummary | null;
   originAttribution: CgiAttribution | null;
 };
