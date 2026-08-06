@@ -13,6 +13,7 @@ import {
   getMaxCgiReportVersion,
   insertRegeneratedCgiReport,
   type CgiLeadRow,
+  type InsertRegeneratedCgiReportResult,
 } from "../_cgi-supabase.js";
 
 // Admin-only. Never trusts assessment/lead/answers/score content from the
@@ -168,7 +169,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
   const nextVersion = (await getMaxCgiReportVersion(assessment.public_assessment_id)) + 1;
   const model = getConfiguredOpenAiModel();
 
-  const saved = await insertRegeneratedCgiReport({
+  const saved: InsertRegeneratedCgiReportResult = await insertRegeneratedCgiReport({
     publicAssessmentId: assessment.public_assessment_id,
     version: nextVersion,
     aiReport: ai.text,

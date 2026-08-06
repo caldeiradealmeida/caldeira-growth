@@ -565,6 +565,10 @@ export type RegeneratedCgiReport = {
   generationCompletedAt: string;
 };
 
+export type InsertRegeneratedCgiReportResult =
+  | { ok: true; report: RegeneratedCgiReport }
+  | { ok: false; reason: "conflict" | "invalid_version" | "unknown" };
+
 const REGENERATED_REPORT_SELECT = [
   "id",
   "version",
@@ -587,10 +591,7 @@ export async function insertRegeneratedCgiReport(input: {
   websiteEnrichment: unknown;
   requestContext: unknown;
   language: "pt" | "en" | "es";
-}): Promise<
-  | { ok: true; report: RegeneratedCgiReport }
-  | { ok: false; reason: "conflict" | "invalid_version" | "unknown" }
-> {
+}): Promise<InsertRegeneratedCgiReportResult> {
   if (!input.publicAssessmentId || input.version < 1) {
     return { ok: false, reason: "invalid_version" };
   }
