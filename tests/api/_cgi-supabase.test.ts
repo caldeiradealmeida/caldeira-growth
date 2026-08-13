@@ -2,9 +2,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   getActiveAssessmentByAnonymousSession,
   getMaxCgiReportVersion,
+  getReportAccessTokenByHash,
   insertRegeneratedCgiReport,
   isReusableStartAssessment,
+  revokeReportAccessToken,
+  touchReportAccessToken,
   updateLeadComments,
+  upsertReportAccessToken,
 } from "../../api/_cgi-supabase";
 
 const originalEnv = { ...process.env };
@@ -247,5 +251,86 @@ describe("cgi_reports versioning helpers", () => {
     });
 
     expect(saved).toEqual({ ok: false, reason: "conflict" });
+  });
+});
+
+describe("cgi_report_access helpers", () => {
+  beforeEach(() => {
+    process.env.SUPABASE_URL = "https://example.supabase.co";
+    process.env.SUPABASE_SERVICE_ROLE_KEY = "test-service-role";
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    process.env = { ...originalEnv };
+  });
+
+  it("upsertReportAccessToken sends an upsert (on_conflict), never a plain insert, keyed on public_assessment_id", async () => {
+    const fetchMock = vi.fn(async () => new Response(null, { status: 201 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const ok = await upsertReportAccessToken({
+      publicAssessmentId: "pub_1",
+      tokenHash: "hash123",
+      expiresAt: "2026-11-01T00:00:00.000Z",
+    });
+
+    expect(ok).toBe(true);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(String(url)).toContain("cgi_report_access?on_conflict=public_assessment_id");
+    const body = JSON.parse(String(init.body));
+    expect(body.public_assessment_id).toBe("pub_1");
+    expect(body.token_hash).toBe("hash123");
+    expect(body.revoked_at).toBeNull();
+  });
+
+  it("revokeReportAccessToken PATCHes revoked_at for the given assessment", async () => {
+    const fetchMock = vi.fn(async () => new Response(null, { status: 204 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const ok = await revokeReportAccessToken("pub_1");
+
+    expect(ok).toBe(true);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(String(url)).toContain("cgi_report_access?public_assessment_id=eq.pub_1");
+    expect(init.method).toBe("PATCH");
+    const body = JSON.parse(String(init.body));
+    expect(typeof body.revoked_at).toBe("string");
+  });
+
+  it("getReportAccessTokenByHash looks up by token_hash, not by the raw token", async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response(
+        JSON.stringify([
+          { id: "row_1", public_assessment_id: "pub_1", token_hash: "hash123", expires_at: "2026-11-01T00:00:00.000Z", revoked_at: null },
+        ]),
+        { status: 200 }
+      )
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const row = await getReportAccessTokenByHash("hash123");
+
+    expect(row?.public_assessment_id).toBe("pub_1");
+    expect(fetchMock.mock.calls[0][0]).toContain("token_hash=eq.hash123");
+  });
+
+  it("getReportAccessTokenByHash returns null when nothing matches", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify([]), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const row = await getReportAccessTokenByHash("nomatch");
+
+    expect(row).toBeNull();
+  });
+
+  it("touchReportAccessToken never throws even if the request fails", async () => {
+    const fetchMock = vi.fn(async () => {
+      throw new Error("network down");
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(touchReportAccessToken("row_1")).resolves.toBeUndefined();
   });
 });

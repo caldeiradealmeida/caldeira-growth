@@ -621,6 +621,14 @@ describe("POST /api/cgi-assessment Supabase completion best-effort", () => {
       public_assessment_id: "assessment_1",
       report_status: "report_ready",
     });
+    // lead (PII) and requestContext (IP/geolocation) must never appear in
+    // this unauthenticated response, even though the stored report has
+    // them -- anyone who knows/guesses public_assessment_id can call this
+    // endpoint with no auth, so respondWithStoredReport only forwards what
+    // the frontend's own local fallback state already has (score, answers,
+    // ai report), never PII the caller might not already possess.
+    expect(response.body).not.toHaveProperty("lead");
+    expect(response.body).not.toHaveProperty("requestContext");
   });
 
   it("returns report_generating on refresh while another request is still generating", async () => {

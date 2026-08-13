@@ -654,6 +654,84 @@ export async function insertRegeneratedCgiReport(input: {
   };
 }
 
+// --- Report access tokens (public.cgi_report_access) ---
+// Read/write layer only. Never generates or hashes tokens itself -- that
+// crypto lives in api/_cgi-report-token.ts, which calls these.
+
+type CgiReportAccessRow = {
+  id: string;
+  public_assessment_id: string;
+  token_hash: string;
+  expires_at: string;
+  revoked_at: string | null;
+};
+
+export async function upsertReportAccessToken(input: {
+  publicAssessmentId: string;
+  tokenHash: string;
+  expiresAt: string;
+}): Promise<boolean> {
+  const result = await supabaseRequest(
+    "cgi_report_access?on_conflict=public_assessment_id",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        public_assessment_id: input.publicAssessmentId,
+        token_hash: input.tokenHash,
+        expires_at: input.expiresAt,
+        revoked_at: null,
+        updated_at: new Date().toISOString(),
+      }),
+      prefer: "resolution=merge-duplicates,return=minimal",
+    }
+  );
+  if (!result.ok) {
+    logSupabaseFailure("upsert_report_access_token", {
+      status: result.status,
+      error: result.error,
+      publicAssessmentId: input.publicAssessmentId,
+    });
+  }
+  return result.ok;
+}
+
+export async function revokeReportAccessToken(publicAssessmentId: string): Promise<boolean> {
+  const result = await supabaseRequest(
+    `cgi_report_access?public_assessment_id=${eqFilter(publicAssessmentId)}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({ revoked_at: new Date().toISOString() }),
+      prefer: "return=minimal",
+    }
+  );
+  if (!result.ok) {
+    logSupabaseFailure("revoke_report_access_token", {
+      status: result.status,
+      error: result.error,
+      publicAssessmentId,
+    });
+  }
+  return result.ok;
+}
+
+export async function getReportAccessTokenByHash(tokenHash: string): Promise<CgiReportAccessRow | null> {
+  const result = await supabaseRequest<CgiReportAccessRow[]>(
+    `cgi_report_access?token_hash=${eqFilter(tokenHash)}&select=id,public_assessment_id,token_hash,expires_at,revoked_at&limit=1`,
+    { method: "GET" }
+  );
+  if (!result.ok) return null;
+  return Array.isArray(result.data) ? result.data[0] ?? null : null;
+}
+
+export async function touchReportAccessToken(id: string): Promise<void> {
+  // Informational only -- last_accessed_at must never block or fail access.
+  await supabaseRequest(`cgi_report_access?id=${eqFilter(id)}`, {
+    method: "PATCH",
+    body: JSON.stringify({ last_accessed_at: new Date().toISOString() }),
+    prefer: "return=minimal",
+  }).catch(() => undefined);
+}
+
 export function isReusableStartAssessment(row: AssessmentRow | null, now = new Date()): boolean {
   if (!row?.public_assessment_id || !row.status || !START_REUSABLE_STATUSES.has(row.status)) {
     return false;

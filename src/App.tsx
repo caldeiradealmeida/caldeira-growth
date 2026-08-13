@@ -26,6 +26,7 @@ import NotFound from "./pages/NotFound";
 // Lazy: keeps @supabase/supabase-js and the whole CRM module out of the
 // public site's bundle -- only fetched when someone actually visits /admin/crm.
 const CrmApp = lazy(() => import("@/features/crm/CrmApp"));
+const CgiReportView = lazy(() => import("./pages/CgiReportView"));
 
 function CrmLoadingFallback() {
   return <div className="flex min-h-screen items-center justify-center bg-background" />;
@@ -73,6 +74,14 @@ const App = () => (
             <Route path="/qr" element={<AmazonRedirect />} />
             <Route path="/amazon" element={<AmazonRedirect />} />
             <Route path="/cgi" element={<CGI />} />
+            <Route
+              path="/cgi/relatorio"
+              element={
+                <Suspense fallback={<CrmLoadingFallback />}>
+                  <CgiReportView />
+                </Suspense>
+              }
+            />
             <Route
               path="/admin/crm/*"
               element={

@@ -290,10 +290,8 @@ function respondWithStoredReport(
       plainText: report.aiReportText,
     },
     ai_generation_status: report.aiGenerationStatus,
-    lead: report.lead,
     answers: report.answers,
     websiteEnrichment: report.websiteEnrichment,
-    requestContext: report.requestContext,
     reused: true,
   });
 }

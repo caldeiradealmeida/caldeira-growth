@@ -1,6 +1,27 @@
 <!doctype html>
 <html lang="en">
   <head>
+    <!-- CGI report-access token: must run before GTM/any other script.
+         Strips the "#t=..." bearer token from the URL bar immediately, on
+         /cgi/relatorio only, so it can never reach an analytics pageview
+         event, browser history entry, or referrer header. Does nothing on
+         any other path. -->
+    <script>
+      (function () {
+        if (window.location.pathname !== '/cgi/relatorio') return;
+        var hash = window.location.hash || '';
+        var raw = hash.charAt(0) === '#' ? hash.slice(1) : hash;
+        var match = /(?:^|&)t=([^&]+)/.exec(raw);
+        if (!match) return;
+        try {
+          window.__cgiReportAccessToken = decodeURIComponent(match[1]);
+        } catch (err) {
+          window.__cgiReportAccessToken = null;
+        }
+        window.history.replaceState(null, '', window.location.pathname + window.location.search);
+      })();
+    </script>
+
     <!-- Google Tag Manager -->
     <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
     new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
