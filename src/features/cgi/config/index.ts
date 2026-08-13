@@ -50,6 +50,7 @@ export const CGI_START_ENDPOINT = "/api/cgi/start";
 export const CGI_LEAD_ENDPOINT = "/api/cgi/lead";
 export const CGI_PROGRESS_ENDPOINT = "/api/cgi/progress";
 export const CGI_EVENT_ENDPOINT = "/api/cgi/event";
+export const CGI_CHECKPOINT_ENDPOINT = "/api/cgi/checkpoint";
 export const CGI_LAST_ASSESSMENT_KEY = "caldeira-growth:cgi:last-assessment";
 // Must comfortably exceed the backend's worst-case report generation time
 // (api/cgi-assessment.ts: one primary OpenAI attempt + one transient retry +

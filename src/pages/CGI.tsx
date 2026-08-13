@@ -73,6 +73,8 @@ import {
   sendCgiProgressEvent,
 } from "@/features/cgi/services/analytics";
 import { startCgiAssessment, submitCgiLead } from "@/features/cgi/services/api";
+import { persistCgiCheckpoint } from "@/features/cgi/services/checkpoint";
+import { checkpointsToSend } from "@/features/cgi/logic/checkpointSchedule";
 
 declare global {
   interface Window {
@@ -141,6 +143,10 @@ export default function CGI() {
     Boolean(readAssessmentState()?.sent_events.cgi_assessment_started)
   );
   const progressSentRef = useRef(new Set(readAssessmentState()?.sent_progress || []));
+  // In-memory only, not persisted to assessmentStorage -- a reload may
+  // re-send an already-persisted checkpoint, which is harmless (upsertAnswers
+  // is idempotent) rather than worth extra state to avoid.
+  const checkpointSentRef = useRef(new Set<number>());
 
   const currentDimension = config.dimensions[dimensionIndex];
   const currentQuestions = useMemo(
@@ -848,6 +854,20 @@ export default function CGI() {
           });
         }
       });
+
+      // Dimension-boundary checkpoint (Etapa 2): distinct from the 25/50/75%
+      // progress milestones above -- fires at the end of each of the 5
+      // dimensions (8/16/24/32/40 answered) and persists the full cumulative
+      // answer set so far to the server, not just analytics metadata.
+      const crossedCheckpoints = checkpointsToSend(nextAnsweredCount, checkpointSentRef.current);
+      if (publicAssessmentId && crossedCheckpoints.length > 0) {
+        crossedCheckpoints.forEach((count) => checkpointSentRef.current.add(count));
+        void persistCgiCheckpoint({
+          anonymousSessionId,
+          publicAssessmentId,
+          answers: normalized,
+        });
+      }
 
       return next;
     });
