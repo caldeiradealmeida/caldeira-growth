@@ -70,6 +70,20 @@ describe("buildCgiReportReadyEmail", () => {
     expect(email.plainText).toContain("Ler meu relatório CGI");
   });
 
+  it("uses the approved opening line mentioning the company by name", () => {
+    const email = buildCgiReportReadyEmail(base);
+    expect(email.plainText).toContain(
+      "A partir das suas respostas, o CGI produziu uma leitura inicial sobre o sistema de crescimento da Empresa Teste."
+    );
+  });
+
+  it("uses the approved closing paragraph", () => {
+    const email = buildCgiReportReadyEmail(base);
+    expect(email.plainText).toContain(
+      "O CGI foi desenhado para levantar boas hipóteses — não para substituir contexto, julgamento ou conhecimento profundo do negócio."
+    );
+  });
+
   it("includes the signature exactly as specified", () => {
     const email = buildCgiReportReadyEmail(base);
     expect(email.plainText).toContain("Denis Caldeira\nCEO e Founder\nCaldeira Growth Consulting");
@@ -125,6 +139,13 @@ describe("buildCgiAbandonmentEmail", () => {
     expect(email.plainText).toContain("Continuar meu diagnóstico");
     expect(email.plainText).toContain(base.reportAccessUrl);
     expect(email.htmlBody).toContain(`href="${base.reportAccessUrl}"`);
+  });
+
+  it("uses the approved wording for concluding the diagnostic", () => {
+    const email = buildCgiAbandonmentEmail(base);
+    expect(email.plainText).toContain(
+      "Como você já iniciou o diagnóstico, vale concluí-lo para que essas relações possam ser observadas em conjunto."
+    );
   });
 
   it("never uses guilt/urgency/scarcity language", () => {

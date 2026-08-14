@@ -106,7 +106,7 @@ export function buildCgiReportReadyEmail(input: {
   const plainText = [
     `Olá, ${name}.`,
     "",
-    "Seu relatório CGI está pronto.",
+    `A partir das suas respostas, o CGI produziu uma leitura inicial sobre o sistema de crescimento da ${company}.`,
     "",
     summary,
     "",
@@ -117,19 +117,19 @@ export function buildCgiReportReadyEmail(input: {
     "Ler meu relatório CGI:",
     url,
     "",
-    "O CGI traduz para um diagnóstico prático princípios que desenvolvi em Cresça ou Desapareça e na minha atuação com empresas e lideranças. Ele foi desenhado para levantar boas hipóteses, não para substituir contexto.",
+    "O CGI traduz para um diagnóstico prático princípios que desenvolvi em Cresça ou Desapareça e na minha atuação com empresas e lideranças. O CGI foi desenhado para levantar boas hipóteses — não para substituir contexto, julgamento ou conhecimento profundo do negócio.",
     "",
     SIGNATURE_PLAIN,
   ].join("\n");
 
   const htmlBody = htmlShell(`
     <p style="margin:0 0 20px 0;">Olá, ${escapeHtml(name)}.</p>
-    <p style="margin:0 0 20px 0;">Seu relatório CGI está pronto.</p>
+    <p style="margin:0 0 20px 0;">A partir das suas respostas, o CGI produziu uma leitura inicial sobre o sistema de crescimento da ${escapeHtml(company)}.</p>
     <p style="margin:0 0 20px 0;">${escapeHtml(summary)}</p>
     <p style="margin:0 0 20px 0;">Ao abrir o relatório, minha sugestão é não começar pela nota. Ela sintetiza o estágio atual, mas não é a parte mais importante do diagnóstico.</p>
     <p style="margin:0 0 20px 0;">Procure principalmente onde as cinco dimensões não avançam no mesmo ritmo, quais gargalos podem limitar o próximo ciclo e quais hipóteses precisam ser validadas antes de virarem decisões. É nessas tensões — mais do que no número final — que costuma estar a parte mais útil do CGI.</p>
     ${ctaButtonHtml("Ler meu relatório CGI", url)}
-    <p style="margin:20px 0;font-size:14px;color:#555555;">O CGI traduz para um diagnóstico prático princípios que desenvolvi em Cresça ou Desapareça e na minha atuação com empresas e lideranças. Ele foi desenhado para levantar boas hipóteses, não para substituir contexto.</p>
+    <p style="margin:20px 0;font-size:14px;color:#555555;">O CGI traduz para um diagnóstico prático princípios que desenvolvi em Cresça ou Desapareça e na minha atuação com empresas e lideranças. O CGI foi desenhado para levantar boas hipóteses — não para substituir contexto, julgamento ou conhecimento profundo do negócio.</p>
     <p style="margin:28px 0 0 0;font-size:15px;">${SIGNATURE_HTML}</p>
   `);
 
@@ -152,7 +152,7 @@ export function buildCgiAbandonmentEmail(input: {
     "",
     "O CGI observa cinco dimensões que, em conjunto, ajudam a entender a capacidade de uma empresa sustentar crescimento. As respostas isoladas dizem pouco; é a combinação entre elas que permite identificar tensões, gargalos e prioridades.",
     "",
-    "Como você já iniciou o diagnóstico, vale concluir a leitura para que essas relações apareçam com clareza.",
+    "Como você já iniciou o diagnóstico, vale concluí-lo para que essas relações possam ser observadas em conjunto.",
     "",
     "Continuar meu diagnóstico:",
     url,
@@ -168,7 +168,7 @@ export function buildCgiAbandonmentEmail(input: {
     <p style="margin:0 0 20px 0;">Olá, ${escapeHtml(name)}.</p>
     <p style="margin:0 0 20px 0;">Você iniciou o Caldeira Growth Index, mas o diagnóstico ficou incompleto.</p>
     <p style="margin:0 0 20px 0;">O CGI observa cinco dimensões que, em conjunto, ajudam a entender a capacidade de uma empresa sustentar crescimento. As respostas isoladas dizem pouco; é a combinação entre elas que permite identificar tensões, gargalos e prioridades.</p>
-    <p style="margin:0 0 20px 0;">Como você já iniciou o diagnóstico, vale concluir a leitura para que essas relações apareçam com clareza.</p>
+    <p style="margin:0 0 20px 0;">Como você já iniciou o diagnóstico, vale concluí-lo para que essas relações possam ser observadas em conjunto.</p>
     ${ctaButtonHtml("Continuar meu diagnóstico", url)}
     <p style="margin:20px 0;font-size:14px;color:#555555;">O link retoma o CGI a partir do progresso que já ficou salvo.</p>
     <p style="margin:0 0 20px 0;font-size:14px;color:#555555;">O método traduz princípios que desenvolvi em Cresça ou Desapareça e na minha atuação com empresas e lideranças.</p>
