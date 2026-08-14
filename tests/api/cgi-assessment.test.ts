@@ -14,7 +14,7 @@ const supabaseMocks = vi.hoisted(() => ({
   upsertAnswers: vi.fn(),
   upsertAssessment: vi.fn(),
   // Etapa 4: report-ready participant email idempotency + token issuance.
-  getAssessmentByPublicId: vi.fn(),
+  getAssessmentEmailState: vi.fn(),
   markReportEmailSent: vi.fn(),
   upsertReportAccessToken: vi.fn(),
 }));
@@ -194,7 +194,7 @@ describe("POST /api/cgi-assessment Supabase completion best-effort", () => {
     delete process.env.CGI_REPORT_EMAIL_ENABLED;
     delete process.env.CGI_EMAIL_DRY_RUN;
     delete process.env.CGI_EMAIL_RELAY_TOKEN;
-    supabaseMocks.getAssessmentByPublicId.mockResolvedValue(null);
+    supabaseMocks.getAssessmentEmailState.mockResolvedValue(null);
     supabaseMocks.markReportEmailSent.mockResolvedValue(true);
     supabaseMocks.upsertReportAccessToken.mockResolvedValue(true);
     vi.spyOn(console, "error").mockImplementation(() => undefined);
@@ -1179,7 +1179,7 @@ describe("POST /api/cgi-assessment Supabase completion best-effort", () => {
     it("dispatches exactly one email, with the correct recipient/subject/executive_summary/CTA url, and marks it sent", async () => {
       enableEmail();
       supabaseMocks.upsertAssessment.mockResolvedValue(realAssessment());
-      supabaseMocks.getAssessmentByPublicId.mockResolvedValue({
+      supabaseMocks.getAssessmentEmailState.mockResolvedValue({
         id: "assessment_row_1",
         public_assessment_id: "assessment_1",
         report_email_sent_at: null,
@@ -1225,7 +1225,7 @@ describe("POST /api/cgi-assessment Supabase completion best-effort", () => {
     it("never sends a second time when report_email_sent_at is already set (retry does not duplicate)", async () => {
       enableEmail();
       supabaseMocks.upsertAssessment.mockResolvedValue(realAssessment());
-      supabaseMocks.getAssessmentByPublicId.mockResolvedValue({
+      supabaseMocks.getAssessmentEmailState.mockResolvedValue({
         id: "assessment_row_1",
         public_assessment_id: "assessment_1",
         report_email_sent_at: "2026-08-14T10:00:00.000Z",
@@ -1244,7 +1244,7 @@ describe("POST /api/cgi-assessment Supabase completion best-effort", () => {
     it("does not mark as sent, and does not fail the overall request, when token issuance fails", async () => {
       enableEmail();
       supabaseMocks.upsertAssessment.mockResolvedValue(realAssessment());
-      supabaseMocks.getAssessmentByPublicId.mockResolvedValue({
+      supabaseMocks.getAssessmentEmailState.mockResolvedValue({
         id: "assessment_row_1",
         public_assessment_id: "assessment_1",
         report_email_sent_at: null,
@@ -1263,7 +1263,7 @@ describe("POST /api/cgi-assessment Supabase completion best-effort", () => {
     it("does not mark as sent, and does not fail the overall request, when Apps Script is unreachable for the email call", async () => {
       enableEmail();
       supabaseMocks.upsertAssessment.mockResolvedValue(realAssessment());
-      supabaseMocks.getAssessmentByPublicId.mockResolvedValue({
+      supabaseMocks.getAssessmentEmailState.mockResolvedValue({
         id: "assessment_row_1",
         public_assessment_id: "assessment_1",
         report_email_sent_at: null,

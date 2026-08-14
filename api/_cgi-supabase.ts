@@ -16,8 +16,6 @@ type AssessmentRow = {
   current_question?: number | null;
   progress_percent?: number | null;
   last_activity_at?: string | null;
-  report_email_sent_at?: string | null;
-  abandonment_email_sent_at?: string | null;
 };
 
 type LeadRow = {
@@ -845,7 +843,35 @@ export async function upsertAssessment(input: {
 
 export async function getAssessmentByPublicId(publicAssessmentId: string): Promise<AssessmentRow | null> {
   const result = await supabaseRequest<AssessmentRow[]>(
-    `cgi_assessments?public_assessment_id=${eqFilter(publicAssessmentId)}&select=id,lead_id,public_assessment_id,status,current_question,progress_percent,last_activity_at,report_email_sent_at,abandonment_email_sent_at`,
+    `cgi_assessments?public_assessment_id=${eqFilter(publicAssessmentId)}&select=id,lead_id,public_assessment_id,status,current_question,progress_percent,last_activity_at`,
+    { method: "GET" }
+  );
+  if (!result.ok) return null;
+  return Array.isArray(result.data) ? result.data[0] ?? null : null;
+}
+
+// Etapa 4: deliberately a *separate* query from getAssessmentByPublicId
+// above, not a widened one. getAssessmentByPublicId is called by
+// long-established, already-in-production code (checkpoint.ts,
+// persistLeadForAssessment, insertFunnelEvent, Etapa 3's resume endpoint)
+// -- selecting the two new email-marker columns there would make every one
+// of those callers depend on the Etapa 4 migration being applied, even
+// though the migration is intentionally not applied yet. This function is
+// only ever called from the two new, feature-flagged email code paths, so
+// it is the only thing allowed to depend on those columns existing.
+export type AssessmentEmailStateRow = {
+  id: string;
+  status?: string;
+  current_question?: number | null;
+  report_email_sent_at?: string | null;
+  abandonment_email_sent_at?: string | null;
+};
+
+export async function getAssessmentEmailState(
+  publicAssessmentId: string
+): Promise<AssessmentEmailStateRow | null> {
+  const result = await supabaseRequest<AssessmentEmailStateRow[]>(
+    `cgi_assessments?public_assessment_id=${eqFilter(publicAssessmentId)}&select=id,status,current_question,report_email_sent_at,abandonment_email_sent_at`,
     { method: "GET" }
   );
   if (!result.ok) return null;

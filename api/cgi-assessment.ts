@@ -11,7 +11,7 @@ import {
 import { buildCgiReportPromptContext } from "./cgi-report-guide.js";
 import {
   createEventId,
-  getAssessmentByPublicId,
+  getAssessmentEmailState,
   getCgiReportState,
   getReadyCgiReport,
   insertFunnelEvent,
@@ -2902,7 +2902,7 @@ export default async function handler(
   // marketing, so consent_marketing is deliberately not checked.
   try {
     if (isCgiReportEmailEnabled() && supabaseCompletion?.leadId && isReportReadyStatus(reportStatus)) {
-      const currentAssessment = await getAssessmentByPublicId(responsePublicAssessmentId);
+      const currentAssessment = await getAssessmentEmailState(responsePublicAssessmentId);
       const alreadySent = Boolean(currentAssessment?.report_email_sent_at);
       const summary = extractExecutiveSummary(ai.text);
       const recipient = String(payload.lead?.email || "").trim();

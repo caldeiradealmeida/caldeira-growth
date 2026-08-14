@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import {
   getAbandonmentCandidates,
-  getAssessmentByPublicId,
+  getAssessmentEmailState,
   getLeadById,
   markAbandonmentEmailSent,
 } from "../_cgi-supabase.js";
@@ -98,7 +98,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     try {
       // Stale-read guard: re-fetch this one assessment fresh, right before
       // acting on it, instead of trusting the batch query above.
-      const fresh = await getAssessmentByPublicId(candidate.public_assessment_id);
+      const fresh = await getAssessmentEmailState(candidate.public_assessment_id);
       const stillEligible =
         fresh?.status === "in_progress" &&
         (fresh.current_question ?? 0) > 0 &&

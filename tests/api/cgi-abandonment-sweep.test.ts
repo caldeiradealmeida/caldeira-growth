@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const supabaseMocks = vi.hoisted(() => ({
   getAbandonmentCandidates: vi.fn(),
-  getAssessmentByPublicId: vi.fn(),
+  getAssessmentEmailState: vi.fn(),
   getLeadById: vi.fn(),
   markAbandonmentEmailSent: vi.fn(),
   upsertReportAccessToken: vi.fn(),
@@ -75,7 +75,7 @@ describe("POST /api/cgi/abandonment-sweep", () => {
     delete process.env.CGI_ABANDONMENT_DELAY_HOURS;
 
     supabaseMocks.getAbandonmentCandidates.mockReset().mockResolvedValue([]);
-    supabaseMocks.getAssessmentByPublicId.mockReset();
+    supabaseMocks.getAssessmentEmailState.mockReset();
     supabaseMocks.getLeadById.mockReset();
     supabaseMocks.markAbandonmentEmailSent.mockReset().mockResolvedValue(true);
     supabaseMocks.upsertReportAccessToken.mockReset().mockResolvedValue(true);
@@ -119,7 +119,7 @@ describe("POST /api/cgi/abandonment-sweep", () => {
 
   it("1. sends the abandonment email for an eligible candidate and marks it sent", async () => {
     supabaseMocks.getAbandonmentCandidates.mockResolvedValue([candidate()]);
-    supabaseMocks.getAssessmentByPublicId.mockResolvedValue(eligibleFreshRow());
+    supabaseMocks.getAssessmentEmailState.mockResolvedValue(eligibleFreshRow());
     supabaseMocks.getLeadById.mockResolvedValue(leadRow());
     const response = createResponse();
 
@@ -136,7 +136,7 @@ describe("POST /api/cgi/abandonment-sweep", () => {
 
   it("7. does not send when status changed to completed between query and send (race condition)", async () => {
     supabaseMocks.getAbandonmentCandidates.mockResolvedValue([candidate()]);
-    supabaseMocks.getAssessmentByPublicId.mockResolvedValue(eligibleFreshRow({ status: "completed" }));
+    supabaseMocks.getAssessmentEmailState.mockResolvedValue(eligibleFreshRow({ status: "completed" }));
     const response = createResponse();
 
     await handler(createRequest() as never, response as never);
@@ -151,7 +151,7 @@ describe("POST /api/cgi/abandonment-sweep", () => {
 
   it("6. does not send when abandonment_email_sent_at is already set at revalidation time", async () => {
     supabaseMocks.getAbandonmentCandidates.mockResolvedValue([candidate()]);
-    supabaseMocks.getAssessmentByPublicId.mockResolvedValue(
+    supabaseMocks.getAssessmentEmailState.mockResolvedValue(
       eligibleFreshRow({ abandonment_email_sent_at: "2026-08-10T00:00:00.000Z" })
     );
     const response = createResponse();
@@ -166,7 +166,7 @@ describe("POST /api/cgi/abandonment-sweep", () => {
 
   it("5. does not send when report_email_sent_at is already set (report_ready reached)", async () => {
     supabaseMocks.getAbandonmentCandidates.mockResolvedValue([candidate()]);
-    supabaseMocks.getAssessmentByPublicId.mockResolvedValue(
+    supabaseMocks.getAssessmentEmailState.mockResolvedValue(
       eligibleFreshRow({ report_email_sent_at: "2026-08-10T00:00:00.000Z" })
     );
     const response = createResponse();
@@ -180,7 +180,7 @@ describe("POST /api/cgi/abandonment-sweep", () => {
 
   it("does not send when current_question is 0 at revalidation time", async () => {
     supabaseMocks.getAbandonmentCandidates.mockResolvedValue([candidate()]);
-    supabaseMocks.getAssessmentByPublicId.mockResolvedValue(eligibleFreshRow({ current_question: 0 }));
+    supabaseMocks.getAssessmentEmailState.mockResolvedValue(eligibleFreshRow({ current_question: 0 }));
     const response = createResponse();
 
     await handler(createRequest() as never, response as never);
@@ -192,7 +192,7 @@ describe("POST /api/cgi/abandonment-sweep", () => {
 
   it("11. skips when the lead lookup returns nothing", async () => {
     supabaseMocks.getAbandonmentCandidates.mockResolvedValue([candidate()]);
-    supabaseMocks.getAssessmentByPublicId.mockResolvedValue(eligibleFreshRow());
+    supabaseMocks.getAssessmentEmailState.mockResolvedValue(eligibleFreshRow());
     supabaseMocks.getLeadById.mockResolvedValue(null);
     const response = createResponse();
 
@@ -206,7 +206,7 @@ describe("POST /api/cgi/abandonment-sweep", () => {
 
   it("11b. skips when the lead has no email", async () => {
     supabaseMocks.getAbandonmentCandidates.mockResolvedValue([candidate()]);
-    supabaseMocks.getAssessmentByPublicId.mockResolvedValue(eligibleFreshRow());
+    supabaseMocks.getAssessmentEmailState.mockResolvedValue(eligibleFreshRow());
     supabaseMocks.getLeadById.mockResolvedValue(leadRow({ email: "" }));
     const response = createResponse();
 
@@ -220,7 +220,7 @@ describe("POST /api/cgi/abandonment-sweep", () => {
   it("dry-run identifies the candidate, builds the token, but never calls Apps Script or marks sent", async () => {
     process.env.CGI_EMAIL_DRY_RUN = "true";
     supabaseMocks.getAbandonmentCandidates.mockResolvedValue([candidate()]);
-    supabaseMocks.getAssessmentByPublicId.mockResolvedValue(eligibleFreshRow());
+    supabaseMocks.getAssessmentEmailState.mockResolvedValue(eligibleFreshRow());
     supabaseMocks.getLeadById.mockResolvedValue(leadRow());
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
@@ -238,7 +238,7 @@ describe("POST /api/cgi/abandonment-sweep", () => {
 
   it("error_token: does not mark sent when token issuance fails", async () => {
     supabaseMocks.getAbandonmentCandidates.mockResolvedValue([candidate()]);
-    supabaseMocks.getAssessmentByPublicId.mockResolvedValue(eligibleFreshRow());
+    supabaseMocks.getAssessmentEmailState.mockResolvedValue(eligibleFreshRow());
     supabaseMocks.getLeadById.mockResolvedValue(leadRow());
     supabaseMocks.upsertReportAccessToken.mockResolvedValue(false);
     const response = createResponse();
@@ -253,7 +253,7 @@ describe("POST /api/cgi/abandonment-sweep", () => {
 
   it("error_dispatch: does not mark sent when Apps Script rejects the relay", async () => {
     supabaseMocks.getAbandonmentCandidates.mockResolvedValue([candidate()]);
-    supabaseMocks.getAssessmentByPublicId.mockResolvedValue(eligibleFreshRow());
+    supabaseMocks.getAssessmentEmailState.mockResolvedValue(eligibleFreshRow());
     supabaseMocks.getLeadById.mockResolvedValue(leadRow());
     vi.stubGlobal(
       "fetch",
@@ -274,7 +274,7 @@ describe("POST /api/cgi/abandonment-sweep", () => {
       candidate({ public_assessment_id: "pub_bad" }),
       candidate({ public_assessment_id: "pub_good" }),
     ]);
-    supabaseMocks.getAssessmentByPublicId.mockImplementation(async (id: string) => {
+    supabaseMocks.getAssessmentEmailState.mockImplementation(async (id: string) => {
       if (id === "pub_bad") throw new Error("boom");
       return eligibleFreshRow({ public_assessment_id: id });
     });
@@ -322,7 +322,7 @@ describe("POST /api/cgi/abandonment-sweep", () => {
 
   it("the CTA link uses the exact same report-access token mechanism (fragment-based /cgi/relatorio#t=)", async () => {
     supabaseMocks.getAbandonmentCandidates.mockResolvedValue([candidate()]);
-    supabaseMocks.getAssessmentByPublicId.mockResolvedValue(eligibleFreshRow());
+    supabaseMocks.getAssessmentEmailState.mockResolvedValue(eligibleFreshRow());
     supabaseMocks.getLeadById.mockResolvedValue(leadRow());
     const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
       const body = JSON.parse(String(init?.body));
