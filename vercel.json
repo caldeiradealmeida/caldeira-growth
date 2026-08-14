@@ -1,4 +1,10 @@
 {
+  "crons": [
+    {
+      "path": "/api/cgi/abandonment-sweep",
+      "schedule": "0 * * * *"
+    }
+  ],
   "headers": [
     {
       "source": "/cgi/relatorio",

@@ -13,6 +13,10 @@ const supabaseMocks = vi.hoisted(() => ({
   updateLeadComments: vi.fn(),
   upsertAnswers: vi.fn(),
   upsertAssessment: vi.fn(),
+  // Etapa 4: report-ready participant email idempotency + token issuance.
+  getAssessmentByPublicId: vi.fn(),
+  markReportEmailSent: vi.fn(),
+  upsertReportAccessToken: vi.fn(),
 }));
 
 vi.mock("node:dns/promises", () => ({
@@ -183,6 +187,16 @@ describe("POST /api/cgi-assessment Supabase completion best-effort", () => {
     supabaseMocks.upsertAssessment.mockRejectedValue(
       new Error("unexpected_supabase_failure")
     );
+    // Etapa 4 defaults: feature flag off, so none of these should even be
+    // reached by the existing (pre-Etapa-4) tests above. Tests that
+    // specifically exercise the report-ready email override the flag and
+    // these mocks explicitly.
+    delete process.env.CGI_REPORT_EMAIL_ENABLED;
+    delete process.env.CGI_EMAIL_DRY_RUN;
+    delete process.env.CGI_EMAIL_RELAY_TOKEN;
+    supabaseMocks.getAssessmentByPublicId.mockResolvedValue(null);
+    supabaseMocks.markReportEmailSent.mockResolvedValue(true);
+    supabaseMocks.upsertReportAccessToken.mockResolvedValue(true);
     vi.spyOn(console, "error").mockImplementation(() => undefined);
     vi.spyOn(console, "info").mockImplementation(() => undefined);
   });
@@ -1099,5 +1113,202 @@ describe("POST /api/cgi-assessment Supabase completion best-effort", () => {
       report_status: "report_failed",
     });
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  describe("Etapa 4: report-ready participant email", () => {
+  function stubFetchWithEmailCapture() {
+      const emailCalls: Array<Record<string, unknown>> = [];
+      const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+        if (String(url).includes("api.openai.com")) {
+          return openAiJsonResponse(validOpenAiReport());
+        }
+        const body = init?.body ? JSON.parse(String(init.body)) : {};
+        if (body.action === "cgi_send_email") {
+          emailCalls.push(body);
+          return {
+            ok: true,
+            status: 200,
+            url: process.env.CONTACT_FORM_URL,
+            headers: { get: () => "application/json" },
+            text: async () => JSON.stringify({ ok: true, sent: true }),
+          };
+        }
+        // action === "cgi_assessment" (sheets sync)
+        return {
+          ok: true,
+          status: 200,
+          url: process.env.CONTACT_FORM_URL,
+          headers: { get: () => "application/json" },
+          text: async () => JSON.stringify({ ok: true, type: "cgi_assessment" }),
+        };
+      });
+      vi.stubGlobal("fetch", fetchMock);
+      return { fetchMock, emailCalls };
+    }
+
+    function enableEmail() {
+      process.env.CGI_REPORT_EMAIL_ENABLED = "true";
+      process.env.CONTACT_FORM_URL = "https://script.google.test/macros/s/fake/exec";
+      process.env.CGI_EMAIL_RELAY_TOKEN = "relay-secret";
+    }
+
+    function realAssessment(overrides: Record<string, unknown> = {}) {
+      return {
+        id: "assessment_row_1",
+        lead_id: "lead_row_1",
+        public_assessment_id: "assessment_1",
+        status: "completed",
+        ...overrides,
+      };
+    }
+
+    it("does nothing when the feature flag is off (default)", async () => {
+      supabaseMocks.upsertAssessment.mockResolvedValue(realAssessment());
+      const { fetchMock, emailCalls } = stubFetchWithEmailCapture();
+      const response = createResponse();
+
+      await handler({ method: "POST", headers: {}, body: createValidPayload() } as never, response as never);
+
+      expect(response.statusCode).toBe(200);
+      expect(emailCalls).toHaveLength(0);
+      expect(supabaseMocks.markReportEmailSent).not.toHaveBeenCalled();
+      // sanity: fetch was still called for OpenAI + sheets sync, just not email
+      expect(fetchMock).toHaveBeenCalled();
+    });
+
+    it("dispatches exactly one email, with the correct recipient/subject/executive_summary/CTA url, and marks it sent", async () => {
+      enableEmail();
+      supabaseMocks.upsertAssessment.mockResolvedValue(realAssessment());
+      supabaseMocks.getAssessmentByPublicId.mockResolvedValue({
+        id: "assessment_row_1",
+        public_assessment_id: "assessment_1",
+        report_email_sent_at: null,
+      });
+      supabaseMocks.upsertReportAccessToken.mockResolvedValue(true);
+      const { emailCalls } = stubFetchWithEmailCapture();
+      const response = createResponse();
+      const payload = createValidPayload();
+
+      await handler({ method: "POST", headers: {}, body: payload } as never, response as never);
+
+      expect(response.statusCode).toBe(200);
+      expect(emailCalls).toHaveLength(1);
+      expect(emailCalls[0]).toMatchObject({
+        action: "cgi_send_email",
+        token: "relay-secret",
+        emailKind: "report_ready",
+        recipient: payload.lead.email,
+      });
+      expect(String(emailCalls[0].subject)).toContain(payload.lead.company);
+      expect(String(emailCalls[0].plainText)).toContain(
+        "As respostas deste executivo indicam uma organizacao com fundamentos relevantes"
+      );
+      expect(String(emailCalls[0].plainText)).toMatch(/https:\/\/www\.caldeiragrowth\.com\/cgi\/relatorio#t=/);
+      expect(supabaseMocks.markReportEmailSent).toHaveBeenCalledWith("assessment_1");
+      expect(supabaseMocks.upsertReportAccessToken).toHaveBeenCalledTimes(1);
+    });
+
+    it("never sends when the assessment has no pre-existing lead_id (forceNewAttempt/regenerate phantom row)", async () => {
+      enableEmail();
+      supabaseMocks.upsertAssessment.mockResolvedValue(realAssessment({ lead_id: null }));
+      const { emailCalls } = stubFetchWithEmailCapture();
+      const response = createResponse();
+
+      await handler({ method: "POST", headers: {}, body: createValidPayload() } as never, response as never);
+
+      expect(response.statusCode).toBe(200);
+      expect(emailCalls).toHaveLength(0);
+      expect(supabaseMocks.upsertReportAccessToken).not.toHaveBeenCalled();
+      expect(supabaseMocks.markReportEmailSent).not.toHaveBeenCalled();
+    });
+
+    it("never sends a second time when report_email_sent_at is already set (retry does not duplicate)", async () => {
+      enableEmail();
+      supabaseMocks.upsertAssessment.mockResolvedValue(realAssessment());
+      supabaseMocks.getAssessmentByPublicId.mockResolvedValue({
+        id: "assessment_row_1",
+        public_assessment_id: "assessment_1",
+        report_email_sent_at: "2026-08-14T10:00:00.000Z",
+      });
+      const { emailCalls } = stubFetchWithEmailCapture();
+      const response = createResponse();
+
+      await handler({ method: "POST", headers: {}, body: createValidPayload() } as never, response as never);
+
+      expect(response.statusCode).toBe(200);
+      expect(emailCalls).toHaveLength(0);
+      expect(supabaseMocks.upsertReportAccessToken).not.toHaveBeenCalled();
+      expect(supabaseMocks.markReportEmailSent).not.toHaveBeenCalled();
+    });
+
+    it("does not mark as sent, and does not fail the overall request, when token issuance fails", async () => {
+      enableEmail();
+      supabaseMocks.upsertAssessment.mockResolvedValue(realAssessment());
+      supabaseMocks.getAssessmentByPublicId.mockResolvedValue({
+        id: "assessment_row_1",
+        public_assessment_id: "assessment_1",
+        report_email_sent_at: null,
+      });
+      supabaseMocks.upsertReportAccessToken.mockResolvedValue(false);
+      const { emailCalls } = stubFetchWithEmailCapture();
+      const response = createResponse();
+
+      await handler({ method: "POST", headers: {}, body: createValidPayload() } as never, response as never);
+
+      expect(response.statusCode).toBe(200);
+      expect(emailCalls).toHaveLength(0);
+      expect(supabaseMocks.markReportEmailSent).not.toHaveBeenCalled();
+    });
+
+    it("does not mark as sent, and does not fail the overall request, when Apps Script is unreachable for the email call", async () => {
+      enableEmail();
+      supabaseMocks.upsertAssessment.mockResolvedValue(realAssessment());
+      supabaseMocks.getAssessmentByPublicId.mockResolvedValue({
+        id: "assessment_row_1",
+        public_assessment_id: "assessment_1",
+        report_email_sent_at: null,
+      });
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (url: string, init?: RequestInit) => {
+          if (String(url).includes("api.openai.com")) return openAiJsonResponse(validOpenAiReport());
+          const body = init?.body ? JSON.parse(String(init.body)) : {};
+          if (body.action === "cgi_send_email") throw new Error("network down");
+          return {
+            ok: true,
+            status: 200,
+            url: process.env.CONTACT_FORM_URL,
+            headers: { get: () => "application/json" },
+            text: async () => JSON.stringify({ ok: true, type: "cgi_assessment" }),
+          };
+        })
+      );
+      const response = createResponse();
+
+      await handler({ method: "POST", headers: {}, body: createValidPayload() } as never, response as never);
+
+      expect(response.statusCode).toBe(200);
+      expect(response.body).toMatchObject({ ok: true, save: { ok: true } });
+      expect(supabaseMocks.markReportEmailSent).not.toHaveBeenCalled();
+    });
+
+    it("internal notification is untouched -- Etapa 4 flags/logic never gate sheets_sync", async () => {
+      // Feature flag stays off (default); the pre-existing sheets sync path
+      // (which also carries the internal notification trigger on the Apps
+      // Script side) must behave exactly as before.
+      supabaseMocks.upsertAssessment.mockResolvedValue(realAssessment());
+      const { fetchMock } = stubFetchWithEmailCapture();
+      process.env.CONTACT_FORM_URL = "https://script.google.test/macros/s/fake/exec";
+      const response = createResponse();
+
+      await handler({ method: "POST", headers: {}, body: createValidPayload() } as never, response as never);
+
+      expect(response.body).toMatchObject({ ok: true, secondary_sync_status: "secondary_sync_succeeded" });
+      const sheetsSyncCalls = fetchMock.mock.calls.filter(([, init]) => {
+        const body = (init as RequestInit | undefined)?.body ? JSON.parse(String((init as RequestInit).body)) : {};
+        return body.action === "cgi_assessment";
+      });
+      expect(sheetsSyncCalls).toHaveLength(1);
+    });
   });
 });

@@ -11,10 +11,12 @@ import {
 import { buildCgiReportPromptContext } from "./cgi-report-guide.js";
 import {
   createEventId,
+  getAssessmentByPublicId,
   getCgiReportState,
   getReadyCgiReport,
   insertFunnelEvent,
   markCgiReportFailed,
+  markReportEmailSent,
   saveCompletedCgiReport,
   tryCreateCgiReportGenerationLock,
   updateCgiReportSecondarySyncStatus,
@@ -29,6 +31,9 @@ import {
   normalizePublicAssessmentId,
   validateProfessionalContent,
 } from "./_cgi-validation.js";
+import { issueReportAccessToken, buildReportAccessUrl } from "./_cgi-report-token.js";
+import { buildCgiReportReadyEmail, extractExecutiveSummary } from "./_cgi-email-content.js";
+import { dispatchCgiParticipantEmail } from "./_cgi-email-dispatch.js";
 
 export type CgiLead = {
   name?: string;
@@ -211,6 +216,25 @@ function getAppsScriptUrl(): string {
     process.env.VITE_CONTACT_FORM_URL?.trim() ||
     ""
   );
+}
+
+// Etapa 4 -- independently switchable participant emails. Internal
+// notification (sendCgiNotification_ in Apps Script) is untouched by these
+// and stays unconditionally on, exactly as it is today.
+export function isCgiReportEmailEnabled(): boolean {
+  return process.env.CGI_REPORT_EMAIL_ENABLED === "true";
+}
+
+export function isCgiEmailDryRun(): boolean {
+  return process.env.CGI_EMAIL_DRY_RUN === "true";
+}
+
+function getCgiEmailRelayToken(): string {
+  return process.env.CGI_EMAIL_RELAY_TOKEN?.trim() || "";
+}
+
+function isReportReadyStatus(status: string): status is "report_ready" | "report_ready_with_warnings" {
+  return status === "report_ready" || status === "report_ready_with_warnings";
 }
 
 export function getConfiguredOpenAiModel(): string {
@@ -2329,7 +2353,7 @@ async function persistCompletedAssessmentBestEffort({
   payload: CgiPayload;
   answers: Record<string, number>;
   score: CgiScoreResult;
-}): Promise<{ publicAssessmentId: string; completionEventId: string } | null> {
+}): Promise<{ publicAssessmentId: string; completionEventId: string; leadId: string | null } | null> {
   const publicAssessmentId = normalizePublicAssessmentId(payload.public_assessment_id);
   const anonymousSessionId = normalizeAnonymousSessionId(payload.anonymous_session_id);
   if (!publicAssessmentId || !anonymousSessionId) return null;
@@ -2392,7 +2416,7 @@ async function persistCompletedAssessmentBestEffort({
     },
   });
 
-  return { publicAssessmentId, completionEventId };
+  return { publicAssessmentId, completionEventId, leadId: assessment?.lead_id ?? null };
 }
 
 export default async function handler(
@@ -2845,6 +2869,109 @@ export default async function handler(
       durationMs: Date.now() - handlerStartedAt,
     });
     return;
+  }
+
+  // Etapa 4 -- report-ready participant email. Deliberately its own
+  // best-effort step, independent of the sheets_sync outcome above: never
+  // throws, never affects the response the client receives, never retried
+  // automatically by anything in this handler. Gated on:
+  //  - the feature flag (off entirely today, no live Apps Script change);
+  //  - reportStatus already being one of the two "ready" values reached by
+  //    this point in the handler (report_generating/report_failed already
+  //    returned earlier -- see the `!reportSaved` branch above);
+  //  - supabaseCompletion.leadId being set, i.e. this assessment already
+  //    existed (identification done) before this completion request --
+  //    a forceNewAttempt/regenerate retry posts a brand-new, disconnected
+  //    public_assessment_id with no prior lead_id, and must never trigger a
+  //    fresh participant email;
+  //  - report_email_sent_at still being null (fetched fresh here, not
+  //    reused from an earlier point in the request).
+  // A token is only issued -- rotating whatever token, if any, already
+  // exists for this assessment -- immediately before actually attempting
+  // the send, and report_email_sent_at is only set after Apps Script
+  // confirms the send succeeded. A send that never happens (flag off,
+  // missing summary, dry run, dispatch error) never rotates anything on a
+  // token that might already be sitting in a previously-delivered email.
+  // Consent: /api/cgi/lead (the identification step) already rejects
+  // (400) any submission without consent_privacy === true before a
+  // cgi_leads row -- and therefore a lead_id on the assessment -- can ever
+  // exist. supabaseCompletion.leadId being set is consequently already a
+  // structural guarantee of privacy consent, not just an anti-phantom-
+  // -assessment check; no separate consent read is needed here. This is
+  // operational delivery of a report the person explicitly requested, not
+  // marketing, so consent_marketing is deliberately not checked.
+  try {
+    if (isCgiReportEmailEnabled() && supabaseCompletion?.leadId && isReportReadyStatus(reportStatus)) {
+      const currentAssessment = await getAssessmentByPublicId(responsePublicAssessmentId);
+      const alreadySent = Boolean(currentAssessment?.report_email_sent_at);
+      const summary = extractExecutiveSummary(ai.text);
+      const recipient = String(payload.lead?.email || "").trim();
+
+      if (alreadySent) {
+        logCgiOperation({
+          correlationId,
+          publicAssessmentId: responsePublicAssessmentId,
+          operation: "report_email_dispatch",
+          success: true,
+          errorCode: "already_sent",
+          durationMs: Date.now() - handlerStartedAt,
+        });
+      } else if (!summary) {
+        logCgiOperation({
+          correlationId,
+          publicAssessmentId: responsePublicAssessmentId,
+          operation: "report_email_dispatch",
+          success: false,
+          errorCode: "missing_executive_summary",
+          durationMs: Date.now() - handlerStartedAt,
+        });
+      } else {
+        const emailStartedAt = Date.now();
+        const token = await issueReportAccessToken(responsePublicAssessmentId);
+        if (token) {
+          const content = buildCgiReportReadyEmail({
+            name: String(payload.lead?.name || ""),
+            company: String(payload.lead?.company || ""),
+            executiveSummary: summary,
+            reportAccessUrl: buildReportAccessUrl(token.token),
+          });
+          const dispatchResult = await dispatchCgiParticipantEmail({
+            appsScriptUrl: url,
+            relayToken: getCgiEmailRelayToken(),
+            recipient,
+            content,
+            emailKind: "report_ready",
+            dryRun: isCgiEmailDryRun(),
+          });
+          if (dispatchResult.status === "sent") {
+            await markReportEmailSent(responsePublicAssessmentId);
+          }
+          logCgiOperation({
+            correlationId,
+            publicAssessmentId: responsePublicAssessmentId,
+            operation: "report_email_dispatch",
+            success: dispatchResult.status === "sent" || dispatchResult.status === "dry_run",
+            errorCode: dispatchResult.status === "error" ? dispatchResult.error : dispatchResult.status,
+            durationMs: Date.now() - emailStartedAt,
+          });
+        } else {
+          logCgiOperation({
+            correlationId,
+            publicAssessmentId: responsePublicAssessmentId,
+            operation: "report_email_dispatch",
+            success: false,
+            errorCode: "token_issuance_failed",
+            durationMs: Date.now() - emailStartedAt,
+          });
+        }
+      }
+    }
+  } catch (error) {
+    console.error("[CGI Email]", {
+      operation: "report_email_dispatch",
+      public_assessment_id: responsePublicAssessmentId,
+      error: error instanceof Error ? error.message : String(error || ""),
+    });
   }
 
   if (!upstream.ok || (data as { ok?: boolean }).ok !== true) {

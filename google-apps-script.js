@@ -3,7 +3,18 @@
  * Colunas: timestamp, nome, email, empresa, cargo, tema, mensagem
  */
 var SPREADSHEET_ID = '1NivGOjutCgJTGDjXxt8ydFiCeWrKvbbIdqmkVmwSC9M';
-var SCRIPT_VERSION = '2026-07-16-cgi-v3';
+var SCRIPT_VERSION = '2026-07-16-cgi-v4';
+// Etapa 4 (CGI email automation): independent kill switches for the two
+// participant emails, checked in handleCgiSendEmailPost_ against the
+// payload's declared emailKind. Defense in depth alongside Vercel's own
+// CGI_REPORT_EMAIL_ENABLED / CGI_ABANDONMENT_EMAIL_ENABLED env flags --
+// Vercel decides whether to even ask; this decides whether Apps Script
+// will act on that ask. Both start false: flipping either to true is a
+// deliberate, manual, live-script edit, never something a deploy does by
+// itself. sendCgiNotification_ (internal notification) is untouched by
+// either of these and stays unconditionally on.
+var ENABLE_CGI_REPORT_EMAIL = false;
+var ENABLE_CGI_ABANDONMENT_EMAIL = false;
 var ARTICLES_SHEET_NAME = 'Artigos';
 var MEDIA_SHEET_NAME = 'Midia';
 var CGI_SHEET_NAME = 'CGI';
@@ -114,6 +125,9 @@ function doPost(e) {
     }
     if (action === 'cgi_assessment') {
       return handleCgiAssessmentPost_(payload);
+    }
+    if (action === 'cgi_send_email') {
+      return handleCgiSendEmailPost_(payload);
     }
 
     var nome = String(payload.nome || '').trim();
@@ -317,7 +331,11 @@ function handleCgiAssessmentPost_(payload) {
 
   appendMappedRow_(sheet, CGI_HEADERS, row);
   sendCgiNotification_(lead, score, attentionPoints, payload);
-  sendCgiLeadReport_(lead, score, attentionPoints, payload);
+  // Participant report-ready email: superseded by the dedicated
+  // cgi_send_email action (handleCgiSendEmailPost_) as of Etapa 4. Vercel
+  // now builds the exact email content server-side and relays it via a
+  // separate request; this handler never templates or sends that email
+  // itself anymore, so it can't double-send alongside the new path.
 
   return jsonResponse_({ ok: true, type: 'cgi_assessment', version: SCRIPT_VERSION });
 }
@@ -380,80 +398,43 @@ function sendCgiNotification_(lead, score, attentionPoints, payload) {
   }
 }
 
-function sendCgiLeadReport_(lead, score, attentionPoints, payload) {
+// Etapa 4: generic relay for both participant emails (report-ready,
+// abandonment). Deliberately does no templating of its own -- subject,
+// plainText and htmlBody arrive already fully rendered from Vercel
+// (api/_cgi-email-content.ts), so copy changes never require touching
+// this live script. Auth is the same Script-Properties shared-token
+// pattern already used by handleArticlePost_/handleMediaPost_, scoped to
+// its own property so rotating it can never affect content publishing.
+function handleCgiSendEmailPost_(payload) {
+  var expectedToken = String(PropertiesService.getScriptProperties().getProperty('CGI_EMAIL_RELAY_TOKEN') || '').trim();
+  var token = String(payload.token || '').trim();
+  if (!expectedToken || token !== expectedToken) {
+    return jsonResponse_({ ok: false, error: 'auth' });
+  }
+
+  var emailKind = String(payload.emailKind || '').trim();
+  var kindEnabled =
+    emailKind === 'report_ready' ? ENABLE_CGI_REPORT_EMAIL :
+    emailKind === 'abandonment' ? ENABLE_CGI_ABANDONMENT_EMAIL :
+    false;
+  if (!kindEnabled) {
+    return jsonResponse_({ ok: true, sent: false, error: 'disabled' });
+  }
+
+  var recipient = String(payload.recipient || '').trim();
+  var subject = String(payload.subject || '').trim();
+  var plainText = String(payload.plainText || '').trim();
+  var htmlBody = String(payload.htmlBody || '');
+  if (!recipient || !subject || !plainText) {
+    return jsonResponse_({ ok: false, error: 'validation' });
+  }
+
   try {
-    var email = String(lead.email || '').trim();
-    if (!email) return;
-    var language = String(payload.language || 'pt').trim();
-    var allLabels = {
-      pt: {
-        greeting: 'Olá, ',
-        intro: 'Segue o seu resultado do CGI - Caldeira Growth Index.',
-        finalScore: 'CGI final',
-        level: 'Nível',
-        diagnosis: 'Diagnóstico',
-        scoreByDimension: 'Score por dimensão',
-        attentionPoints: '3 principais pontos de atenção',
-        nextStep: 'Para aprofundar o diagnóstico, o próximo passo recomendado é solicitar uma conversa estratégica com a Caldeira Growth.',
-        subject: 'Seu CGI - Caldeira Growth Index'
-      },
-      en: {
-        greeting: 'Hello, ',
-        intro: 'Here is your CGI - Caldeira Growth Index result.',
-        finalScore: 'Final CGI',
-        level: 'Level',
-        diagnosis: 'Diagnosis',
-        scoreByDimension: 'Score by dimension',
-        attentionPoints: '3 main attention points',
-        nextStep: 'To deepen the diagnosis, the recommended next step is to request a strategic conversation with Caldeira Growth.',
-        subject: 'Your CGI - Caldeira Growth Index'
-      },
-      es: {
-        greeting: 'Hola, ',
-        intro: 'Este es su resultado del CGI - Caldeira Growth Index.',
-        finalScore: 'CGI final',
-        level: 'Nivel',
-        diagnosis: 'Diagnóstico',
-        scoreByDimension: 'Score por dimensión',
-        attentionPoints: '3 principales puntos de atención',
-        nextStep: 'Para profundizar el diagnóstico, el próximo paso recomendado es solicitar una conversación estratégica con Caldeira Growth.',
-        subject: 'Su CGI - Caldeira Growth Index'
-      }
-    };
-    var labels = allLabels[language] || allLabels.pt;
-
-    var dimensionLines = (score.dimensionScores || [])
-      .map(function (item) {
-        return '- ' + String(item.title || item.dimensionId || '') + ': ' + String(item.score || '') + '/100';
-      })
-      .join('\n');
-
-    var aiReport = String(payload.aiReportText || payload.aiReport || '').trim();
-    var body = [
-      labels.greeting + String(lead.name || '').trim() + '.',
-      '',
-      labels.intro,
-      '',
-      labels.finalScore + ': ' + String(score.finalScore || ''),
-      labels.level + ': ' + String(score.level && score.level.title ? score.level.title : ''),
-      '',
-      labels.diagnosis + ':',
-      aiReport || String(score.diagnostic || ''),
-      '',
-      labels.scoreByDimension + ':',
-      dimensionLines,
-      '',
-      labels.attentionPoints + ':',
-      attentionPoints,
-      '',
-      labels.nextStep,
-      '',
-      'Caldeira Growth'
-    ].join('\n');
-
-    MailApp.sendEmail(email, labels.subject, body);
+    MailApp.sendEmail(recipient, subject, plainText, { htmlBody: htmlBody });
+    return jsonResponse_({ ok: true, sent: true });
   } catch (err) {
-    console.error('Erro ao enviar relatório CGI ao lead: ' + String(err));
+    console.error('CGI: failed to send participant email (' + emailKind + '): ' + String(err));
+    return jsonResponse_({ ok: false, error: 'send_failed', detail: String(err) });
   }
 }
 

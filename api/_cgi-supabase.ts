@@ -16,6 +16,8 @@ type AssessmentRow = {
   current_question?: number | null;
   progress_percent?: number | null;
   last_activity_at?: string | null;
+  report_email_sent_at?: string | null;
+  abandonment_email_sent_at?: string | null;
 };
 
 type LeadRow = {
@@ -843,7 +845,7 @@ export async function upsertAssessment(input: {
 
 export async function getAssessmentByPublicId(publicAssessmentId: string): Promise<AssessmentRow | null> {
   const result = await supabaseRequest<AssessmentRow[]>(
-    `cgi_assessments?public_assessment_id=${eqFilter(publicAssessmentId)}&select=id,lead_id,public_assessment_id,status,current_question,progress_percent,last_activity_at`,
+    `cgi_assessments?public_assessment_id=${eqFilter(publicAssessmentId)}&select=id,lead_id,public_assessment_id,status,current_question,progress_percent,last_activity_at,report_email_sent_at,abandonment_email_sent_at`,
     { method: "GET" }
   );
   if (!result.ok) return null;
@@ -1167,4 +1169,91 @@ export async function insertFunnelEvent(input: EventInsertInput): Promise<string
     });
   }
   return eventId;
+}
+
+// --- Etapa 4: participant email idempotency markers -----------------------
+// Each marker is set only once, only after a confirmed successful send (see
+// api/cgi-assessment.ts and api/cgi/abandonment-sweep.ts) -- never set
+// speculatively before attempting the send. A retry that never actually
+// sent an email always finds the marker still null and is free to try
+// again with a fresh token; once set, nothing re-attempts that email kind
+// for this assessment.
+
+export async function markReportEmailSent(publicAssessmentId: string): Promise<boolean> {
+  const result = await supabaseRequest(
+    `cgi_assessments?public_assessment_id=${eqFilter(publicAssessmentId)}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({ report_email_sent_at: new Date().toISOString() }),
+      prefer: "return=minimal",
+    }
+  );
+  if (!result.ok) {
+    logSupabaseFailure("mark_report_email_sent", {
+      status: result.status,
+      error: result.error,
+      publicAssessmentId,
+    });
+  }
+  return result.ok;
+}
+
+export async function markAbandonmentEmailSent(publicAssessmentId: string): Promise<boolean> {
+  const result = await supabaseRequest(
+    `cgi_assessments?public_assessment_id=${eqFilter(publicAssessmentId)}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({ abandonment_email_sent_at: new Date().toISOString() }),
+      prefer: "return=minimal",
+    }
+  );
+  if (!result.ok) {
+    logSupabaseFailure("mark_abandonment_email_sent", {
+      status: result.status,
+      error: result.error,
+      publicAssessmentId,
+    });
+  }
+  return result.ok;
+}
+
+export type AbandonmentCandidateRow = {
+  id: string;
+  public_assessment_id: string;
+  lead_id: string;
+  current_question: number;
+  last_activity_at: string;
+};
+
+/** Sweep query for the abandonment cron (api/cgi/abandonment-sweep.ts): only
+ * a cheap, indexable WHERE clause here (status/lead_id/current_question/
+ * last_activity_at/abandonment_email_sent_at) -- the caller re-validates
+ * each candidate's live status immediately before sending, so this is
+ * allowed to be a stale read. */
+export async function getAbandonmentCandidates(input: {
+  cutoffIso: string;
+  limit: number;
+}): Promise<AbandonmentCandidateRow[]> {
+  const query = [
+    "status=eq.in_progress",
+    "lead_id=not.is.null",
+    "current_question=gt.0",
+    `last_activity_at=lte.${encodeURIComponent(input.cutoffIso)}`,
+    "abandonment_email_sent_at=is.null",
+    "report_email_sent_at=is.null",
+    "select=id,public_assessment_id,lead_id,current_question,last_activity_at",
+    "order=last_activity_at.asc",
+    `limit=${Math.max(1, Math.min(input.limit, 100))}`,
+  ].join("&");
+  const result = await supabaseRequest<AbandonmentCandidateRow[]>(`cgi_assessments?${query}`, {
+    method: "GET",
+  });
+  if (!result.ok) {
+    logSupabaseFailure("get_abandonment_candidates", {
+      status: result.status,
+      error: result.error,
+    });
+    return [];
+  }
+  return Array.isArray(result.data) ? result.data : [];
 }
