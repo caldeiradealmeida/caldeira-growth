@@ -13,6 +13,8 @@ type AssessmentRow = {
   lead_id?: string | null;
   public_assessment_id: string;
   status?: string;
+  current_question?: number | null;
+  progress_percent?: number | null;
   last_activity_at?: string | null;
 };
 
@@ -841,7 +843,7 @@ export async function upsertAssessment(input: {
 
 export async function getAssessmentByPublicId(publicAssessmentId: string): Promise<AssessmentRow | null> {
   const result = await supabaseRequest<AssessmentRow[]>(
-    `cgi_assessments?public_assessment_id=${eqFilter(publicAssessmentId)}&select=id,lead_id,public_assessment_id,status`,
+    `cgi_assessments?public_assessment_id=${eqFilter(publicAssessmentId)}&select=id,lead_id,public_assessment_id,status,current_question,progress_percent,last_activity_at`,
     { method: "GET" }
   );
   if (!result.ok) return null;

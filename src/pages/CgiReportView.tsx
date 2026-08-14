@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import logo from "@/assets/brand/Black logo - no background.svg";
 import { cgiUi } from "@/features/cgi/config";
 import { extractReportAccessToken } from "@/features/cgi/logic/reportAccessFragment";
@@ -45,6 +46,7 @@ function takeReportAccessToken(): string | null {
 }
 
 export default function CgiReportView() {
+  const navigate = useNavigate();
   const [viewState, setViewState] = useState<ReportViewState | { kind: "loading" }>({
     kind: "loading",
   });
@@ -67,7 +69,18 @@ export default function CgiReportView() {
           body: JSON.stringify({ t: token }),
         });
         const json = await response.json().catch(() => null);
-        if (!cancelled) setViewState(parseReportAccessResponse(json));
+        if (cancelled) return;
+        const parsed = parseReportAccessResponse(json);
+        // Cross-device resume (Etapa 3): the token identified an incomplete
+        // assessment, not a finished report. Hand the already-resolved data
+        // off to /cgi via router state -- in-memory only, never written to
+        // any Storage API -- and let CGI.tsx (the actual form/state machine)
+        // take over. This page never renders the assessment UI itself.
+        if (parsed.kind === "resume") {
+          navigate("/cgi", { replace: true, state: { cgiResumeHandoff: parsed.handoff } });
+          return;
+        }
+        setViewState(parsed);
       } catch {
         if (!cancelled) setViewState({ kind: "error" });
       }
@@ -76,7 +89,7 @@ export default function CgiReportView() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [navigate]);
 
   return (
     <div className="min-h-screen bg-background px-4 py-10">
@@ -88,6 +101,12 @@ export default function CgiReportView() {
         )}
         {viewState.kind === "report_unavailable" && (
           <MessageState title="Seu relatório ainda está sendo processado. Tente novamente em alguns instantes." />
+        )}
+        {viewState.kind === "report_generating" && (
+          <MessageState title="Seu relatório está sendo gerado. Tente novamente em alguns instantes." />
+        )}
+        {viewState.kind === "report_failed" && (
+          <MessageState title="Não foi possível concluir a geração do relatório. Tente novamente mais tarde." />
         )}
         {viewState.kind === "error" && (
           <MessageState title="Não foi possível carregar o relatório agora. Tente novamente em alguns instantes." />

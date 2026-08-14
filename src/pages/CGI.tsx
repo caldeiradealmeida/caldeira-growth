@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import SEO from "@/components/SEO";
@@ -19,7 +20,7 @@ import {
   dimensionOrder,
   initialLead,
 } from "@/features/cgi/config";
-import type { LeadForm, Step } from "@/features/cgi/types";
+import type { CgiResumeHandoff, LeadForm, Step } from "@/features/cgi/types";
 import type { CgiConsentState, CgiReportStatus, CgiSecondarySyncStatus } from "@/features/cgi/types";
 import {
   CGI_COMMENTS_MAX_LENGTH,
@@ -74,7 +75,8 @@ import {
 } from "@/features/cgi/services/analytics";
 import { startCgiAssessment, submitCgiLead } from "@/features/cgi/services/api";
 import { persistCgiCheckpoint } from "@/features/cgi/services/checkpoint";
-import { checkpointsToSend } from "@/features/cgi/logic/checkpointSchedule";
+import { checkpointsToSend, CGI_CHECKPOINT_QUESTION_COUNTS } from "@/features/cgi/logic/checkpointSchedule";
+import { computeResumeHydration } from "@/features/cgi/logic/resumeHydration";
 
 declare global {
   interface Window {
@@ -100,6 +102,8 @@ function createLocalAttemptId(prefix: string) {
 
 export default function CGI() {
   const { toast } = useToast();
+  const location = useLocation();
+  const navigate = useNavigate();
   const { lang } = useLanguage();
   const config = getCgiConfig(lang);
   const t = cgiUi[lang];
@@ -147,6 +151,11 @@ export default function CGI() {
   // re-send an already-persisted checkpoint, which is harmless (upsertAnswers
   // is idempotent) rather than worth extra state to avoid.
   const checkpointSentRef = useRef(new Set<number>());
+  // Guards the cross-device resume handoff (Etapa 3) from being reapplied on
+  // a re-render -- router location.state otherwise persists across
+  // in-session navigations, and this must run its one-time hydration only
+  // once per handoff.
+  const resumeHandledRef = useRef(false);
 
   const currentDimension = config.dimensions[dimensionIndex];
   const currentQuestions = useMemo(
@@ -219,7 +228,62 @@ export default function CGI() {
     }
   }, [lang]);
 
+  // Cross-device resume (Etapa 3): CgiReportView already resolved the
+  // report-access token server-side and handed off the result via router
+  // state -- this never reads a token itself, never calls the API. The
+  // server is treated as the sole source of truth: local storage is
+  // overwritten outright (no merge with whatever, if anything, was already
+  // on this browser), matching the same pattern restoreReadyReport already
+  // uses for report_ready hydration.
   useEffect(() => {
+    const handoff = (location.state as { cgiResumeHandoff?: CgiResumeHandoff } | null)
+      ?.cgiResumeHandoff;
+    if (!handoff || resumeHandledRef.current) return;
+    resumeHandledRef.current = true;
+
+    const hydration = computeResumeHydration(handoff, initialLead, dimensionOrder);
+
+    setPublicAssessmentId(hydration.publicAssessmentId);
+    setAnswers(hydration.answers);
+    checkpointSentRef.current = new Set(
+      CGI_CHECKPOINT_QUESTION_COUNTS.filter((count) => hydration.answeredCount >= count)
+    );
+    // Already started on the original device -- avoid re-sending the
+    // one-time cgi_assessment_started event on this one.
+    assessmentStartedSentRef.current = true;
+
+    if (hydration.lead) setLead(hydration.lead);
+    setStep(hydration.step);
+    if (hydration.dimensionIndex !== null) setDimensionIndex(hydration.dimensionIndex);
+
+    patchAssessmentState({
+      public_assessment_id: hydration.publicAssessmentId,
+      status: handoff.status,
+      current_question: hydration.answeredCount,
+      answers: hydration.answers,
+      lead: hydration.lead,
+      sent_events: {},
+      sent_progress: [],
+    });
+
+    // Drop the handoff from history so an in-SPA back/forward navigation
+    // back to this URL can never reapply it.
+    navigate(location.pathname, { replace: true, state: null });
+
+    void sendCgiClientEvent({
+      eventName: "cgi_assessment_resumed",
+      anonymousSessionId,
+      publicAssessmentId: handoff.publicAssessmentId,
+      metadata: {
+        progress_percent: Math.min(99, Math.round((hydration.answeredCount / CGI_QUESTIONS.length) * 100)),
+      },
+    });
+
+    scrollToAssessment();
+  }, [anonymousSessionId, location, navigate]);
+
+  useEffect(() => {
+    if (resumeHandledRef.current) return;
     const savedState = readAssessmentState();
     if (!savedState || savedState.status === "completed") return;
     if (savedState.public_assessment_id) {

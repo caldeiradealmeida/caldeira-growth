@@ -1,20 +1,32 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { getReadyCgiReport } from "./_cgi-supabase.js";
+import {
+  getAnswersByAssessmentId,
+  getAssessmentByPublicId,
+  getCgiReportState,
+  getLeadById,
+} from "./_cgi-supabase.js";
 import { resolveReportAccessToken } from "./_cgi-report-token.js";
 
-// Server-side, read-only resolution of a report-access bearer token into
-// report content. POST-only, token in the request body only (query-string
+// Server-side, read-only resolution of a report-access bearer token. The
+// token identifies an assessment, not just a finished report (Etapa 3) --
+// this endpoint now branches on the assessment's own status to support both
+// the original report-ready view and cross-device resume of an incomplete
+// assessment. POST-only, token in the request body only (query-string
 // tokens are never read), no CORS (same-origin use only), no caching.
 //
 // Response states are deliberately collapsed so nothing about *why* a token
 // doesn't work is observable: "link_unavailable" covers not-found, expired,
 // and revoked alike -- never public_assessment_id, never the token itself.
 //
-// Read-only by construction: the only calls made are resolveReportAccessToken
-// (reads cgi_report_access, best-effort touches last_accessed_at) and
-// getReadyCgiReport (reads cgi_reports). Never calls OpenAI, never calls
-// saveCompletedCgiReport/insertRegeneratedCgiReport, never touches
-// report_status, never creates a new report version.
+// Read-only by construction: the calls made are resolveReportAccessToken
+// (reads cgi_report_access, best-effort touches last_accessed_at),
+// getAssessmentByPublicId, getAnswersByAssessmentId, getLeadById (all plain
+// reads), and getCgiReportState (reads cgi_reports, already returns the
+// latest version -- same function/semantics the legacy status endpoint
+// uses, so "latest valid version" behavior is inherited, not reimplemented).
+// Never calls OpenAI, never calls saveCompletedCgiReport/
+// insertRegeneratedCgiReport, never touches report_status, never creates a
+// new report version, never creates or mutates an assessment/lead/answer.
 
 const MAX_BODY_BYTES = 2048;
 const MAX_TOKEN_LENGTH = 512;
@@ -83,9 +95,78 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     return;
   }
 
+  const publicAssessmentId = resolved.publicAssessmentId;
+
+  let assessment;
+  try {
+    assessment = await getAssessmentByPublicId(publicAssessmentId);
+  } catch {
+    res.status(200).json({ ok: true, state: "error" });
+    return;
+  }
+
+  // Same collapsed philosophy as an invalid token: a token whose assessment
+  // is gone reveals nothing more specific than "this link doesn't work".
+  if (!assessment) {
+    res.status(200).json({ ok: true, state: "link_unavailable" });
+    return;
+  }
+
+  if (assessment.status !== "completed") {
+    // Incomplete assessment (created / lead_captured / started / in_progress
+    // / abandoned) -- Etapa 3 cross-device resume. Never touches
+    // report generation; only reads already-persisted answers/lead.
+    let answers: Record<string, number> = {};
+    let leadRow = null;
+    try {
+      [answers, leadRow] = await Promise.all([
+        getAnswersByAssessmentId(assessment.id),
+        assessment.lead_id ? getLeadById(assessment.lead_id) : Promise.resolve(null),
+      ]);
+    } catch {
+      res.status(200).json({ ok: true, state: "error" });
+      return;
+    }
+
+    res.status(200).json({
+      ok: true,
+      state: "resume",
+      data: {
+        // publicAssessmentId is required, not incidental: the frontend must
+        // send it back on every subsequent checkpoint/completion call, or it
+        // would call /api/cgi/start and create a second, unrelated
+        // assessment instead of continuing this one.
+        publicAssessmentId,
+        status: assessment.status,
+        answers,
+        currentQuestion: assessment.current_question ?? 0,
+        progressPercent: assessment.progress_percent ?? 0,
+        lead: leadRow
+          ? {
+              name: leadRow.name,
+              email: leadRow.email,
+              phone: leadRow.phone || "",
+              company: leadRow.company,
+              companyWebsite: leadRow.company_website || "",
+              role: leadRow.role,
+              sector: leadRow.sector || "",
+              commercialRelationshipModel: leadRow.commercial_relationship_model || "",
+              employeeCount: leadRow.employee_count || "",
+              annualRevenue: leadRow.annual_revenue_range || "",
+              currentChallenge: leadRow.current_challenge || "",
+              growthGoal: leadRow.growth_goal || "",
+              investmentIntent: leadRow.investment_intent || "",
+              comments: leadRow.comments || "",
+            }
+          : null,
+      },
+    });
+    return;
+  }
+
   let reportState;
   try {
-    reportState = await getReadyCgiReport({ publicAssessmentId: resolved.publicAssessmentId });
+    reportState = await getCgiReportState({ publicAssessmentId });
   } catch {
     res.status(200).json({ ok: true, state: "error" });
     return;
@@ -96,14 +177,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     return;
   }
 
+  if (reportState.status !== "ready") {
+    res.status(200).json({
+      ok: true,
+      state: reportState.status === "failed" ? "report_failed" : "report_generating",
+    });
+    return;
+  }
+
   res.status(200).json({
     ok: true,
     state: "ready",
     data: {
-      language: reportState.language,
-      score: reportState.score,
-      lead: reportState.lead,
-      reportJson: reportState.reportJson,
+      language: reportState.report.language,
+      score: reportState.report.score,
+      lead: reportState.report.lead,
+      reportJson: reportState.report.reportJson,
     },
   });
 }
