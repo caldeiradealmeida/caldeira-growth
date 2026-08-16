@@ -45,8 +45,13 @@ function getAppsScriptUrl(): string {
   return process.env.CONTACT_FORM_URL?.trim() || process.env.VITE_CONTACT_FORM_URL?.trim() || "";
 }
 
+// Named CRON_SECRET (not a custom name) so Vercel's built-in Cron Jobs
+// auto-injection applies: https://vercel.com/docs/cron-jobs/manage-cron-jobs#securing-cron-jobs
+// -- Vercel only sends the Authorization header automatically for an env
+// var with this exact name. A custom name would silently 401 every
+// scheduled invocation while still working for manual/test calls.
 function isAuthorized(req: VercelRequest): boolean {
-  const expected = process.env.CGI_CRON_SECRET?.trim();
+  const expected = process.env.CRON_SECRET?.trim();
   if (!expected) return false; // fail closed: unset secret means nobody is authorized, not everybody.
   const header = String(req.headers.authorization || "");
   return header === `Bearer ${expected}`;

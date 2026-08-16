@@ -67,7 +67,7 @@ function leadRow(overrides: Record<string, unknown> = {}) {
 
 describe("POST /api/cgi/abandonment-sweep", () => {
   beforeEach(() => {
-    process.env.CGI_CRON_SECRET = "cron-secret";
+    process.env.CRON_SECRET = "cron-secret";
     process.env.CGI_ABANDONMENT_EMAIL_ENABLED = "true";
     process.env.CONTACT_FORM_URL = "https://script.google.test/exec";
     process.env.CGI_EMAIL_RELAY_TOKEN = "relay-secret";
@@ -104,8 +104,8 @@ describe("POST /api/cgi/abandonment-sweep", () => {
     expect(response.statusCode).toBe(401);
   });
 
-  it("fails closed when CGI_CRON_SECRET itself is unset, even with a matching-looking header", async () => {
-    delete process.env.CGI_CRON_SECRET;
+  it("fails closed when CRON_SECRET itself is unset, even with a matching-looking header", async () => {
+    delete process.env.CRON_SECRET;
     const response = createResponse();
     await handler(createRequest({ headers: { authorization: "Bearer undefined" } }) as never, response as never);
     expect(response.statusCode).toBe(401);
