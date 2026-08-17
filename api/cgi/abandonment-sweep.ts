@@ -45,6 +45,21 @@ function getAppsScriptUrl(): string {
   return process.env.CONTACT_FORM_URL?.trim() || process.env.VITE_CONTACT_FORM_URL?.trim() || "";
 }
 
+// TEST-ONLY escape hatch for a controlled, single-assessment sweep run.
+// Gated on VERCEL_ENV -- set by the Vercel platform itself for every
+// deployment, never something this codebase or its env vars control --
+// so CGI_ABANDONMENT_TEST_ASSESSMENT_ID is structurally impossible to
+// honor in production, even if the var were somehow set there by
+// accident. Outside production, when set, narrows the already-fetched,
+// already-eligible candidate list down to exactly one entry -- it does
+// not change eligibility criteria, the SQL query, batch limit, cron,
+// token issuance, copy, or the idempotency markers.
+function getAbandonmentTestAssessmentId(): string | null {
+  if (process.env.VERCEL_ENV === "production") return null;
+  const value = process.env.CGI_ABANDONMENT_TEST_ASSESSMENT_ID?.trim();
+  return value || null;
+}
+
 // Named CRON_SECRET (not a custom name) so Vercel's built-in Cron Jobs
 // auto-injection applies: https://vercel.com/docs/cron-jobs/manage-cron-jobs#securing-cron-jobs
 // -- Vercel only sends the Authorization header automatically for an env
@@ -95,6 +110,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       detail: error instanceof Error ? error.message : String(error),
     });
     return;
+  }
+
+  const testAssessmentId = getAbandonmentTestAssessmentId();
+  if (testAssessmentId) {
+    candidates = candidates.filter((candidate) => candidate.public_assessment_id === testAssessmentId);
   }
 
   const results: Array<{ publicAssessmentId: string; outcome: SweepOutcome; detail?: string }> = [];

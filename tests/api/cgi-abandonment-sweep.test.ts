@@ -73,6 +73,8 @@ describe("POST /api/cgi/abandonment-sweep", () => {
     process.env.CGI_EMAIL_RELAY_TOKEN = "relay-secret";
     delete process.env.CGI_EMAIL_DRY_RUN;
     delete process.env.CGI_ABANDONMENT_DELAY_HOURS;
+    delete process.env.VERCEL_ENV;
+    delete process.env.CGI_ABANDONMENT_TEST_ASSESSMENT_ID;
 
     supabaseMocks.getAbandonmentCandidates.mockReset().mockResolvedValue([]);
     supabaseMocks.getAssessmentEmailState.mockReset();
@@ -336,5 +338,95 @@ describe("POST /api/cgi/abandonment-sweep", () => {
     await handler(createRequest() as never, response as never);
     expect(response.statusCode).toBe(200);
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  describe("CGI_ABANDONMENT_TEST_ASSESSMENT_ID (preview-only single-candidate override)", () => {
+    it("1. preview + override: only the matching technical assessment is processed, real candidates are skipped entirely", async () => {
+      process.env.VERCEL_ENV = "preview";
+      process.env.CGI_ABANDONMENT_TEST_ASSESSMENT_ID = "pub_technical";
+      const technical = candidate({ public_assessment_id: "pub_technical", lead_id: "lead_technical" });
+      const real1 = candidate({ public_assessment_id: "pub_real_1", lead_id: "lead_real_1" });
+      const real2 = candidate({ public_assessment_id: "pub_real_2", lead_id: "lead_real_2" });
+      supabaseMocks.getAbandonmentCandidates.mockResolvedValue([real1, technical, real2]);
+      supabaseMocks.getAssessmentEmailState.mockResolvedValue(
+        eligibleFreshRow({ public_assessment_id: "pub_technical" })
+      );
+      supabaseMocks.getLeadById.mockResolvedValue(leadRow({ id: "lead_technical" }));
+      const response = createResponse();
+
+      await handler(createRequest() as never, response as never);
+
+      expect(response.statusCode).toBe(200);
+      const body = response.body as { candidateCount: number; results: Array<{ publicAssessmentId: string }> };
+      expect(body.candidateCount).toBe(1);
+      expect(body.results).toHaveLength(1);
+      expect(body.results[0].publicAssessmentId).toBe("pub_technical");
+      expect(supabaseMocks.getAssessmentEmailState).toHaveBeenCalledTimes(1);
+      expect(supabaseMocks.getAssessmentEmailState).toHaveBeenCalledWith("pub_technical");
+      expect(supabaseMocks.getLeadById).toHaveBeenCalledTimes(1);
+      expect(supabaseMocks.getLeadById).toHaveBeenCalledWith("lead_technical");
+    });
+
+    it("2. preview without override: normal batch behavior, every eligible candidate is processed", async () => {
+      process.env.VERCEL_ENV = "preview";
+      const real1 = candidate({ public_assessment_id: "pub_real_1", lead_id: "lead_real_1" });
+      const real2 = candidate({ public_assessment_id: "pub_real_2", lead_id: "lead_real_2" });
+      supabaseMocks.getAbandonmentCandidates.mockResolvedValue([real1, real2]);
+      supabaseMocks.getAssessmentEmailState.mockImplementation(async (id: string) =>
+        eligibleFreshRow({ public_assessment_id: id })
+      );
+      supabaseMocks.getLeadById.mockImplementation(async (id: string) => leadRow({ id }));
+      const response = createResponse();
+
+      await handler(createRequest() as never, response as never);
+
+      expect(response.statusCode).toBe(200);
+      const body = response.body as { candidateCount: number; results: Array<{ publicAssessmentId: string }> };
+      expect(body.candidateCount).toBe(2);
+      expect(body.results.map((r) => r.publicAssessmentId).sort()).toEqual(["pub_real_1", "pub_real_2"]);
+    });
+
+    it("3. production + override: override is ignored by construction, every eligible candidate is processed", async () => {
+      process.env.VERCEL_ENV = "production";
+      process.env.CGI_ABANDONMENT_TEST_ASSESSMENT_ID = "pub_technical";
+      const technical = candidate({ public_assessment_id: "pub_technical", lead_id: "lead_technical" });
+      const real1 = candidate({ public_assessment_id: "pub_real_1", lead_id: "lead_real_1" });
+      supabaseMocks.getAbandonmentCandidates.mockResolvedValue([technical, real1]);
+      supabaseMocks.getAssessmentEmailState.mockImplementation(async (id: string) =>
+        eligibleFreshRow({ public_assessment_id: id })
+      );
+      supabaseMocks.getLeadById.mockImplementation(async (id: string) => leadRow({ id }));
+      const response = createResponse();
+
+      await handler(createRequest() as never, response as never);
+
+      expect(response.statusCode).toBe(200);
+      const body = response.body as { candidateCount: number; results: Array<{ publicAssessmentId: string }> };
+      expect(body.candidateCount).toBe(2);
+      expect(body.results.map((r) => r.publicAssessmentId).sort()).toEqual(["pub_real_1", "pub_technical"]);
+    });
+
+    it("4. preview + override: no real lead is ever looked up, dispatched to, or marked sent", async () => {
+      process.env.VERCEL_ENV = "preview";
+      process.env.CGI_ABANDONMENT_TEST_ASSESSMENT_ID = "pub_technical";
+      const technical = candidate({ public_assessment_id: "pub_technical", lead_id: "lead_technical" });
+      const real1 = candidate({ public_assessment_id: "pub_real_1", lead_id: "lead_real_1" });
+      supabaseMocks.getAbandonmentCandidates.mockResolvedValue([real1, technical]);
+      supabaseMocks.getAssessmentEmailState.mockResolvedValue(
+        eligibleFreshRow({ public_assessment_id: "pub_technical" })
+      );
+      supabaseMocks.getLeadById.mockResolvedValue(leadRow({ id: "lead_technical" }));
+      const fetchMock = vi.fn(async () => new Response(JSON.stringify({ ok: true, sent: true }), { status: 200 }));
+      vi.stubGlobal("fetch", fetchMock);
+      const response = createResponse();
+
+      await handler(createRequest() as never, response as never);
+
+      expect(response.statusCode).toBe(200);
+      expect(supabaseMocks.getLeadById).not.toHaveBeenCalledWith("lead_real_1");
+      expect(supabaseMocks.markAbandonmentEmailSent).toHaveBeenCalledTimes(1);
+      expect(supabaseMocks.markAbandonmentEmailSent).toHaveBeenCalledWith("pub_technical");
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
   });
 });
