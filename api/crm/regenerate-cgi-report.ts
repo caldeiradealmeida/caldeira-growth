@@ -183,7 +183,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     language,
   });
 
-  if (!saved.ok) {
+  // Compared against `false` rather than written as `!saved.ok`: Vercel builds
+  // this function against the root tsconfig.json, which sets
+  // strictNullChecks:false, and under that setting TypeScript does not narrow a
+  // discriminated union through the truthiness of a boolean-literal
+  // discriminant. The explicit comparison narrows identically under both
+  // settings. Same runtime behaviour.
+  if (saved.ok === false) {
     // "conflict" means the DB still has the legacy single-row-per-assessment
     // constraint (versioning migration Phase 3 not applied yet) and this
     // assessment already has a report -- nothing was overwritten, the
