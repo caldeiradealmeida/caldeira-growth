@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { areCgiAnswersComplete, calculateCgiScore } from "../cgi-core.js";
+import { areCgiAnswersComplete, calculateCgiScore } from "../_cgi-core.js";
 import {
   enrichCompanyWebsite,
   generateAiDiagnostic,

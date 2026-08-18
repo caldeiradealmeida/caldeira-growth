@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import handler from "../../api/crm/regenerate-cgi-report";
-import { calculateCgiScore } from "../../api/cgi-core";
+import { calculateCgiScore } from "../../api/_cgi-core";
 
 const supabaseMocks = vi.hoisted(() => ({
   getAssessmentById: vi.fn(),

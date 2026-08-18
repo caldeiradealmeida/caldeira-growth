@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { CGI_QUESTIONS, normalizeCgiAnswers } from "../cgi-core.js";
+import { CGI_QUESTIONS, normalizeCgiAnswers } from "../_cgi-core.js";
 import {
   getAssessmentByPublicId,
   upsertAnswers,

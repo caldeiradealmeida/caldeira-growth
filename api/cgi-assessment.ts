@@ -7,8 +7,8 @@ import {
   calculateCgiScore,
   normalizeCgiAnswers,
   type CgiScoreResult,
-} from "./cgi-core.js";
-import { buildCgiReportPromptContext } from "./cgi-report-guide.js";
+} from "./_cgi-core.js";
+import { buildCgiReportPromptContext } from "./_cgi-report-guide.js";
 import {
   createEventId,
   getCgiReportState,
