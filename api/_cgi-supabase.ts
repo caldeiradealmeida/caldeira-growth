@@ -22,6 +22,57 @@ type LeadRow = {
   id: string;
 };
 
+export const CGI_ASSESSMENT_STATUSES = [
+  "created",
+  "lead_captured",
+  "started",
+  "in_progress",
+  "completed",
+  "abandoned",
+] as const;
+
+export type CgiAssessmentStatus = (typeof CGI_ASSESSMENT_STATUSES)[number];
+
+// Lifecycle ordering used to stop a late or out-of-order write from moving an
+// assessment backwards. "completed" and "abandoned" are both terminal and
+// deliberately share the top rank: neither may be overwritten by an earlier
+// stage. Used by persistLeadForAssessment and api/cgi/progress.ts.
+const CGI_ASSESSMENT_STATUS_RANK: Record<CgiAssessmentStatus, number> = {
+  created: 0,
+  lead_captured: 1,
+  started: 2,
+  in_progress: 3,
+  completed: 4,
+  abandoned: 4,
+};
+
+export function normalizeCgiAssessmentStatus(value: unknown): CgiAssessmentStatus | null {
+  const candidate = String(value ?? "").trim();
+  return (CGI_ASSESSMENT_STATUSES as readonly string[]).includes(candidate)
+    ? (candidate as CgiAssessmentStatus)
+    : null;
+}
+
+export function isFinalizedCgiAssessmentStatus(value: unknown): boolean {
+  const status = normalizeCgiAssessmentStatus(value);
+  return status === "completed" || status === "abandoned";
+}
+
+/** Returns whichever of the two statuses is further along the lifecycle, so a
+ * caller that only needs to attach data (a lead_id, say) can never regress a
+ * more advanced state it did not intend to touch. */
+export function maxCgiAssessmentStatus(
+  current: unknown,
+  candidate: CgiAssessmentStatus
+): CgiAssessmentStatus {
+  const normalized = normalizeCgiAssessmentStatus(current);
+  if (!normalized) return candidate;
+  return CGI_ASSESSMENT_STATUS_RANK[normalized] > CGI_ASSESSMENT_STATUS_RANK[candidate]
+    ? normalized
+    : candidate;
+}
+
+
 type CgiReportRow = {
   id?: string;
   public_assessment_id?: string | null;
@@ -803,8 +854,12 @@ export async function upsertAssessment(input: {
     anonymous_session_id: input.anonymousSessionId,
     status: input.status,
     last_activity_at: now,
-    progress_percent: input.progressPercent ?? 0,
   };
+  // progress_percent is only written when the caller actually has a value for
+  // it. It used to default to 0 on every single upsert, which meant any
+  // partial write -- attaching a lead_id, for instance -- silently zeroed the
+  // progress of an assessment that was already finished.
+  if (input.progressPercent !== undefined) body.progress_percent = input.progressPercent;
   if (input.currentQuestion !== undefined) body.current_question = input.currentQuestion;
   if (input.leadId !== undefined) body.lead_id = input.leadId;
   if (input.startedAt !== undefined) body.started_at = input.startedAt;
@@ -1091,13 +1146,20 @@ export async function persistLeadForAssessment(input: {
     }
   }
 
-  if (leadId) {
+  // Attach the lead to the assessment -- and nothing else. This step used to
+  // unconditionally rewrite status to "lead_captured" and progress_percent to
+  // 0, which corrupted any assessment whose lead step arrived late: a
+  // cgi_phone_submitted posted *after* the person had already completed the
+  // CGI reset a finished, already-scored assessment back to "lead_captured"
+  // at 0%. It is now skipped entirely when there is nothing to attach, and
+  // when it does run it never moves the lifecycle backwards and never touches
+  // progress_percent.
+  if (leadId && assessment.lead_id !== leadId) {
     await upsertAssessment({
       publicAssessmentId: input.publicAssessmentId,
       anonymousSessionId: input.anonymousSessionId,
-      status: "lead_captured",
+      status: maxCgiAssessmentStatus(assessment.status, "lead_captured"),
       leadId,
-      progressPercent: 0,
     });
   }
 
@@ -1282,4 +1344,104 @@ export async function getAbandonmentCandidates(input: {
     return [];
   }
   return Array.isArray(result.data) ? result.data : [];
+}
+
+// ---------------------------------------------------------------------------
+// P0 -- report-email recovery/backfill support.
+//
+// The inline report-ready email (api/cgi-assessment.ts) only ever fires while
+// the completion request is still in flight. These helpers exist so an
+// assessment whose report was already persisted -- before the feature was
+// switched on, or after a dispatch failure -- can still be delivered later
+// through the exact same idempotent pipeline.
+// ---------------------------------------------------------------------------
+
+export type ReportEmailStateRow = {
+  id: string;
+  public_assessment_id: string;
+  lead_id: string | null;
+  status?: string;
+  completed_at: string | null;
+  report_email_sent_at: string | null;
+};
+
+const REPORT_EMAIL_STATE_SELECT =
+  "id,public_assessment_id,lead_id,status,completed_at,report_email_sent_at";
+
+/** Fresh single-row read of everything the report-email executor needs before
+ * it may send. Deliberately its own query rather than a widened
+ * getAssessmentByPublicId, for the same reason getAssessmentEmailState is:
+ * only the email paths depend on completed_at and the marker column together. */
+export async function getReportEmailState(
+  publicAssessmentId: string
+): Promise<ReportEmailStateRow | null> {
+  const result = await supabaseRequest<ReportEmailStateRow[]>(
+    `cgi_assessments?public_assessment_id=${eqFilter(publicAssessmentId)}&select=${REPORT_EMAIL_STATE_SELECT}&limit=1`,
+    { method: "GET" }
+  );
+  if (!result.ok) return null;
+  return Array.isArray(result.data) ? result.data[0] ?? null : null;
+}
+
+/** Recovery sweep query. Anchored on completed_at rather than status=completed
+ * on purpose: an assessment whose status column was corrupted by an
+ * out-of-order write is still a real, finished assessment and must remain
+ * recoverable. Like the abandonment sweep, this read is allowed to be stale --
+ * the executor re-reads each candidate immediately before sending. */
+export async function getReportEmailCandidates(input: {
+  completedSinceIso: string;
+  limit: number;
+}): Promise<ReportEmailStateRow[]> {
+  const query = [
+    "completed_at=not.is.null",
+    `completed_at=${gteFilter(input.completedSinceIso)}`,
+    "lead_id=not.is.null",
+    "report_email_sent_at=is.null",
+    `select=${REPORT_EMAIL_STATE_SELECT}`,
+    "order=completed_at.asc",
+    `limit=${Math.max(1, Math.min(input.limit, 100))}`,
+  ].join("&");
+  const result = await supabaseRequest<ReportEmailStateRow[]>(`cgi_assessments?${query}`, {
+    method: "GET",
+  });
+  if (!result.ok) {
+    logSupabaseFailure("get_report_email_candidates", {
+      status: result.status,
+      error: result.error,
+    });
+    return [];
+  }
+  return Array.isArray(result.data) ? result.data : [];
+}
+
+export type CrmOpportunityRow = {
+  lead_id: string;
+  status?: string | null;
+  last_contact_at?: string | null;
+  next_action_at?: string | null;
+};
+
+export type CrmOpportunityLookup =
+  | { ok: true; opportunity: CrmOpportunityRow | null }
+  | { ok: false };
+
+/** Commercial state for the backfill guard.
+ *
+ * A missing row is NOT an error: crm_opportunities rows are created lazily on
+ * the first human touch in /admin/crm, so "no row" is exactly what the Pipe
+ * renders as "novo" -- nobody has ever worked this lead. A failed *read*, on
+ * the other hand, is reported as ok:false so the caller can fail closed
+ * instead of mistaking an outage for "nobody contacted this person". */
+export async function getCrmOpportunityByLeadId(leadId: string): Promise<CrmOpportunityLookup> {
+  if (!leadId) return { ok: false };
+  const result = await supabaseRequest<CrmOpportunityRow[]>(
+    `crm_opportunities?lead_id=${eqFilter(leadId)}&select=lead_id,status,last_contact_at,next_action_at&limit=1`,
+    { method: "GET" }
+  );
+  if (!result.ok) {
+    logSupabaseFailure("get_crm_opportunity", { status: result.status, error: result.error });
+    return { ok: false };
+  }
+  const row = Array.isArray(result.data) ? result.data[0] ?? null : null;
+  return { ok: true, opportunity: row };
 }

@@ -11,12 +11,10 @@ import {
 import { buildCgiReportPromptContext } from "./cgi-report-guide.js";
 import {
   createEventId,
-  getAssessmentEmailState,
   getCgiReportState,
   getReadyCgiReport,
   insertFunnelEvent,
   markCgiReportFailed,
-  markReportEmailSent,
   saveCompletedCgiReport,
   tryCreateCgiReportGenerationLock,
   updateCgiReportSecondarySyncStatus,
@@ -31,9 +29,7 @@ import {
   normalizePublicAssessmentId,
   validateProfessionalContent,
 } from "./_cgi-validation.js";
-import { issueReportAccessToken, buildReportAccessUrl } from "./_cgi-report-token.js";
-import { buildCgiReportReadyEmail, extractExecutiveSummary } from "./_cgi-email-content.js";
-import { dispatchCgiParticipantEmail } from "./_cgi-email-dispatch.js";
+import { deliverReportEmailForAssessment } from "./_cgi-report-email.js";
 
 export type CgiLead = {
   name?: string;
@@ -2902,69 +2898,44 @@ export default async function handler(
   // marketing, so consent_marketing is deliberately not checked.
   try {
     if (isCgiReportEmailEnabled() && supabaseCompletion?.leadId && isReportReadyStatus(reportStatus)) {
-      const currentAssessment = await getAssessmentEmailState(responsePublicAssessmentId);
-      const alreadySent = Boolean(currentAssessment?.report_email_sent_at);
-      const summary = extractExecutiveSummary(ai.text);
-      const recipient = String(payload.lead?.email || "").trim();
-
-      if (alreadySent) {
-        logCgiOperation({
-          correlationId,
-          publicAssessmentId: responsePublicAssessmentId,
-          operation: "report_email_dispatch",
-          success: true,
-          errorCode: "already_sent",
-          durationMs: Date.now() - handlerStartedAt,
-        });
-      } else if (!summary) {
-        logCgiOperation({
-          correlationId,
-          publicAssessmentId: responsePublicAssessmentId,
-          operation: "report_email_dispatch",
-          success: false,
-          errorCode: "missing_executive_summary",
-          durationMs: Date.now() - handlerStartedAt,
-        });
-      } else {
-        const emailStartedAt = Date.now();
-        const token = await issueReportAccessToken(responsePublicAssessmentId);
-        if (token) {
-          const content = buildCgiReportReadyEmail({
+      // The send itself lives in api/_cgi-report-email.ts and is shared, byte
+      // for byte, with the recovery and backfill paths -- there is exactly one
+      // implementation of "issue a token, render, relay, mark sent". What stays
+      // here is only the gating that is specific to *this* moment: the feature
+      // flag, the anti-phantom lead_id check, and report readiness.
+      // The already-sent recheck, the token issuance and the marker write all
+      // happen inside the executor.
+      const emailStartedAt = Date.now();
+      const delivery = await deliverReportEmailForAssessment({
+        publicAssessmentId: responsePublicAssessmentId,
+        reason: "completion",
+        appsScriptUrl: url,
+        relayToken: getCgiEmailRelayToken(),
+        dryRun: isCgiEmailDryRun(),
+        context: {
+          // Already in memory from this very request -- no second read, and no
+          // dependency on the best-effort assessment write having landed.
+          aiReportJson: ai.text,
+          lead: {
             name: String(payload.lead?.name || ""),
             company: String(payload.lead?.company || ""),
-            executiveSummary: summary,
-            reportAccessUrl: buildReportAccessUrl(token.token),
-          });
-          const dispatchResult = await dispatchCgiParticipantEmail({
-            appsScriptUrl: url,
-            relayToken: getCgiEmailRelayToken(),
-            recipient,
-            content,
-            emailKind: "report_ready",
-            dryRun: isCgiEmailDryRun(),
-          });
-          if (dispatchResult.status === "sent") {
-            await markReportEmailSent(responsePublicAssessmentId);
-          }
-          logCgiOperation({
-            correlationId,
-            publicAssessmentId: responsePublicAssessmentId,
-            operation: "report_email_dispatch",
-            success: dispatchResult.status === "sent" || dispatchResult.status === "dry_run",
-            errorCode: dispatchResult.status === "error" ? dispatchResult.error : dispatchResult.status,
-            durationMs: Date.now() - emailStartedAt,
-          });
-        } else {
-          logCgiOperation({
-            correlationId,
-            publicAssessmentId: responsePublicAssessmentId,
-            operation: "report_email_dispatch",
-            success: false,
-            errorCode: "token_issuance_failed",
-            durationMs: Date.now() - emailStartedAt,
-          });
-        }
-      }
+            email: String(payload.lead?.email || ""),
+          },
+        },
+      });
+      logCgiOperation({
+        correlationId,
+        publicAssessmentId: responsePublicAssessmentId,
+        operation: "report_email_dispatch",
+        // "already sent" is a healthy outcome (a retry that correctly did
+        // nothing), not a failure -- same as before this was extracted.
+        success:
+          delivery.outcome === "sent" ||
+          delivery.outcome === "dry_run" ||
+          delivery.outcome === "skipped_already_sent",
+        errorCode: delivery.outcome === "sent" ? undefined : delivery.detail || delivery.outcome,
+        durationMs: Date.now() - emailStartedAt,
+      });
     }
   } catch (error) {
     console.error("[CGI Email]", {

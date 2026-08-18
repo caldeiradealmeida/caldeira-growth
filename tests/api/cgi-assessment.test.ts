@@ -17,6 +17,12 @@ const supabaseMocks = vi.hoisted(() => ({
   getAssessmentEmailState: vi.fn(),
   markReportEmailSent: vi.fn(),
   upsertReportAccessToken: vi.fn(),
+  // P0: also imported by the shared delivery executor. The completion path
+  // never calls these (it passes the report and lead it already holds), but
+  // they must exist on the mocked module namespace.
+  getReportEmailState: vi.fn(),
+  getLeadById: vi.fn(),
+  getCrmOpportunityByLeadId: vi.fn(),
 }));
 
 vi.mock("node:dns/promises", () => ({
@@ -1290,6 +1296,76 @@ describe("POST /api/cgi-assessment Supabase completion best-effort", () => {
       expect(response.statusCode).toBe(200);
       expect(response.body).toMatchObject({ ok: true, save: { ok: true } });
       expect(supabaseMocks.markReportEmailSent).not.toHaveBeenCalled();
+    });
+
+    it("does not mark as sent when Apps Script answers that the email kind is disabled", async () => {
+      // The exact production failure mode this P0 exists for: the relay is
+      // reachable and authorized, but the live script has the kind switched
+      // off. It must never look like a successful send.
+      enableEmail();
+      supabaseMocks.upsertAssessment.mockResolvedValue(realAssessment());
+      supabaseMocks.getAssessmentEmailState.mockResolvedValue({
+        id: "assessment_row_1",
+        public_assessment_id: "assessment_1",
+        report_email_sent_at: null,
+      });
+      supabaseMocks.upsertReportAccessToken.mockResolvedValue(true);
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (url: string, init?: RequestInit) => {
+          if (String(url).includes("api.openai.com")) return openAiJsonResponse(validOpenAiReport());
+          const body = init?.body ? JSON.parse(String(init.body)) : {};
+          if (body.action === "cgi_send_email") {
+            return {
+              ok: true,
+              status: 200,
+              url: process.env.CONTACT_FORM_URL,
+              headers: { get: () => "application/json" },
+              text: async () => JSON.stringify({ ok: true, sent: false, error: "disabled" }),
+            };
+          }
+          return {
+            ok: true,
+            status: 200,
+            url: process.env.CONTACT_FORM_URL,
+            headers: { get: () => "application/json" },
+            text: async () => JSON.stringify({ ok: true, type: "cgi_assessment" }),
+          };
+        })
+      );
+      const response = createResponse();
+
+      await handler({ method: "POST", headers: {}, body: createValidPayload() } as never, response as never);
+
+      // Report persistence is unaffected, and the assessment stays retryable.
+      expect(response.statusCode).toBe(200);
+      expect(response.body).toMatchObject({ ok: true, report_status: "report_ready" });
+      expect(supabaseMocks.markReportEmailSent).not.toHaveBeenCalled();
+    });
+
+    it("delivers from the values it already holds -- no extra lead read on the completion path", async () => {
+      // Proves the completion path goes through the shared executor using its
+      // in-memory context: it must not depend on cgi_leads, nor on the
+      // best-effort assessment write having landed first.
+      enableEmail();
+      supabaseMocks.upsertAssessment.mockResolvedValue(realAssessment());
+      supabaseMocks.getAssessmentEmailState.mockResolvedValue({
+        id: "assessment_row_1",
+        public_assessment_id: "assessment_1",
+        report_email_sent_at: null,
+      });
+      supabaseMocks.upsertReportAccessToken.mockResolvedValue(true);
+      const { emailCalls } = stubFetchWithEmailCapture();
+      const response = createResponse();
+
+      await handler({ method: "POST", headers: {}, body: createValidPayload() } as never, response as never);
+
+      expect(response.statusCode).toBe(200);
+      expect(emailCalls).toHaveLength(1);
+      expect(supabaseMocks.getLeadById).not.toHaveBeenCalled();
+      expect(supabaseMocks.getReportEmailState).not.toHaveBeenCalled();
+      expect(supabaseMocks.getCrmOpportunityByLeadId).not.toHaveBeenCalled();
+      expect(supabaseMocks.markReportEmailSent).toHaveBeenCalledWith("assessment_1");
     });
 
     it("internal notification is untouched -- Etapa 4 flags/logic never gate sheets_sync", async () => {
