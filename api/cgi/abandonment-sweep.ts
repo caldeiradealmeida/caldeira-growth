@@ -8,6 +8,15 @@ import {
 import { issueReportAccessToken, buildReportAccessUrl } from "../_cgi-report-token.js";
 import { buildCgiAbandonmentEmail } from "../_cgi-email-content.js";
 import { dispatchCgiParticipantEmail } from "../_cgi-email-dispatch.js";
+import { getAbandonmentCandidatesV2 } from "../_cgi-supabase.js";
+import {
+  deliverAbandonmentEmailForAssessment,
+  evaluateAbandonmentCandidate,
+  getAbandonmentDelayHours,
+  getAbandonmentMaxAgeHours,
+  isAbandonmentV2Enabled,
+  type AbandonmentDecision,
+} from "../_cgi-abandonment-email.js";
 
 // Vercel Cron target (see vercel.json). Not part of any user-facing flow --
 // finds in_progress assessments idle past CGI_ABANDONMENT_DELAY_HOURS,
@@ -72,6 +81,138 @@ function isAuthorized(req: VercelRequest): boolean {
   return header === `Bearer ${expected}`;
 }
 
+
+// --- V2 -------------------------------------------------------------------
+// Everything below is inert until CGI_ABANDONMENT_V2_ENABLED === "true", with
+// one deliberate exception: mode=inspect works regardless, because it is
+// read-only by construction and exists precisely to look before switching on.
+
+const V2_BATCH_LIMIT = 25;
+
+function readSweepParam(req: VercelRequest, key: string): string {
+  const fromQuery = req.query?.[key];
+  if (typeof fromQuery === "string") return fromQuery.trim();
+  if (Array.isArray(fromQuery) && typeof fromQuery[0] === "string") return fromQuery[0].trim();
+  const body = req.body;
+  if (body && typeof body === "object" && !Array.isArray(body)) {
+    const value = (body as Record<string, unknown>)[key];
+    if (typeof value === "string") return value.trim();
+  }
+  return "";
+}
+
+function parseAssessmentIds(raw: string): string[] {
+  const seen = new Set<string>();
+  for (const part of raw.split(",")) {
+    const id = part.trim();
+    if (id && /^[A-Za-z0-9_-]{8,64}$/.test(id)) seen.add(id);
+    if (seen.size >= V2_BATCH_LIMIT) break;
+  }
+  return [...seen];
+}
+
+async function selectV2Candidates(): Promise<string[]> {
+  const now = Date.now();
+  const idleSinceIso = new Date(now - getAbandonmentDelayHours() * 3_600_000).toISOString();
+  const notOlderThanIso = new Date(now - getAbandonmentMaxAgeHours() * 3_600_000).toISOString();
+  const rows = await getAbandonmentCandidatesV2({ idleSinceIso, notOlderThanIso, limit: V2_BATCH_LIMIT });
+  return rows.map((r) => r.public_assessment_id).filter(Boolean);
+}
+
+/** Read-only. Calls evaluateAbandonmentCandidate and nothing else -- there is no
+ * reachable path from here to issueReportAccessToken, the relay, or any write. */
+async function runAbandonmentInspect(req: VercelRequest, res: VercelResponse): Promise<void> {
+  const explicitIds = parseAssessmentIds(readSweepParam(req, "ids"));
+  const enforceMaxAge = explicitIds.length === 0;
+  const ids = explicitIds.length > 0 ? explicitIds : await selectV2Candidates();
+
+  const results: AbandonmentDecision[] = [];
+  for (const publicAssessmentId of ids) {
+    const { decision } = await evaluateAbandonmentCandidate({ publicAssessmentId, enforceMaxAge });
+    results.push(decision);
+  }
+
+  res.status(200).json({
+    ok: true,
+    mode: "inspect",
+    readOnly: true,
+    v2Enabled: isAbandonmentV2Enabled(),
+    delayHours: getAbandonmentDelayHours(),
+    maxAgeHours: getAbandonmentMaxAgeHours(),
+    enforceMaxAge,
+    candidateCount: ids.length,
+    results,
+  });
+}
+
+async function runAbandonmentV2(
+  req: VercelRequest,
+  res: VercelResponse,
+  mode: "sweep" | "backfill"
+): Promise<void> {
+  if (!isAbandonmentV2Enabled()) {
+    res.status(409).json({ ok: false, error: "abandonment_v2_disabled", mode });
+    return;
+  }
+
+  let ids: string[] = [];
+  if (mode === "backfill") {
+    ids = parseAssessmentIds(readSweepParam(req, "ids"));
+    if (ids.length === 0) {
+      res.status(400).json({ ok: false, error: "ids_required", mode });
+      return;
+    }
+  } else {
+    ids = await selectV2Candidates();
+  }
+
+  const dryRun = isCgiEmailDryRun();
+  const appsScriptUrl = getAppsScriptUrl();
+  const relayToken = getCgiEmailRelayToken();
+  const results: AbandonmentDecision[] = [];
+
+  for (const publicAssessmentId of ids) {
+    try {
+      results.push(
+        await deliverAbandonmentEmailForAssessment({
+          publicAssessmentId,
+          // Backfill is the authorized exception to the age ceiling; it never
+          // skips the commercial guard.
+          enforceMaxAge: mode === "sweep",
+          appsScriptUrl,
+          relayToken,
+          dryRun,
+        })
+      );
+    } catch (error) {
+      console.error("[CGI Abandonment V2]", {
+        public_assessment_id: publicAssessmentId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      results.push({
+        publicAssessmentId,
+        outcome: "error_dispatch",
+        abandonmentKind: null,
+        inactiveHours: null,
+        maskedRecipient: null,
+        subject: null,
+        detail: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  res.status(200).json({
+    ok: true,
+    mode,
+    v2Enabled: true,
+    dryRun,
+    delayHours: getAbandonmentDelayHours(),
+    maxAgeHours: getAbandonmentMaxAgeHours(),
+    candidateCount: ids.length,
+    results,
+  });
+}
+
 type SweepOutcome =
   | "sent"
   | "dry_run"
@@ -93,6 +234,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     res.status(401).json({ ok: false, error: "unauthorized" });
     return;
   }
+
+  const mode = readSweepParam(req, "mode");
+  if (mode === "inspect") {
+    await runAbandonmentInspect(req, res);
+    return;
+  }
+  if (mode === "backfill") {
+    await runAbandonmentV2(req, res, "backfill");
+    return;
+  }
+  if (isAbandonmentV2Enabled()) {
+    await runAbandonmentV2(req, res, "sweep");
+    return;
+  }
+  // V2 off and no mode: falls through to the legacy sweep below, unchanged.
 
   const dryRun = isCgiEmailDryRun();
   const enabled = isCgiAbandonmentEmailEnabled();
