@@ -15,13 +15,10 @@ function TextSection({
   title,
   children,
   muted = false,
-  wide = false,
 }: {
   title: string;
   children: ReactNode;
   muted?: boolean;
-  /** Ocupa o container inteiro, alinhando a borda direita com as demais secoes. */
-  wide?: boolean;
 }) {
   return (
     <section
@@ -30,12 +27,10 @@ function TextSection({
       }`}
     >
       <div className={sectionLayout.container}>
-        <div className={wide ? undefined : sectionLayout.prose}>
-          <div className={sectionLayout.headerToContent}>
-            <h2 className={sectionLayout.title}>{title}</h2>
-          </div>
-          {children}
+        <div className={sectionLayout.headerToContent}>
+          <h2 className={sectionLayout.title}>{title}</h2>
         </div>
+        {children}
       </div>
     </section>
   );
@@ -99,7 +94,7 @@ export default function Index() {
         </div>
       </section>
 
-      <TextSection title={h.painsTitle} wide>
+      <TextSection title={h.painsTitle}>
         <p className={sectionLayout.subtitle}>{h.painsIntro}</p>
         <div className="mt-12 grid sm:grid-cols-2 gap-x-8 md:gap-x-16 gap-y-5">
           {h.pains.map((pain) => (
@@ -202,15 +197,25 @@ export default function Index() {
         </div>
       </section>
 
-      <TextSection title={h.differenceTitle}>
-        <div className="space-y-6">
-          {h.differenceParagraphs.map((paragraph) => (
-            <p key={paragraph} className="text-base md:text-[17px] leading-[1.75] text-foreground/88">
-              {paragraph}
-            </p>
-          ))}
+      <section className={`${sectionLayout.sectionY} bg-background`}>
+        <div className={sectionLayout.container}>
+          <div className="grid gap-10 md:grid-cols-[0.95fr_1.05fr] md:items-start">
+            <div>
+              <h2 className={sectionLayout.title}>{h.differenceTitle}</h2>
+            </div>
+            <div className="space-y-6">
+              {h.differenceParagraphs.map((paragraph) => (
+                <p
+                  key={paragraph}
+                  className="text-base md:text-[17px] leading-[1.75] text-foreground/88"
+                >
+                  {paragraph}
+                </p>
+              ))}
+            </div>
+          </div>
         </div>
-      </TextSection>
+      </section>
 
       <section className={`${sectionLayout.sectionY} bg-background border-y border-border/50`}>
         <div className={sectionLayout.container}>
