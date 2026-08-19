@@ -5,6 +5,7 @@ import vejaMercado from "@/assets/media/veja-mercado.webp";
 import cartaCapitalProfissionais from "@/assets/media/cartacapital-profissionais-do-futuro.webp";
 import hsmProfissionalAumentado from "@/assets/media/hsm-profissional-aumentado.webp";
 import cbnFloripa from "@/assets/media/cbn-floripa.webp";
+import poder360 from "@/assets/media/poder360-primeiro-negocio.webp";
 import panNewsEmRevista from "@/assets/media/pan-news-em-revista.webp";
 
 /**
@@ -117,6 +118,7 @@ export const mediaFeatures: MediaFeature[] = [
     },
     url: "https://www.youtube.com/watch?v=Vx9AqtxX0vQ",
     type: "podcast",
+    image: poder360,
     isVideo: true,
     featured: true,
   },
