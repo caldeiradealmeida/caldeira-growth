@@ -136,6 +136,57 @@ export function buildCgiReportReadyEmail(input: {
   return { subject, plainText, htmlBody };
 }
 
+/** Abandonment copy for someone who left their details and never answered a
+ * single question. Deliberately NOT the same message as the resume email: that
+ * one says "you started" and "the link resumes from your saved progress", both
+ * of which are false here and read as if the system had confused the person
+ * with someone else.
+ *
+ * The dimension wording is the canonical one from api/_cgi-core.ts, matching the
+ * sentence already published on the site, so the email never contradicts it. */
+export function buildCgiLeadCaptureAbandonmentEmail(input: {
+  name: string;
+  company: string;
+  reportAccessUrl: string;
+}): CgiEmailContent {
+  const name = String(input.name || "").trim();
+  const company = String(input.company || "").trim();
+  const url = input.reportAccessUrl;
+
+  const subject = "Seu acesso ao CGI continua disponível";
+
+  const companyClause = company ? `da ${company}` : "da sua empresa";
+
+  const plainText = [
+    `Olá, ${name}.`,
+    "",
+    "Você deixou seus dados para fazer o Caldeira Growth Index, mas o diagnóstico ainda não foi iniciado.",
+    "",
+    `O CGI combina 40 questões distribuídas em cinco dimensões: Estratégia, Mercado e Cliente, Máquina de Crescimento, Execução e Gestão, e Liderança e Cultura. O diagnóstico leva entre dez e quinze minutos e produz uma leitura de onde o crescimento ${companyClause} está sendo limitado hoje.`,
+    "",
+    "A parte mais útil não é a nota. É observar onde as cinco dimensões não avançam no mesmo ritmo — normalmente é aí que está o gargalo que ainda não tinha sido nomeado.",
+    "",
+    "Começar meu diagnóstico:",
+    url,
+    "",
+    "Se não for o momento, tudo bem. O acesso continua válido e você pode começar quando fizer sentido.",
+    "",
+    SIGNATURE_PLAIN,
+  ].join("\n");
+
+  const htmlBody = htmlShell(`
+    <p style="margin:0 0 20px 0;">Olá, ${escapeHtml(name)}.</p>
+    <p style="margin:0 0 20px 0;">Você deixou seus dados para fazer o Caldeira Growth Index, mas o diagnóstico ainda não foi iniciado.</p>
+    <p style="margin:0 0 20px 0;">O CGI combina 40 questões distribuídas em cinco dimensões: Estratégia, Mercado e Cliente, Máquina de Crescimento, Execução e Gestão, e Liderança e Cultura. O diagnóstico leva entre dez e quinze minutos e produz uma leitura de onde o crescimento ${escapeHtml(companyClause)} está sendo limitado hoje.</p>
+    <p style="margin:0 0 20px 0;">A parte mais útil não é a nota. É observar onde as cinco dimensões não avançam no mesmo ritmo — normalmente é aí que está o gargalo que ainda não tinha sido nomeado.</p>
+    ${ctaButtonHtml("Começar meu diagnóstico", url)}
+    <p style="margin:20px 0;font-size:14px;color:#555555;">Se não for o momento, tudo bem. O acesso continua válido e você pode começar quando fizer sentido.</p>
+    <p style="margin:28px 0 0 0;font-size:15px;">${SIGNATURE_HTML}</p>
+  `);
+
+  return { subject, plainText, htmlBody };
+}
+
 export function buildCgiAbandonmentEmail(input: {
   name: string;
   reportAccessUrl: string;
@@ -159,6 +210,8 @@ export function buildCgiAbandonmentEmail(input: {
     "",
     "O link retoma o CGI a partir do progresso que já ficou salvo.",
     "",
+    "Se não for o momento, tudo bem. O link continua válido.",
+    "",
     "O método traduz princípios que desenvolvi em Cresça ou Desapareça e na minha atuação com empresas e lideranças.",
     "",
     SIGNATURE_PLAIN,
@@ -170,10 +223,14 @@ export function buildCgiAbandonmentEmail(input: {
     <p style="margin:0 0 20px 0;">O CGI observa cinco dimensões que, em conjunto, ajudam a entender a capacidade de uma empresa sustentar crescimento. As respostas isoladas dizem pouco; é a combinação entre elas que permite identificar tensões, gargalos e prioridades.</p>
     <p style="margin:0 0 20px 0;">Como você já iniciou o diagnóstico, vale concluí-lo para que essas relações possam ser observadas em conjunto.</p>
     ${ctaButtonHtml("Continuar meu diagnóstico", url)}
-    <p style="margin:20px 0;font-size:14px;color:#555555;">O link retoma o CGI a partir do progresso que já ficou salvo.</p>
+    <p style="margin:20px 0;font-size:14px;color:#555555;">O link retoma o CGI a partir do progresso que já ficou salvo. Se não for o momento, tudo bem — o link continua válido.</p>
     <p style="margin:0 0 20px 0;font-size:14px;color:#555555;">O método traduz princípios que desenvolvi em Cresça ou Desapareça e na minha atuação com empresas e lideranças.</p>
     <p style="margin:28px 0 0 0;font-size:15px;">${SIGNATURE_HTML}</p>
   `);
 
   return { subject, plainText, htmlBody };
 }
+
+/** Semantic alias: the historical name for what is now one of two abandonment
+ * copies. Kept so existing call sites and tests do not churn. */
+export const buildCgiProgressAbandonmentEmail = buildCgiAbandonmentEmail;

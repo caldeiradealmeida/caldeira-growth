@@ -1445,3 +1445,76 @@ export async function getCrmOpportunityByLeadId(leadId: string): Promise<CrmOppo
   const row = Array.isArray(result.data) ? result.data[0] ?? null : null;
   return { ok: true, opportunity: row };
 }
+
+// ---------------------------------------------------------------------------
+// Abandonment V2 -- two typed kinds, commercial guard, bounded window.
+// ---------------------------------------------------------------------------
+
+export type AbandonmentStateRow = {
+  id: string;
+  public_assessment_id: string;
+  lead_id: string | null;
+  status?: string;
+  progress_percent?: number | null;
+  current_question?: number | null;
+  completed_at: string | null;
+  last_activity_at: string | null;
+  abandonment_email_sent_at: string | null;
+  report_email_sent_at: string | null;
+};
+
+const ABANDONMENT_STATE_SELECT =
+  "id,public_assessment_id,lead_id,status,progress_percent,current_question,completed_at,last_activity_at,abandonment_email_sent_at,report_email_sent_at";
+
+/** Fresh single-row read for the abandonment executor. Carries everything the
+ * eligibility decision needs, including the fields used to reclassify the kind
+ * at send time rather than trusting the sweep query's classification. */
+export async function getAbandonmentState(
+  publicAssessmentId: string
+): Promise<AbandonmentStateRow | null> {
+  const result = await supabaseRequest<AbandonmentStateRow[]>(
+    `cgi_assessments?public_assessment_id=${eqFilter(publicAssessmentId)}&select=${ABANDONMENT_STATE_SELECT}&limit=1`,
+    { method: "GET" }
+  );
+  if (!result.ok) return null;
+  return Array.isArray(result.data) ? result.data[0] ?? null : null;
+}
+
+/** Sweep query for the V2 abandonment flow.
+ *
+ * Two differences from the legacy getAbandonmentCandidates: it accepts
+ * `lead_captured` (people who left their details and never answered a single
+ * question -- structurally excluded before by `current_question > 0`, which is
+ * why none of them ever received anything), and it has an upper bound on age so
+ * a bug or a misfire can never reach years of history. Anchored on completed_at
+ * IS NULL rather than on status, so a row whose status column lagged behind an
+ * out-of-order write is still judged by what actually happened. */
+export async function getAbandonmentCandidatesV2(input: {
+  idleSinceIso: string;
+  notOlderThanIso: string;
+  limit: number;
+}): Promise<AbandonmentStateRow[]> {
+  const query = [
+    "completed_at=is.null",
+    "lead_id=not.is.null",
+    "status=in.(lead_captured,in_progress)",
+    "abandonment_email_sent_at=is.null",
+    "report_email_sent_at=is.null",
+    `last_activity_at=lte.${encodeURIComponent(input.idleSinceIso)}`,
+    `last_activity_at=${gteFilter(input.notOlderThanIso)}`,
+    `select=${ABANDONMENT_STATE_SELECT}`,
+    "order=last_activity_at.asc",
+    `limit=${Math.max(1, Math.min(input.limit, 100))}`,
+  ].join("&");
+  const result = await supabaseRequest<AbandonmentStateRow[]>(`cgi_assessments?${query}`, {
+    method: "GET",
+  });
+  if (!result.ok) {
+    logSupabaseFailure("get_abandonment_candidates_v2", {
+      status: result.status,
+      error: result.error,
+    });
+    return [];
+  }
+  return Array.isArray(result.data) ? result.data : [];
+}
