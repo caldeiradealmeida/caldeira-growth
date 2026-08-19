@@ -15,10 +15,13 @@ function TextSection({
   title,
   children,
   muted = false,
+  wide = false,
 }: {
   title: string;
   children: ReactNode;
   muted?: boolean;
+  /** Ocupa o container inteiro, alinhando a borda direita com as demais secoes. */
+  wide?: boolean;
 }) {
   return (
     <section
@@ -27,7 +30,7 @@ function TextSection({
       }`}
     >
       <div className={sectionLayout.container}>
-        <div className={sectionLayout.prose}>
+        <div className={wide ? undefined : sectionLayout.prose}>
           <div className={sectionLayout.headerToContent}>
             <h2 className={sectionLayout.title}>{title}</h2>
           </div>
@@ -67,7 +70,7 @@ export default function Index() {
           />
         </div>
 
-        <div className={`${sectionLayout.container} py-10 md:py-14 relative z-10`}>
+        <div className={`${sectionLayout.container} w-full py-10 md:py-14 relative z-10`}>
           <div className="max-w-2xl">
             <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold leading-[1.08] tracking-tight text-white mb-6">
               {h.heroTitle}
@@ -96,9 +99,9 @@ export default function Index() {
         </div>
       </section>
 
-      <TextSection title={h.painsTitle}>
+      <TextSection title={h.painsTitle} wide>
         <p className={sectionLayout.subtitle}>{h.painsIntro}</p>
-        <div className="mt-12 grid sm:grid-cols-2 gap-x-8 gap-y-5">
+        <div className="mt-12 grid sm:grid-cols-2 gap-x-8 md:gap-x-16 gap-y-5">
           {h.pains.map((pain) => (
             <p
               key={pain}
