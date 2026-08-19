@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import SEO from "@/components/SEO";
+import MediaAuthorityCarousel from "@/components/home/MediaAuthorityCarousel";
 import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { sectionLayout } from "@/lib/sectionLayout";
@@ -107,20 +108,15 @@ export default function Index() {
             </p>
           ))}
         </div>
+        <p
+          id="abordagem"
+          className="mt-12 scroll-mt-28 border-t border-border/60 pt-8 text-lg md:text-xl font-medium leading-snug tracking-tight text-foreground"
+        >
+          {h.painsClosing}
+        </p>
       </TextSection>
 
-      <TextSection title={h.thesisTitle} muted>
-        <div id="abordagem" className="space-y-6">
-          {h.thesisParagraphs.map((paragraph) => (
-            <p
-              key={paragraph}
-              className="text-base md:text-[17px] leading-[1.75] text-foreground/88"
-            >
-              {paragraph}
-            </p>
-          ))}
-        </div>
-      </TextSection>
+      <MediaAuthorityCarousel />
 
       <section className={`${sectionLayout.sectionY} bg-background`}>
         <div className={sectionLayout.container}>
