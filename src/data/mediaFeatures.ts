@@ -1,5 +1,12 @@
 import type { Language } from "@/contexts/LanguageContext";
 
+import forbesRonaldo from "@/assets/media/forbes-ronaldo.webp";
+import vejaMercado from "@/assets/media/veja-mercado.webp";
+import cartaCapitalProfissionais from "@/assets/media/cartacapital-profissionais-do-futuro.webp";
+import hsmProfissionalAumentado from "@/assets/media/hsm-profissional-aumentado.webp";
+import cbnFloripa from "@/assets/media/cbn-floripa.webp";
+import panNewsEmRevista from "@/assets/media/pan-news-em-revista.webp";
+
 /**
  * Curadoria editorial de imprensa — Home e página /midia.
  *
@@ -21,6 +28,11 @@ export type MediaFeature = {
   image?: string;
   /** Marca o card com o indicador de play. */
   isVideo?: boolean;
+  /**
+   * Selo discreto no canto inferior direito da imagem. Usado quando a foto nao
+   * e da materia -- identifica o veiculo sem fingir que a imagem e dele.
+   */
+  overlayLabel?: string;
   featured?: boolean;
 };
 
@@ -49,11 +61,13 @@ export const mediaFeatures: MediaFeature[] = [
     id: "forbes-ronaldo-nova-era",
     outlet: "Forbes Brasil",
     title: {
-      pt: "Ronaldo inaugura nova era no futebol",
-      en: "Ronaldo inaugurates a new era in football",
+      pt: "Ronaldo inaugura nova era no futebol — Denis Caldeira é convidado",
+      en: "Ronaldo inaugurates a new era in football — Denis Caldeira is invited",
     },
     url: "https://forbes.com.br/carreira/2022/11/ronaldo-inaugura-nova-era-no-futebol/",
     type: "article",
+    image: forbesRonaldo,
+    overlayLabel: "Forbes",
     featured: true,
   },
   {
@@ -77,6 +91,7 @@ export const mediaFeatures: MediaFeature[] = [
     // Entrevista começa em 28:42 = 1722s
     url: "https://www.youtube.com/live/saypN54jKMY?t=1722",
     type: "live",
+    image: vejaMercado,
     isVideo: true,
     featured: true,
   },
@@ -89,6 +104,8 @@ export const mediaFeatures: MediaFeature[] = [
     },
     url: "https://www.cartacapital.com.br/do-micro-ao-macro/profissionais-do-futuro-habilidades-lideres-ia/",
     type: "article",
+    image: cartaCapitalProfissionais,
+    overlayLabel: "CartaCapital",
     featured: true,
   },
   {
@@ -112,6 +129,8 @@ export const mediaFeatures: MediaFeature[] = [
     },
     url: "https://hsmmanagement.com.br/o-futuro-depois-da-inteligencia-artificial-as-cinco-competencias-que-definirao-o-profissional-aumentado/",
     type: "article",
+    image: hsmProfissionalAumentado,
+    overlayLabel: "HSM Management",
     featured: true,
   },
   {
@@ -124,6 +143,7 @@ export const mediaFeatures: MediaFeature[] = [
     // Entrevista começa em 35:55 = 2155s
     url: "https://www.youtube.com/live/8ZcUZvArvhk?t=2155",
     type: "interview",
+    image: cbnFloripa,
     isVideo: true,
     featured: true,
   },
@@ -230,6 +250,7 @@ export const mediaFeatures: MediaFeature[] = [
     },
     url: "https://www.youtube.com/watch?v=XEb7nG8czZI&t=1089s",
     type: "interview",
+    image: panNewsEmRevista,
     isVideo: true,
   },
 ];

@@ -112,6 +112,11 @@ export default function MediaSection({ variant = "home" }: MediaSectionProps) {
                         <Play className="h-3.5 w-3.5 translate-x-[1px] fill-foreground text-foreground" />
                       </span>
                     ) : null}
+                    {item.overlayLabel ? (
+                      <span className="absolute bottom-3 right-3 rounded-md bg-background/90 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-foreground/80 ring-1 ring-border/60">
+                        {item.overlayLabel}
+                      </span>
+                    ) : null}
                   </div>
                 ) : null}
 

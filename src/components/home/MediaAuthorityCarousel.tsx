@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { ExternalLink, Play } from "lucide-react";
+import { ArrowRight, ExternalLink, Play } from "lucide-react";
+import { Link } from "react-router-dom";
 import {
   Carousel,
   CarouselContent,
@@ -9,6 +10,7 @@ import {
 } from "@/components/ui/carousel";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { sectionLayout } from "@/lib/sectionLayout";
+import { localizedPath } from "@/lib/routing";
 import { pushDataLayerEvent } from "@/lib/analytics";
 import {
   MEDIA_TYPE_LABEL,
@@ -24,24 +26,27 @@ const IMAGE_HEIGHT = 675;
 const copy = {
   pt: {
     kicker: "Na mídia",
-    title: "Caldeira Growth na mídia",
+    title: "Caldeira na mídia",
     previous: "Ver matérias anteriores",
     next: "Ver próximas matérias",
     region: "Matérias e entrevistas na imprensa",
+    seeAll: "Ver todas as matérias",
   },
   en: {
     kicker: "In the media",
-    title: "Caldeira Growth in the media",
+    title: "Caldeira in the media",
     previous: "See previous stories",
     next: "See next stories",
     region: "Press coverage and interviews",
+    seeAll: "See all coverage",
   },
   es: {
     kicker: "En los medios",
-    title: "Caldeira Growth en los medios",
+    title: "Caldeira en los medios",
     previous: "Ver notas anteriores",
     next: "Ver próximas notas",
     region: "Cobertura de prensa y entrevistas",
+    seeAll: "Ver todas las notas",
   },
 } as const;
 
@@ -120,6 +125,11 @@ function MediaCard({
             <Play className="h-4 w-4 translate-x-[1px] fill-foreground text-foreground" />
           </span>
         ) : null}
+        {item.overlayLabel ? (
+          <span className="absolute bottom-3 right-3 rounded-md bg-background/90 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-foreground/80 ring-1 ring-border/60 backdrop-blur-sm">
+            {item.overlayLabel}
+          </span>
+        ) : null}
       </div>
 
       <div className="flex flex-1 flex-col px-6 py-5">
@@ -165,6 +175,13 @@ export default function MediaAuthorityCarousel() {
                 {c.kicker}
               </p>
               <h2 className={`${sectionLayout.title} mt-4`}>{c.title}</h2>
+              <Link
+                to={localizedPath("media", lang)}
+                className="mt-5 inline-flex items-center gap-1.5 rounded-sm text-sm font-medium text-primary transition-colors hover:text-primary/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background motion-reduce:transition-none"
+              >
+                {c.seeAll}
+                <ArrowRight className="h-4 w-4" aria-hidden />
+              </Link>
             </div>
             <div className="relative hidden shrink-0 items-center gap-2 sm:flex">
               <CarouselPrevious
