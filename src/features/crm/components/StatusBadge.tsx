@@ -9,6 +9,7 @@ const TONE: Record<CrmOpportunityStatus, string> = {
   contato_pendente: "bg-amber-100 text-amber-900",
   contato_realizado: "bg-sky-100 text-sky-900",
   reuniao_agendada: "bg-sky-100 text-sky-900",
+  enviar_proposta: "bg-violet-100 text-violet-900",
   proposta_enviada: "bg-violet-100 text-violet-900",
   convertido: "bg-emerald-100 text-emerald-900",
   sem_interesse: "bg-muted text-muted-foreground",

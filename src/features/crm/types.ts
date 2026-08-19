@@ -26,6 +26,7 @@ export type CgiAssessment = {
   lead_id: string | null;
   status: "created" | "lead_captured" | "started" | "in_progress" | "completed" | "abandoned";
   progress_percent: number;
+  current_question: number | null;
   started_at: string | null;
   last_activity_at: string | null;
   completed_at: string | null;
@@ -88,6 +89,7 @@ export type CrmOpportunityStatus =
   | "contato_pendente"
   | "contato_realizado"
   | "reuniao_agendada"
+  | "enviar_proposta"
   | "proposta_enviada"
   | "convertido"
   | "sem_interesse"
