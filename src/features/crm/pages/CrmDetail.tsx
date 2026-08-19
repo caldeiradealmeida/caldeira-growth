@@ -27,7 +27,8 @@ import { OpportunityForm } from "../components/OpportunityForm";
 import { PersonLinkDialog } from "../components/PersonLinkDialog";
 import { pickLatestReport, canRegenerateReport } from "../logic/reportVersion";
 import { hasLeadComment, NO_COMMENT_MESSAGE } from "../logic/commentTab";
-import { ASSESSMENT_STATUS_LABELS, DIMENSION_LABELS, LEVEL_LABELS, REPORT_STATUS_LABELS } from "../constants";
+import { ASSESSMENT_STATUS_LABELS, CGI_STAGE_LABELS, DIMENSION_LABELS, LEVEL_LABELS, REPORT_STATUS_LABELS } from "../constants";
+import { deriveCgiStage, formatCgiProgress } from "../logic/cgiStage";
 
 function formatDateTime(value: string | null | undefined): string {
   if (!value) return "—";
@@ -241,7 +242,7 @@ export function CrmDetail() {
                 >
                   <span>
                     {formatDateTime(a.created_at)} ·{" "}
-                    <span className="text-muted-foreground">{ASSESSMENT_STATUS_LABELS[a.status] ?? a.status}</span>
+                    <span className="text-muted-foreground">{CGI_STAGE_LABELS[deriveCgiStage(a)?.stage ?? ""] ?? ASSESSMENT_STATUS_LABELS[a.status] ?? a.status} · {formatCgiProgress(deriveCgiStage(a))}</span>
                   </span>
                   <span className="font-semibold tabular-nums">{a.cgi_score ?? "—"}</span>
                 </button>

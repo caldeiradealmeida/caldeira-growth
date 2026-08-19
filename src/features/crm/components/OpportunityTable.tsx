@@ -2,7 +2,8 @@ import { useNavigate } from "react-router-dom";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { StatusBadge } from "./StatusBadge";
-import { LEVEL_LABELS, REPORT_STATUS_LABELS } from "../constants";
+import { CGI_STAGE_LABELS, LEVEL_LABELS, REPORT_STATUS_LABELS } from "../constants";
+import { deriveCgiStage, formatCgiProgress } from "../logic/cgiStage";
 import type { OpportunityRow } from "../types";
 
 function formatDate(value: string | null | undefined): string {
@@ -39,6 +40,8 @@ export function OpportunityTable({ rows }: { rows: OpportunityRow[] }) {
             <TableHead>Data</TableHead>
             <TableHead className="text-right">Score</TableHead>
             <TableHead>Nível</TableHead>
+            <TableHead>CGI</TableHead>
+            <TableHead className="text-right">Progresso</TableHead>
             <TableHead>Relatório</TableHead>
             <TableHead>Status</TableHead>
             <TableHead>Próxima ação</TableHead>
@@ -61,6 +64,23 @@ export function OpportunityTable({ rows }: { rows: OpportunityRow[] }) {
               </TableCell>
               <TableCell className="text-muted-foreground">
                 {row.latestAssessment?.cgi_level ? LEVEL_LABELS[row.latestAssessment.cgi_level] : "—"}
+              </TableCell>
+              <TableCell className="text-muted-foreground">
+                {(() => {
+                  const view = deriveCgiStage(row.latestAssessment);
+                  return view ? CGI_STAGE_LABELS[view.stage] : "—";
+                })()}
+              </TableCell>
+              <TableCell className="text-right tabular-nums">
+                {(() => {
+                  const view = deriveCgiStage(row.latestAssessment);
+                  if (!view) return <span className="text-muted-foreground">—</span>;
+                  return (
+                    <span className={view.progressPercent === 0 ? "text-muted-foreground" : undefined}>
+                      {formatCgiProgress(view)}
+                    </span>
+                  );
+                })()}
               </TableCell>
               <TableCell>
                 {row.latestReport ? (
