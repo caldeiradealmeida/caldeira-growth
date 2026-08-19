@@ -6,6 +6,8 @@ import cartaCapitalProfissionais from "@/assets/media/cartacapital-profissionais
 import hsmProfissionalAumentado from "@/assets/media/hsm-profissional-aumentado.webp";
 import cbnFloripa from "@/assets/media/cbn-floripa.webp";
 import poder360 from "@/assets/media/poder360-primeiro-negocio.webp";
+import terraDenisCaldeira from "@/assets/media/terra-denis-caldeira.webp";
+import diarioDoComercio from "@/assets/media/diario-do-comercio-mortalidade.webp";
 import panNewsEmRevista from "@/assets/media/pan-news-em-revista.webp";
 
 /**
@@ -80,6 +82,8 @@ export const mediaFeatures: MediaFeature[] = [
     },
     url: "https://www.terra.com.br/visao-do-corre/pega-a-visao/denis-caldeira-de-examinador-de-cabos-a-diretor-com-receita-de-r-10-bilhoes,154c8dd96534ec96be95d01210a1227fvoo85sik.html",
     type: "article",
+    image: terraDenisCaldeira,
+    overlayLabel: "Terra",
     featured: true,
   },
   {
@@ -158,6 +162,7 @@ export const mediaFeatures: MediaFeature[] = [
     },
     url: "https://diariodocomercio.com.br/negocios/guia-sugere-caminhos-evitar-mortalidade-empresas/",
     type: "article",
+    image: diarioDoComercio,
     featured: true,
   },
 
