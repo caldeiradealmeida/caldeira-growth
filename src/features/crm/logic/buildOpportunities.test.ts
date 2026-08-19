@@ -29,6 +29,7 @@ function assessment(overrides: Partial<CgiAssessment> & { id: string; public_ass
     lead_id: null,
     status: "created",
     progress_percent: 0,
+    current_question: null,
     started_at: null,
     last_activity_at: null,
     completed_at: null,
