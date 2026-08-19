@@ -64,8 +64,8 @@ export const mediaFeatures: MediaFeature[] = [
     id: "forbes-ronaldo-nova-era",
     outlet: "Forbes Brasil",
     title: {
-      pt: "Ronaldo inaugura nova era no futebol — Denis Caldeira é convidado",
-      en: "Ronaldo inaugurates a new era in football — Denis Caldeira is invited",
+      pt: "Ronaldo inaugura nova era no futebol — Denis Caldeira faz parte",
+      en: "Ronaldo inaugurates a new era in football — Denis Caldeira is part of it",
     },
     url: "https://forbes.com.br/carreira/2022/11/ronaldo-inaugura-nova-era-no-futebol/",
     type: "article",
