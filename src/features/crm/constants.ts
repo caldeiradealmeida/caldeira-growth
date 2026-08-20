@@ -58,6 +58,24 @@ export const CGI_STAGE_LABELS: Record<string, string> = {
   abandonado: "Abandonado",
 };
 
+/** Rótulos de gestão para os tipos do ledger de comunicações. Vocabulário de
+ * quem lê o Pipe, não o identificador técnico: ninguém precisa saber o que é
+ * "abandon_lead_d1" para entender "Lembrete (não iniciou)". */
+export const COMMUNICATION_TYPE_LABELS: Record<string, string> = {
+  report_delivery: "Relatório enviado",
+  report_followup_d2: "Follow-up do relatório (D2)",
+  report_followup_d5: "Follow-up do relatório (D5)",
+  abandon_lead_d1: "Lembrete (não iniciou)",
+  abandon_progress_d1: "Lembrete (diagnóstico em aberto)",
+  insight_d2: "Insight (D2)",
+  howto_d7: "Como aplicar (D7)",
+  strategic_d21: "Leitura estratégica (D21)",
+  checkin_d45: "Check-in (D45)",
+  revisit_d90: "Revisitar o CGI (D90)",
+  commercial_followup: "Follow-up comercial",
+  manual_email: "E-mail manual",
+};
+
 export const ASSESSMENT_STATUS_LABELS: Record<string, string> = {
   created: "Iniciado",
   lead_captured: "Contato capturado",

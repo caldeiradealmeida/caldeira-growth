@@ -109,6 +109,53 @@ export type CrmOpportunity = {
   updated_at: string;
 };
 
+export type CommunicationType =
+  | "report_delivery"
+  | "report_followup_d2"
+  | "report_followup_d5"
+  | "abandon_lead_d1"
+  | "abandon_progress_d1"
+  | "insight_d2"
+  | "howto_d7"
+  | "strategic_d21"
+  | "checkin_d45"
+  | "revisit_d90"
+  | "commercial_followup"
+  | "manual_email";
+
+export type CommunicationClass = "transactional" | "nurturing" | "commercial";
+
+export type CommunicationStatus =
+  | "scheduled"
+  | "sending"
+  | "sent"
+  | "failed"
+  | "cancelled"
+  | "suppressed";
+
+/** Uma linha do ledger cgi_communications. Leitura apenas: o Pipe nunca
+ * escreve aqui -- quem grava é api/ com service role. */
+export type CgiCommunication = {
+  id: string;
+  lead_id: string | null;
+  assessment_id: string | null;
+  public_assessment_id: string | null;
+  communication_type: CommunicationType;
+  communication_class: CommunicationClass;
+  channel: "email" | "whatsapp" | "manual";
+  status: CommunicationStatus;
+  scheduled_at: string | null;
+  sent_at: string | null;
+  failed_at: string | null;
+  cancelled_at: string | null;
+  recipient_masked: string | null;
+  subject: string | null;
+  error_code: string | null;
+  reason: string | null;
+  actor: string | null;
+  created_at: string;
+};
+
 export type CrmPerson = {
   id: string;
   display_name: string | null;
@@ -138,4 +185,8 @@ export type OpportunityRow = {
   lastActivityAt: string | null;
   latestReport: CgiReportSummary | null;
   originAttribution: CgiAttribution | null;
+  /** Ledger de comunicações do lead, mais recente primeiro. Vazio enquanto o
+   * motor de comunicação não estiver ligado -- e vazio também se a leitura
+   * falhar, porque ela é deliberadamente fail-soft (ver api/opportunities.ts). */
+  communications: CgiCommunication[];
 };

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildOpportunities } from "./buildOpportunities";
-import type { CgiAssessment, CgiLead, CrmOpportunity } from "../types";
+import type { CgiAssessment, CgiCommunication, CgiLead, CrmOpportunity } from "../types";
 
 function lead(overrides: Partial<CgiLead> & { id: string }): CgiLead {
   return {
@@ -193,5 +193,57 @@ describe("buildOpportunities", () => {
     expect(rows[0].latestAssessment).toBeNull();
     expect(rows[0].bestScore).toBeNull();
     expect(rows[0].assessmentCount).toBe(0);
+  });
+});
+
+describe("buildOpportunities -- ledger de comunicações", () => {
+  function communication(overrides: Partial<CgiCommunication> & { id: string }): CgiCommunication {
+    return {
+      lead_id: "lead_1",
+      assessment_id: null,
+      public_assessment_id: null,
+      communication_type: "report_delivery",
+      communication_class: "transactional",
+      channel: "email",
+      status: "sent",
+      scheduled_at: null,
+      sent_at: "2026-08-19T12:00:00Z",
+      failed_at: null,
+      cancelled_at: null,
+      recipient_masked: "x***@example.com",
+      subject: "Seu CGI",
+      error_code: null,
+      reason: null,
+      actor: "system:completion",
+      created_at: "2026-08-19T12:00:00Z",
+      ...overrides,
+    };
+  }
+
+  const baseInput = {
+    leads: [lead({ id: "lead_1" })],
+    opportunities: [] as CrmOpportunity[],
+    assessments: [] as CgiAssessment[],
+    attribution: [],
+    reports: [],
+    personLinks: [],
+  };
+
+  it("anexa as comunicações do lead, mais recente primeiro", () => {
+    const rows = buildOpportunities({
+      ...baseInput,
+      communications: [
+        communication({ id: "antiga", created_at: "2026-08-10T12:00:00Z" }),
+        communication({ id: "nova", created_at: "2026-08-20T12:00:00Z" }),
+        communication({ id: "de_outro_lead", lead_id: "lead_2" }),
+      ],
+    });
+
+    expect(rows[0].communications.map((c) => c.id)).toEqual(["nova", "antiga"]);
+  });
+
+  it("trata a ausência do ledger como lista vazia, nunca como erro", () => {
+    const rows = buildOpportunities(baseInput);
+    expect(rows[0].communications).toEqual([]);
   });
 });

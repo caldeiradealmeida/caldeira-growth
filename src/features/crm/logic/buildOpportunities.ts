@@ -1,5 +1,7 @@
+import { groupCommunicationsByLead } from "./communications";
 import type {
   CgiAssessment,
+  CgiCommunication,
   CgiAttribution,
   CgiLead,
   CgiReportSummary,
@@ -23,8 +25,13 @@ export function buildOpportunities(input: {
   attribution: CgiAttribution[];
   reports: CgiReportSummary[];
   personLinks: CrmPersonLink[];
+  /** Opcional: o ledger de comunicações pode não ter sido lido (tabela ainda
+   * não existe, leitura falhou). Ausência é tratada como lista vazia -- nunca
+   * como erro. */
+  communications?: CgiCommunication[];
 }): OpportunityRow[] {
   const opportunityByLead = new Map(input.opportunities.map((o) => [o.lead_id, o]));
+  const communicationsByLead = groupCommunicationsByLead(input.communications);
   const personLinkByLead = new Map(input.personLinks.map((l) => [l.lead_id, l.person_id]));
   const attributionByAssessment = new Map(input.attribution.map((a) => [a.assessment_id, a]));
   // A public_assessment_id can now have multiple report versions (manual
@@ -92,6 +99,9 @@ export function buildOpportunities(input: {
       lastActivityAt,
       latestReport,
       originAttribution,
+      communications: [...(communicationsByLead.get(lead.id) ?? [])].sort(
+        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      ),
     });
   }
 

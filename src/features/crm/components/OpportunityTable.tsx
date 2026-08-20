@@ -2,8 +2,9 @@ import { useNavigate } from "react-router-dom";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { StatusBadge } from "./StatusBadge";
-import { CGI_STAGE_LABELS, LEVEL_LABELS, REPORT_STATUS_LABELS } from "../constants";
+import { CGI_STAGE_LABELS, COMMUNICATION_TYPE_LABELS, LEVEL_LABELS, REPORT_STATUS_LABELS } from "../constants";
 import { deriveCgiStage, formatCgiProgress } from "../logic/cgiStage";
+import { summarizeCommunications } from "../logic/communications";
 import type { OpportunityRow } from "../types";
 
 function formatDate(value: string | null | undefined): string {
@@ -43,6 +44,7 @@ export function OpportunityTable({ rows }: { rows: OpportunityRow[] }) {
             <TableHead>CGI</TableHead>
             <TableHead className="text-right">Progresso</TableHead>
             <TableHead>Relatório</TableHead>
+            <TableHead>Mensagens</TableHead>
             <TableHead>Status</TableHead>
             <TableHead>Próxima ação</TableHead>
             <TableHead>Origem</TableHead>
@@ -90,6 +92,34 @@ export function OpportunityTable({ rows }: { rows: OpportunityRow[] }) {
                 ) : (
                   <span className="text-muted-foreground">—</span>
                 )}
+              </TableCell>
+              <TableCell className="text-muted-foreground">
+                {(() => {
+                  // Coluna aditiva: enquanto o motor de comunicação não estiver
+                  // ligado, toda linha mostra "—". Isso é o estado correto, não
+                  // um dado faltando.
+                  const summary = summarizeCommunications(row.communications);
+                  if (summary.sentCount === 0) {
+                    return <span>—</span>;
+                  }
+                  const last = summary.lastSent;
+                  return (
+                    <span
+                      className="whitespace-nowrap"
+                      title={
+                        last
+                          ? `${COMMUNICATION_TYPE_LABELS[last.communication_type] ?? last.communication_type} · ${formatDate(last.sent_at)}`
+                          : undefined
+                      }
+                    >
+                      <span className="tabular-nums font-medium text-foreground">{summary.sentCount}</span>
+                      {last ? <span> · {formatDate(last.sent_at)}</span> : null}
+                      {summary.failedCount > 0 ? (
+                        <span className="text-destructive"> · {summary.failedCount} falha{summary.failedCount > 1 ? "s" : ""}</span>
+                      ) : null}
+                    </span>
+                  );
+                })()}
               </TableCell>
               <TableCell>
                 <StatusBadge status={row.opportunity?.status ?? "novo"} />
