@@ -215,7 +215,7 @@ export const content: ContentByLang = {
         "Não são cases nem promessas — são contextos reais onde clareza estratégica foi determinante.",
     },
     media: {
-      title: "Na mídia",
+      title: "Caldeira na mídia",
       subtitle:
         "Artigos, entrevistas e reflexões sobre estratégia, crescimento e decisão.",
     },
@@ -519,7 +519,7 @@ export const content: ContentByLang = {
         "Not case studies or promises — real contexts where strategic clarity was decisive.",
     },
     media: {
-      title: "In the Media",
+      title: "Caldeira in the media",
       subtitle:
         "Articles, interviews, and reflections on strategy, growth, and decision-making.",
     },
@@ -773,7 +773,7 @@ content.es = {
     ctaBook: "Conocer el libro",
   },
   media: {
-    title: "En los medios",
+    title: "Caldeira en los medios",
     subtitle:
       "Artículos, entrevistas y reflexiones sobre estrategia, crecimiento y toma de decisiones.",
   },

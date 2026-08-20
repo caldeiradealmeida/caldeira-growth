@@ -113,8 +113,7 @@ export const homeContent: Localized<{
   painsTitle: string;
   painsIntro: string;
   pains: string[];
-  thesisTitle: string;
-  thesisParagraphs: string[];
+  painsClosing: string;
   diagnosticTitle: string;
   diagnosticBody: string[];
   diagnosticNote: string;
@@ -151,13 +150,7 @@ export const homeContent: Localized<{
       "Os indicadores existem, mas não orientam as decisões mais importantes.",
       "As decisões continuam concentradas em poucas pessoas.",
     ],
-    thesisTitle:
-      "Crescimento não é um evento. É uma capacidade organizacional.",
-    thesisParagraphs: [
-      "Empresas não crescem de forma sustentável apenas porque possuem uma boa estratégia, lançam um novo produto ou aumentam a pressão comercial.",
-      "O crescimento se sustenta quando estratégia, cultura, liderança, estrutura, indicadores, governança e execução funcionam como partes de um mesmo sistema.",
-      "A Caldeira Growth ajuda organizações e lideranças a compreender, desenhar e fortalecer esse sistema. Chamamos essa abordagem de Arquitetura de Crescimento.",
-    ],
+    painsClosing: "Crescimento não é um evento. É uma capacidade organizacional.",
     diagnosticTitle:
       "Identifique o que está limitando o crescimento da sua organização",
     diagnosticBody: [
@@ -259,12 +252,7 @@ export const homeContent: Localized<{
       "We have metrics, but they do not guide the most important decisions.",
       "Too many decisions remain concentrated in a few people.",
     ],
-    thesisTitle: "Growth is not an event. It is an organizational capability.",
-    thesisParagraphs: [
-      "Companies do not grow sustainably simply because they have a good strategy, launch a new product or increase commercial pressure.",
-      "Growth becomes sustainable when strategy, culture, leadership, structure, metrics, governance and execution operate as parts of the same system.",
-      "Caldeira Growth helps organizations and leaders understand, design and strengthen that system. We call this approach Growth Architecture.",
-    ],
+    painsClosing: "Growth is not an event. It is an organizational capability.",
     diagnosticTitle:
       "Identify what is limiting your organization's growth",
     diagnosticBody: [
@@ -309,13 +297,7 @@ export const homeContent: Localized<{
       "Existen indicadores, pero no orientan las decisiones más importantes.",
       "Demasiadas decisiones siguen concentradas en pocas personas.",
     ],
-    thesisTitle:
-      "El crecimiento no es un evento. Es una capacidad organizacional.",
-    thesisParagraphs: [
-      "Las empresas no crecen de forma sostenible únicamente porque tengan una buena estrategia, lancen un nuevo producto o aumenten la presión comercial.",
-      "El crecimiento se sostiene cuando la estrategia, la cultura, el liderazgo, la estructura, los indicadores, la gobernanza y la ejecución funcionan como partes de un mismo sistema.",
-      "Caldeira Growth ayuda a organizaciones y líderes a comprender, diseñar y fortalecer ese sistema. Llamamos a este enfoque Arquitectura de Crecimiento.",
-    ],
+    painsClosing: "El crecimiento no es un evento. Es una capacidad organizacional.",
     diagnosticTitle:
       "Identifique qué está limitando el crecimiento de su organización",
     diagnosticBody: [
