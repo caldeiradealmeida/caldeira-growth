@@ -1518,3 +1518,32 @@ export async function getAbandonmentCandidatesV2(input: {
   }
   return Array.isArray(result.data) ? result.data : [];
 }
+
+// --- Communication Engine (Fase 1) ---------------------------------------
+// Insert generico, deliberadamente magro: o modulo de comunicacoes precisa de
+// um unico verbo (inserir uma linha) e nao deve ganhar acesso ao cliente REST
+// inteiro por isso. Devolve o status HTTP cru porque quem chama precisa
+// distinguir 409 (duplicata -- o mecanismo de idempotencia funcionando) de
+// qualquer outra falha.
+
+export type SupabaseInsertResult = {
+  ok: boolean;
+  status: number;
+  error?: string;
+};
+
+export async function supabaseInsert(
+  table: string,
+  body: Record<string, unknown>
+): Promise<SupabaseInsertResult> {
+  const result = await supabaseRequest(table, {
+    method: "POST",
+    body: JSON.stringify(body),
+    prefer: "return=minimal",
+  });
+  return {
+    ok: result.ok,
+    status: result.status,
+    ...(result.error ? { error: result.error } : {}),
+  };
+}
