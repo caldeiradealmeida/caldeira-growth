@@ -9,6 +9,7 @@ import {
 import { buildCgiReportReadyEmail, extractExecutiveSummary } from "./_cgi-email-content.js";
 import { dispatchCgiParticipantEmail } from "./_cgi-email-dispatch.js";
 import { buildReportAccessUrl, issueReportAccessToken } from "./_cgi-report-token.js";
+import { recordCommunicationSafely } from "./_cgi-communications.js";
 
 // P0 -- out-of-band delivery of the report-ready email.
 //
@@ -45,9 +46,14 @@ export type ReportEmailReason = "completion" | "recovery" | "backfill";
 export type ReportEmailContext = {
   aiReportJson?: string;
   lead?: { name?: string; email?: string; company?: string } | null;
+  /** Só o caminho de conclusão passa: ele já validou o lead nesta mesma
+   * requisição. Serve exclusivamente para o registro no ledger poder amarrar a
+   * linha ao lead sem uma segunda leitura. Nenhuma decisão de envio o usa. */
+  leadId?: string | null;
 };
 
 type EmailGateState = {
+  id?: string | null;
   report_email_sent_at?: string | null;
   lead_id?: string | null;
   completed_at?: string | null;
@@ -186,17 +192,44 @@ export async function deliverReportEmailForAssessment(input: {
     dryRun: input.dryRun,
   });
 
+  // 7. Ledger (Communication Engine, fase 1). ADITIVO e DEPOIS do envio: o
+  //    marcador report_email_sent_at continua sendo a fonte operacional de
+  //    idempotência, e recordCommunicationSafely nunca lança nem altera o
+  //    resultado devolvido daqui. Dry run não vira linha: não houve
+  //    comunicação. Ordem deliberada -- o marcador primeiro, o ledger depois --
+  //    para que, se algo falhar entre os dois, o que sobrevive seja a garantia
+  //    de não reenviar, não a contabilidade.
+  const ledger = (
+    status: "sent" | "failed",
+    extra: { errorCode?: string } = {}
+  ): Promise<unknown> =>
+    recordCommunicationSafely({
+      type: "report_delivery",
+      status,
+      leadId: state.lead_id || input.context?.leadId || null,
+      assessmentId: state.id || null,
+      publicAssessmentId,
+      recipient,
+      subject: content.subject,
+      provider: "apps_script_mailapp",
+      actor: input.reason === "completion" ? "system:completion" : `system:${input.reason}`,
+      metadata: { reason: input.reason },
+      now,
+      ...(extra.errorCode ? { errorCode: extra.errorCode } : {}),
+    });
+
   if (dispatchResult.status === "sent") {
-    // 7. Writeback only after confirmed delivery. If this PATCH itself fails
+    // 8. Writeback only after confirmed delivery. If this PATCH itself fails
     //    the send already happened, so the assessment stays retryable and a
     //    rerun would duplicate -- logSupabaseFailure inside markReportEmailSent
     //    is what makes that visible rather than silent.
     const marked = await markReportEmailSent(publicAssessmentId);
+    await ledger("sent");
     return marked ? result("sent") : result("sent", "writeback_failed");
   }
   if (dispatchResult.status === "dry_run") return result("dry_run");
-  return result(
-    "error_dispatch",
-    dispatchResult.status === "error" ? dispatchResult.error : dispatchResult.reason
-  );
+  const dispatchError =
+    dispatchResult.status === "error" ? dispatchResult.error : dispatchResult.reason;
+  await ledger("failed", { errorCode: dispatchError });
+  return result("error_dispatch", dispatchError);
 }

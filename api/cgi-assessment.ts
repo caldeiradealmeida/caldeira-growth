@@ -2916,6 +2916,9 @@ export default async function handler(
           // Already in memory from this very request -- no second read, and no
           // dependency on the best-effort assessment write having landed.
           aiReportJson: ai.text,
+          // Só para o registro no ledger conseguir amarrar a linha ao lead;
+          // nenhuma decisão de envio depende disso.
+          leadId: supabaseCompletion.leadId,
           lead: {
             name: String(payload.lead?.name || ""),
             company: String(payload.lead?.company || ""),

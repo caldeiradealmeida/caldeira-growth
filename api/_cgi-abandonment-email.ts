@@ -13,6 +13,7 @@ import {
 } from "./_cgi-email-content.js";
 import { dispatchCgiParticipantEmail } from "./_cgi-email-dispatch.js";
 import { buildReportAccessUrl, issueReportAccessToken } from "./_cgi-report-token.js";
+import { recordCommunicationSafely } from "./_cgi-communications.js";
 
 // Abandonment V2 -- one executor, two kinds, and a decision step that is
 // deliberately separated from the send step.
@@ -275,14 +276,43 @@ export async function deliverAbandonmentEmailForAssessment(input: {
     dryRun: input.dryRun,
   });
 
+  // Ledger (Communication Engine, fase 1). Aditivo, posterior ao envio e
+  // incapaz de alterar o resultado: abandonment_email_sent_at segue sendo o
+  // marcador operacional. Aqui o tipo registrado é a KIND real
+  // (abandon_lead_d1 / abandon_progress_d1), que é a informação que o marcador
+  // único de hoje não consegue guardar -- é exatamente essa perda que o motor
+  // de comunicação existe para resolver.
+  const ledger = (status: "sent" | "failed", errorCode?: string): Promise<unknown> =>
+    recordCommunicationSafely({
+      type: kind,
+      status,
+      leadId: evaluated.state?.lead_id || null,
+      assessmentId: evaluated.state?.id || null,
+      publicAssessmentId: input.publicAssessmentId,
+      recipientMasked: base.maskedRecipient,
+      subject: base.subject,
+      provider: "apps_script_mailapp",
+      actor: input.enforceMaxAge ? "system:cron" : "system:backfill",
+      metadata: {
+        inactive_hours: base.inactiveHours,
+        enforce_max_age: input.enforceMaxAge,
+      },
+      now: input.now,
+      ...(errorCode ? { errorCode } : {}),
+    });
+
   if (dispatchResult.status === "sent") {
     const marked = await markAbandonmentEmailSent(input.publicAssessmentId);
+    await ledger("sent");
     return marked ? { ...base, outcome: "sent" } : { ...base, outcome: "sent", detail: "writeback_failed" };
   }
   if (dispatchResult.status === "dry_run") return { ...base, outcome: "would_send", detail: "dry_run" };
+  const dispatchError =
+    dispatchResult.status === "error" ? dispatchResult.error : dispatchResult.reason;
+  await ledger("failed", dispatchError);
   return {
     ...base,
     outcome: "error_dispatch",
-    detail: dispatchResult.status === "error" ? dispatchResult.error : dispatchResult.reason,
+    detail: dispatchError,
   };
 }
