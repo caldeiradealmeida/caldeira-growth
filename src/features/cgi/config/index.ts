@@ -223,9 +223,9 @@ export const cgiUi: Record<
     assessmentTitle: "Avalie as capacidades de crescimento da empresa.",
     assessmentSubtitle:
       "Responda com base na realidade atual da organização, e não na situação ideal.",
-    phoneTitle: "Quer aprofundar seu diagnóstico?",
+    phoneTitle: "Estamos preparando sua leitura executiva",
     phoneBody:
-      "Deixe seu telefone ou WhatsApp caso queira conversar sobre os resultados e as prioridades identificadas.",
+      "Suas respostas foram registradas. Enquanto o parecer é gerado, você pode acompanhar por aqui — ele também será enviado para o seu e-mail.",
     viewResult: "Ver meu resultado",
     continue: "Continuar",
     continueToDiagnosis: "Continuar para o diagnóstico",
@@ -459,9 +459,9 @@ export const cgiUi: Record<
     assessmentTitle: "Assess the company's growth capabilities.",
     assessmentSubtitle:
       "Answer based on the organization's current reality, not the ideal situation.",
-    phoneTitle: "Want to deepen your diagnosis?",
+    phoneTitle: "We are preparing your executive reading",
     phoneBody:
-      "Leave your phone or WhatsApp if you want to discuss the results and identified priorities.",
+      "Your answers have been recorded. While the report is generated you can follow along here — it will also be sent to your email.",
     viewResult: "See my result",
     continue: "Continue",
     continueToDiagnosis: "Continue to the diagnosis",
@@ -695,9 +695,9 @@ export const cgiUi: Record<
     assessmentTitle: "Evalúe las capacidades de crecimiento de la empresa.",
     assessmentSubtitle:
       "Responda con base en la realidad actual de la organización, no en la situación ideal.",
-    phoneTitle: "¿Quiere profundizar su diagnóstico?",
+    phoneTitle: "Estamos preparando su lectura ejecutiva",
     phoneBody:
-      "Deje su teléfono o WhatsApp si quiere conversar sobre los resultados y las prioridades identificadas.",
+      "Sus respuestas fueron registradas. Mientras se genera el informe puede seguir aquí — también será enviado a su correo.",
     viewResult: "Ver mi resultado",
     continue: "Continuar",
     continueToDiagnosis: "Continuar al diagnóstico",

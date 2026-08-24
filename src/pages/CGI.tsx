@@ -24,8 +24,8 @@ import type { CgiResumeHandoff, LeadForm, Step } from "@/features/cgi/types";
 import type { CgiConsentState, CgiReportStatus, CgiSecondarySyncStatus } from "@/features/cgi/types";
 import {
   CGI_COMMENTS_MAX_LENGTH,
-  decidePhoneStepAction,
   isOtherOption,
+  isValidPhone,
   isValidProfessionalField,
   normalizeLeadForSubmit,
   parseAnswersJsonInput,
@@ -652,10 +652,26 @@ export default function CGI() {
   };
 
   const validateIdentification = (): boolean => {
-    if (!validateRequiredFields(["name", "email", "company", "role"])) {
+    // Telefone entra aqui, junto da identificação, e é obrigatório.
+    // Razão comercial: quem começa o CGI e abandona no meio deixa de ser
+    // alcançável por qualquer canal que não seja e-mail. Capturado na Etapa 1,
+    // o contato sobrevive ao abandono -- que é justamente o caso em que ele
+    // mais importa.
+    if (!validateRequiredFields(["name", "email", "phone", "company", "role"])) {
       return false;
     }
     if (!validateProfessionalFields(["name", "company", "role"])) {
+      return false;
+    }
+    // Formato validado depois da obrigatoriedade, para que campo vazio receba
+    // "campo obrigatório" e campo preenchido receba "número inválido".
+    if (!isValidPhone(lead.phone)) {
+      trackInternalError("cgi_validation_error", "invalid_phone");
+      toast({
+        title: t.invalidRequiredTitle,
+        description: t.invalidPhoneBody,
+        variant: "destructive",
+      });
       return false;
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(lead.email)) {
@@ -1195,36 +1211,9 @@ export default function CGI() {
   // generation/polling; ensurePublicAssessment (inside persistLead) only
   // reuses/creates the anonymous lead-tracking id, the same one every
   // earlier step already relies on.
-  const viewResult = async () => {
-    const decision = decidePhoneStepAction(lead.phone);
-    if (decision.kind === "block_invalid_phone") {
-      trackInternalError("cgi_validation_error", "invalid_phone");
-      toast({
-        title: t.invalidRequiredTitle,
-        description: t.invalidPhoneBody,
-        variant: "destructive",
-      });
-      return;
-    }
-    if (decision.kind === "save_and_advance") {
-      setIsLeadSubmitting(true);
-      const normalizedLead = normalizeLeadForSubmit(lead);
-      try {
-        await persistLead({
-          normalizedLead,
-          eventName: "cgi_phone_submitted",
-          commercialInterest: true,
-        });
-      } catch (error) {
-        if (import.meta.env.DEV) {
-          console.error("[CGI] phone submit error", error);
-        }
-        trackInternalError("cgi_system_error", "phone_submit_failed");
-      } finally {
-        setIsLeadSubmitting(false);
-        setLead(normalizedLead);
-      }
-    }
+  const viewResult = () => {
+    // A etapa final deixou de capturar telefone: ele agora é obrigatório na
+    // identificação. O que sobra aqui é a espera enquanto o parecer é gerado.
     setStep("result");
     scrollToAssessment();
   };
@@ -1348,10 +1337,8 @@ export default function CGI() {
           {step === "phone" && result && (
             <CgiPhoneStep
               t={t}
-              lead={lead}
               isSubmitting={isSubmitting}
               isLeadSubmitting={isLeadSubmitting}
-              updateLead={updateLead}
               viewResult={viewResult}
             />
           )}

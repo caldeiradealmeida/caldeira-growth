@@ -77,23 +77,6 @@ export function isValidPhone(value: string) {
   return digits.length >= 7 && digits.length <= 15;
 }
 
-export type PhoneStepAction =
-  | { kind: "advance" }
-  | { kind: "save_and_advance"; phone: string }
-  | { kind: "block_invalid_phone" };
-
-// The CGI phone step has a single action now ("Ver meu resultado"): the
-// phone/WhatsApp field is optional, so an empty field must still advance -
-// only a non-empty field gets format-validated, exactly like the old
-// dedicated "quero conversar" CTA used to (same isValidPhone check, same
-// error case), just without requiring a phone at all.
-export function decidePhoneStepAction(phone: string): PhoneStepAction {
-  const trimmed = phone.trim();
-  if (!trimmed) return { kind: "advance" };
-  if (!isValidPhone(trimmed)) return { kind: "block_invalid_phone" };
-  return { kind: "save_and_advance", phone: trimmed };
-}
-
 export function isOtherOption(value: string | undefined) {
   return ["Outro", "Other", "Otro"].includes(String(value || ""));
 }
