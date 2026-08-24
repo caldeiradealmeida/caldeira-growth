@@ -48,7 +48,7 @@ export async function fetchOpportunityRows() {
   const leadIds = leads.map((l) => l.id);
 
   if (leadIds.length === 0) {
-    return buildOpportunities({ leads: [], opportunities: [], assessments: [], attribution: [], reports: [], personLinks: [], communications: [] });
+    return buildOpportunities({ leads: [], opportunities: [], assessments: [], attribution: [], reports: [], personLinks: [], communications: [], reportAccess: [] });
   }
 
   const [opportunitiesRes, assessmentsRes, personLinksRes, communications] = await Promise.all([
@@ -65,7 +65,7 @@ export async function fetchOpportunityRows() {
   const assessmentIds = assessments.map((a) => a.id);
   const publicAssessmentIds = assessments.map((a) => a.public_assessment_id);
 
-  const [attributionRes, reportsRes] = await Promise.all([
+  const [attributionRes, reportsRes, accessRes] = await Promise.all([
     assessmentIds.length
       ? crmSupabase.from("cgi_attribution").select("*").in("assessment_id", assessmentIds)
       : Promise.resolve({ data: [], error: null }),
@@ -75,10 +75,19 @@ export async function fetchOpportunityRows() {
           .select("id,public_assessment_id,report_status,language,ai_report_text,report_json,version,created_at")
           .in("public_assessment_id", publicAssessmentIds)
       : Promise.resolve({ data: [], error: null }),
+    // Quem realmente ABRIU o relatório. Entrega e leitura são coisas
+    // diferentes, e a fila comercial precisa distinguir as duas.
+    publicAssessmentIds.length
+      ? crmSupabase
+          .from("cgi_report_access")
+          .select("public_assessment_id,last_accessed_at")
+          .in("public_assessment_id", publicAssessmentIds)
+      : Promise.resolve({ data: [], error: null }),
   ]);
 
   const attribution = unwrap<CgiAttribution[]>(attributionRes);
   const reports = unwrap<CgiReportSummary[]>(reportsRes);
+  const reportAccess = unwrap<Array<{ public_assessment_id: string; last_accessed_at: string | null }>>(accessRes);
 
-  return buildOpportunities({ leads, opportunities, assessments, attribution, reports, personLinks, communications });
+  return buildOpportunities({ leads, opportunities, assessments, attribution, reports, personLinks, communications, reportAccess });
 }

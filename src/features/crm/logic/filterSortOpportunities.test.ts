@@ -60,6 +60,7 @@ function row(overrides: {
       : null,
     originAttribution: null,
     communications: [],
+    reportOpenedAt: null,
   };
 }
 

@@ -29,9 +29,16 @@ export function buildOpportunities(input: {
    * não existe, leitura falhou). Ausência é tratada como lista vazia -- nunca
    * como erro. */
   communications?: CgiCommunication[];
+  /** last_accessed_at por public_assessment_id. Opcional: uma leitura que
+   * falhe não pode derrubar a montagem da lista. */
+  reportAccess?: Array<{ public_assessment_id: string; last_accessed_at: string | null }>;
 }): OpportunityRow[] {
   const opportunityByLead = new Map(input.opportunities.map((o) => [o.lead_id, o]));
   const communicationsByLead = groupCommunicationsByLead(input.communications);
+  const accessByPublicId = new Map<string, string>();
+  for (const a of input.reportAccess ?? []) {
+    if (a?.public_assessment_id && a.last_accessed_at) accessByPublicId.set(a.public_assessment_id, a.last_accessed_at);
+  }
   const personLinkByLead = new Map(input.personLinks.map((l) => [l.lead_id, l.person_id]));
   const attributionByAssessment = new Map(input.attribution.map((a) => [a.assessment_id, a]));
   // A public_assessment_id can now have multiple report versions (manual
@@ -102,6 +109,12 @@ export function buildOpportunities(input: {
       communications: [...(communicationsByLead.get(lead.id) ?? [])].sort(
         (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
       ),
+      // Mais recente entre todos os assessments do lead.
+      reportOpenedAt:
+        leadAssessments
+          .map((a) => accessByPublicId.get(a.public_assessment_id))
+          .filter((v): v is string => Boolean(v))
+          .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0] ?? null,
     });
   }
 

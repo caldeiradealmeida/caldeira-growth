@@ -42,6 +42,8 @@ function assessment(overrides: Partial<CgiAssessment> & { id: string; public_ass
     cgi_level: null,
     lowest_dimension: null,
     highest_dimension: null,
+    report_email_sent_at: null,
+    abandonment_email_sent_at: null,
     created_at: "2026-07-01T00:00:00Z",
     ...overrides,
   };

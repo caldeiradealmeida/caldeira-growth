@@ -39,6 +39,10 @@ export type CgiAssessment = {
   cgi_level: "reactive" | "intentional" | "structured" | "scalable" | null;
   lowest_dimension: CgiDimension | null;
   highest_dimension: CgiDimension | null;
+  /** Marcadores legados de e-mail, anteriores ao Communication Engine. São a
+   * única prova de comunicações enviadas antes do ledger existir. */
+  report_email_sent_at: string | null;
+  abandonment_email_sent_at: string | null;
   created_at: string;
 };
 
@@ -189,4 +193,8 @@ export type OpportunityRow = {
    * motor de comunicação não estiver ligado -- e vazio também se a leitura
    * falhar, porque ela é deliberadamente fail-soft (ver api/opportunities.ts). */
   communications: CgiCommunication[];
+  /** Quando a pessoa abriu o link do relatório, se abriu. Vem de
+   * cgi_report_access.last_accessed_at -- sinal de engajamento real, não de
+   * entrega. */
+  reportOpenedAt: string | null;
 };
