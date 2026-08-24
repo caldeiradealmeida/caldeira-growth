@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   QUEUE_FILTER_LABELS,
+  deriveReportEvidence,
+  describeReportEvidence,
   compareForQueue,
   deriveCompanySize,
   deriveHumanContact,
@@ -273,5 +275,66 @@ describe("fila — filtros e ordenação", () => {
     const c = { priority: { level: "P1" as const, reason: "" }, size: deriveCompanySize("R$ 50-200 milhões"), bestScore: 10 };
     const d = { priority: { level: "P1" as const, reason: "" }, size: deriveCompanySize("Até R$ 1 milhão"), bestScore: 99 };
     expect(compareForQueue(c, d)).toBeLessThan(0);
+  });
+});
+
+
+describe("relatório — evidência, nunca ausência", () => {
+  const ANTES = "2026-07-26T00:00:00Z"; // antes da telemetria (19/08)
+  const DEPOIS = "2026-08-20T00:00:00Z";
+
+  it("prova positiva vence a data de corte: marcador antigo continua valendo", () => {
+    // Andre Pimentel concluiu 14/08 mas foi alcançado pelo recovery de 19/08.
+    const e = deriveReportEvidence({
+      completedAtIso: "2026-08-14T00:00:00Z",
+      reportReady: true,
+      reportEmailSentAtIso: "2026-08-19T00:10:00Z",
+      accessedAtIso: null,
+    });
+    expect(e).toEqual({ kind: "sent", atIso: "2026-08-19T00:10:00Z" });
+  });
+
+  it("concluído antes da telemetria e sem evidência vira LEGADO, não 'não enviado'", () => {
+    // Belmir / Grupo MNGT: concluiu 26/07, antes de cgi_reports existir.
+    const e = deriveReportEvidence({
+      completedAtIso: ANTES, reportReady: false, reportEmailSentAtIso: null, accessedAtIso: null,
+    });
+    expect(e.kind).toBe("legacy_unknown");
+    expect(describeReportEvidence(e, ANTES)).toContain("NÃO prova");
+  });
+
+  it("concluído DEPOIS da telemetria e sem evidência é, aí sim, não enviado", () => {
+    const e = deriveReportEvidence({
+      completedAtIso: DEPOIS, reportReady: false, reportEmailSentAtIso: null, accessedAtIso: null,
+    });
+    expect(e.kind).toBe("not_sent");
+  });
+
+  it("relatório pronto e sem envio, já na era rastreada, é dito como tal", () => {
+    const e = deriveReportEvidence({
+      completedAtIso: DEPOIS, reportReady: true, reportEmailSentAtIso: null, accessedAtIso: null,
+    });
+    expect(e.kind).toBe("ready_not_sent");
+  });
+
+  it("'aberto' exige relatório pronto — clique no link de abandono não é leitura de parecer", () => {
+    // Giliard: abriu o token emitido pelo e-mail de abandono, sem relatório algum.
+    const semRelatorio = deriveReportEvidence({
+      completedAtIso: DEPOIS, reportReady: false, reportEmailSentAtIso: null,
+      accessedAtIso: "2026-08-21T10:00:00Z",
+    });
+    expect(semRelatorio.kind).not.toBe("opened");
+
+    const comRelatorio = deriveReportEvidence({
+      completedAtIso: DEPOIS, reportReady: true, reportEmailSentAtIso: "2026-08-19T00:10:00Z",
+      accessedAtIso: "2026-08-21T10:00:00Z",
+    });
+    expect(comRelatorio).toEqual({ kind: "opened", atIso: "2026-08-21T10:00:00Z" });
+  });
+
+  it("quem não concluiu não tem estado de relatório", () => {
+    expect(deriveReportEvidence({
+      completedAtIso: null, reportReady: false, reportEmailSentAtIso: null, accessedAtIso: null,
+    }).kind).toBe("none");
   });
 });

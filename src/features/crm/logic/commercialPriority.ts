@@ -287,6 +287,79 @@ export function deriveMessageChips(row: {
 }
 
 // ---------------------------------------------------------------------------
+// RELATÓRIO -- evidência, não ausência
+// ---------------------------------------------------------------------------
+
+/** Quando os marcadores de e-mail passaram a ser confiáveis em produção.
+ *
+ * Antes disso o CGI entregava relatório por um caminho que não deixava
+ * registro: `cgi_reports` só existe desde 28/07 e `report_email_sent_at` desde
+ * 14/08, com o envio real ligado em 19/08. Para quem concluiu antes, a
+ * ausência de marcador é consequência de a telemetria não existir -- não prova
+ * que a pessoa não recebeu nada. Tratar as duas coisas como iguais é o tipo de
+ * erro que faz alguém "reenviar" um relatório que o cliente já leu há um mês. */
+export const CGI_TELEMETRY_START = Date.parse("2026-08-19T00:00:00Z");
+
+export type ReportEvidence =
+  | { kind: "opened"; atIso: string }
+  | { kind: "sent"; atIso: string }
+  | { kind: "ready_not_sent" }
+  | { kind: "legacy_unknown" }
+  | { kind: "not_sent" }
+  | { kind: "none" };
+
+export const REPORT_EVIDENCE_LABELS: Record<ReportEvidence["kind"], string> = {
+  opened: "Aberto",
+  sent: "Enviado",
+  ready_not_sent: "Pronto, não enviado",
+  legacy_unknown: "CGI legado",
+  not_sent: "Não enviado",
+  none: "—",
+};
+
+export function deriveReportEvidence(input: {
+  completedAtIso: string | null | undefined;
+  reportReady: boolean;
+  reportEmailSentAtIso: string | null | undefined;
+  /** cgi_report_access.last_accessed_at */
+  accessedAtIso: string | null | undefined;
+}): ReportEvidence {
+  if (!input.completedAtIso) return { kind: "none" };
+
+  // Prova positiva sempre vence a data de corte. Quem foi alcançado pelo
+  // recovery de 19/08 tem marcador verdadeiro mesmo tendo concluído antes.
+  //
+  // "Aberto" exige relatório pronto: o e-mail de abandono também emite token de
+  // acesso, então um last_accessed_at sem relatório significa "clicou no link
+  // de retomada", não "leu o parecer".
+  if (input.accessedAtIso && input.reportReady) return { kind: "opened", atIso: input.accessedAtIso };
+  if (input.reportEmailSentAtIso) return { kind: "sent", atIso: input.reportEmailSentAtIso };
+
+  const concluidoEm = Date.parse(input.completedAtIso);
+  const antesDaTelemetria = Number.isFinite(concluidoEm) && concluidoEm < CGI_TELEMETRY_START;
+  if (antesDaTelemetria) return { kind: "legacy_unknown" };
+
+  return input.reportReady ? { kind: "ready_not_sent" } : { kind: "not_sent" };
+}
+
+export function describeReportEvidence(evidence: ReportEvidence, completedAtIso?: string | null): string {
+  switch (evidence.kind) {
+    case "opened":
+      return `Relatório aberto pelo lead em ${new Date(evidence.atIso).toLocaleDateString("pt-BR")}.`;
+    case "sent":
+      return `Relatório enviado em ${new Date(evidence.atIso).toLocaleDateString("pt-BR")}. Sem registro de abertura.`;
+    case "ready_not_sent":
+      return "Relatório gerado, mas nenhum e-mail de entrega registrado.";
+    case "legacy_unknown":
+      return `CGI concluído em ${completedAtIso ? new Date(completedAtIso).toLocaleDateString("pt-BR") : "data anterior"}, antes da telemetria atual. A ausência de registro NÃO prova que o lead não recebeu o relatório.`;
+    case "not_sent":
+      return "Nenhum relatório entregue.";
+    default:
+      return "Diagnóstico não concluído.";
+  }
+}
+
+// ---------------------------------------------------------------------------
 // FILTROS DA FILA
 // ---------------------------------------------------------------------------
 
@@ -368,8 +441,14 @@ export function deriveQueueView(row: OpportunityRow, now: number = Date.now()) {
     legacyReportEmailAt: row.latestAssessment?.report_email_sent_at ?? null,
     legacyAbandonmentEmailAt: row.latestAssessment?.abandonment_email_sent_at ?? null,
   });
-  const reportDelivered = chips.some((c) => c.label === "Relatório");
-  const reportOpened = Boolean(row.reportOpenedAt);
+  const reportEvidence = deriveReportEvidence({
+    completedAtIso: row.latestAssessment?.completed_at,
+    reportReady: row.latestReport?.report_status === "report_ready",
+    reportEmailSentAtIso: row.latestAssessment?.report_email_sent_at,
+    accessedAtIso: row.reportOpenedAt,
+  });
+  const reportDelivered = reportEvidence.kind === "sent" || reportEvidence.kind === "opened";
+  const reportOpened = reportEvidence.kind === "opened";
   const priority = derivePriority({
     size,
     contact,
@@ -382,5 +461,5 @@ export function deriveQueueView(row: OpportunityRow, now: number = Date.now()) {
     nextActionAt: row.opportunity?.next_action_at,
     now,
   });
-  return { size, contact, crmStatus, completed, started, chips, reportDelivered, reportOpened, priority };
+  return { size, contact, crmStatus, completed, started, chips, reportDelivered, reportOpened, reportEvidence, priority };
 }

@@ -6,11 +6,13 @@ import { cn } from "@/lib/utils";
 import { StatusBadge } from "./StatusBadge";
 import { PriorityBadge } from "./PriorityBadge";
 import { CompanySizeBadge } from "./CompanySizeBadge";
-import { CGI_STAGE_LABELS, LEVEL_LABELS, REPORT_STATUS_LABELS } from "../constants";
+import { CGI_STAGE_LABELS, LEVEL_LABELS } from "../constants";
 import { deriveCgiStage, formatCgiProgress } from "../logic/cgiStage";
 import {
   QUEUE_FILTER_LABELS,
+  REPORT_EVIDENCE_LABELS,
   compareForQueue,
+  describeReportEvidence,
   deriveQueueView,
   matchesQueueFilter,
   type QueueFilter,
@@ -167,19 +169,26 @@ export function OpportunityTable({ rows }: { rows: OpportunityRow[] }) {
                     </div>
                   </TableCell>
 
+                  {/* Estado do relatório por EVIDÊNCIA. "CGI legado" existe para
+                      não afirmar não-envio onde a telemetria simplesmente não
+                      existia -- a ausência de marcador antes de 19/08 não prova
+                      nada, e tratá-la como prova levaria a reenviar relatório
+                      para quem já leu. */}
                   <TableCell className="whitespace-nowrap">
-                    {row.latestReport ? (
-                      <Badge variant="outline" className="font-normal">
-                        {REPORT_STATUS_LABELS[row.latestReport.report_status] ?? row.latestReport.report_status}
-                      </Badge>
-                    ) : (
-                      <span className="text-muted-foreground">—</span>
-                    )}
-                    {view.reportOpened ? (
-                      <div className="text-xs text-emerald-700" title={`Aberto em ${formatDate(row.reportOpenedAt)}`}>
-                        aberto
-                      </div>
-                    ) : null}
+                    <span
+                      title={describeReportEvidence(view.reportEvidence, row.latestAssessment?.completed_at)}
+                      className={cn(
+                        "inline-flex rounded-full border px-2 py-0.5 text-xs",
+                        view.reportEvidence.kind === "opened" && "border-transparent bg-emerald-100 text-emerald-900",
+                        view.reportEvidence.kind === "sent" && "border-transparent bg-sky-100 text-sky-900",
+                        view.reportEvidence.kind === "ready_not_sent" && "border-amber-300 text-amber-900",
+                        view.reportEvidence.kind === "legacy_unknown" && "border-dashed border-border text-muted-foreground",
+                        (view.reportEvidence.kind === "not_sent" || view.reportEvidence.kind === "none") &&
+                          "border-transparent text-muted-foreground"
+                      )}
+                    >
+                      {REPORT_EVIDENCE_LABELS[view.reportEvidence.kind]}
+                    </span>
                   </TableCell>
 
                   {/* Não é um número: é o que a pessoa recebeu. Chips tracejados
