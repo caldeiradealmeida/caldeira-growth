@@ -14,6 +14,7 @@ import {
   getCgiReportState,
   getReadyCgiReport,
   insertFunnelEvent,
+  findLeadIdByAnonymousSession,
   markCgiReportFailed,
   saveCompletedCgiReport,
   tryCreateCgiReportGenerationLock,
@@ -2386,8 +2387,39 @@ async function persistCompletedAssessmentBestEffort({
     await upsertAnswers(assessment.id, answers);
   }
 
-  if (assessment?.lead_id) {
-    await updateLeadComments(assessment.lead_id, payload.lead?.comments);
+  // Recuperação do vínculo com o lead.
+  //
+  // Uma retentativa depois de uma falha de geração chega com um
+  // public_assessment_id novo, criado no cliente, que nunca passou por
+  // /api/cgi/lead -- então esta linha nasce sem lead_id. Sem isso, a guarda
+  // anti-phantom recusa o e-mail e a pessoa nunca recebe o relatório que ela
+  // acabou de ver na tela. O anonymous_session_id é o que sobrevive à
+  // retentativa, e é por ele que o vínculo é recuperado.
+  //
+  // Só recupera quando a sessão tem exatamente um lead; qualquer ambiguidade
+  // mantém lead_id nulo e, portanto, mantém o comportamento atual de não
+  // enviar. Nunca sobrescreve um lead_id já existente.
+  let leadId = assessment?.lead_id ?? null;
+  if (assessment?.id && !leadId) {
+    const inherited = await findLeadIdByAnonymousSession(anonymousSessionId);
+    if (inherited) {
+      const relinked = await upsertAssessment({
+        publicAssessmentId,
+        anonymousSessionId,
+        status: "completed",
+        leadId: inherited,
+      });
+      leadId = relinked?.lead_id ?? inherited;
+      console.info("[CGI Flow]", {
+        operation: "assessment_lead_relinked",
+        public_assessment_id: publicAssessmentId,
+        reason: "retry_after_report_failure",
+      });
+    }
+  }
+
+  if (leadId) {
+    await updateLeadComments(leadId, payload.lead?.comments);
   }
 
   const completionEventId = String(payload.completion_event_id || createEventId());
@@ -2412,7 +2444,7 @@ async function persistCompletedAssessmentBestEffort({
     },
   });
 
-  return { publicAssessmentId, completionEventId, leadId: assessment?.lead_id ?? null };
+  return { publicAssessmentId, completionEventId, leadId };
 }
 
 export default async function handler(
@@ -2621,6 +2653,50 @@ export default async function handler(
     return;
   }
 
+  // PERSISTÊNCIA DA CONCLUSÃO -- antes da geração do relatório, de propósito.
+  //
+  // Concluir o diagnóstico e ter um parecer gerado são dois fatos diferentes.
+  // A pessoa respondeu as 40 perguntas: isso aconteceu, e é verdade
+  // independentemente de o modelo responder ou não. Enquanto esta escrita
+  // ficou depois da geração, atrás do early return de falha da IA, uma falha
+  // de provider congelava o assessment em `in_progress` para sempre --
+  // completed_at nulo, scores nulos -- mesmo com as 40 respostas gravadas.
+  //
+  // O efeito colateral era pior que a métrica errada: o Pipe não via a
+  // conclusão, e a varredura de abandono passava a considerar essa pessoa
+  // elegível a um lembrete de "seu diagnóstico ficou em aberto" -- para quem
+  // tinha acabado de terminar. Caso real observado em produção (21/08).
+  //
+  // Nada aqui depende do relatório: o e-mail continua exigindo
+  // isReportReadyStatus mais abaixo, e a varredura de recovery encontra um
+  // assessment concluído sem relatório pronto e devolve
+  // skipped_report_not_ready. Persistir cedo só torna verdadeiro o que já era
+  // verdade.
+  let supabaseCompletion: Awaited<ReturnType<typeof persistCompletedAssessmentBestEffort>> = null;
+  try {
+    const persistenceStartedAt = Date.now();
+    supabaseCompletion = await persistCompletedAssessmentBestEffort({
+      payload,
+      answers,
+      score,
+    });
+    logCgiOperation({
+      correlationId,
+      publicAssessmentId: normalizedPublicAssessmentId,
+      operation: "assessment_persistence",
+      success: Boolean(supabaseCompletion),
+      errorCode: supabaseCompletion ? undefined : "assessment_persistence_unavailable",
+      durationMs: Date.now() - persistenceStartedAt,
+    });
+  } catch (error) {
+    console.error("[CGI Supabase]", {
+      operation: "persist_completed_assessment",
+      status: 0,
+      public_assessment_id: normalizePublicAssessmentId(payload.public_assessment_id),
+      error: error instanceof Error ? error.message : String(error || ""),
+    });
+  }
+
   const requestContext = getRequestContext(req);
   const websiteEnrichment = await enrichCompanyWebsite(payload.lead?.companyWebsite);
   const aiModel = getConfiguredOpenAiModel();
@@ -2714,38 +2790,6 @@ export default async function handler(
       ai_generation_status: ai.status,
     });
     return;
-  }
-  let supabaseCompletion: Awaited<ReturnType<typeof persistCompletedAssessmentBestEffort>> = null;
-  try {
-    const persistenceStartedAt = Date.now();
-    supabaseCompletion = await persistCompletedAssessmentBestEffort({
-      payload,
-      answers,
-      score,
-    });
-    logCgiOperation({
-      correlationId,
-      publicAssessmentId: normalizedPublicAssessmentId,
-      operation: "assessment_persistence",
-      success: Boolean(supabaseCompletion),
-      errorCode: supabaseCompletion ? undefined : "assessment_persistence_unavailable",
-      durationMs: Date.now() - persistenceStartedAt,
-    });
-  } catch (error) {
-    console.error("[CGI Supabase]", {
-      operation: "persist_completed_assessment",
-      status: 0,
-      public_assessment_id: normalizePublicAssessmentId(payload.public_assessment_id),
-      error: error instanceof Error ? error.message : String(error || ""),
-    });
-    logCgiOperation({
-      correlationId,
-      publicAssessmentId: normalizedPublicAssessmentId,
-      operation: "assessment_persistence",
-      success: false,
-      errorCode: "assessment_persistence_exception",
-      durationMs: Date.now() - handlerStartedAt,
-    });
   }
 
   const responsePublicAssessmentId =

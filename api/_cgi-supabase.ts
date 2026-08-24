@@ -1834,3 +1834,35 @@ export async function updateCommunicationByDedupeKey(
   }
   return { ok: result.ok, status: result.status };
 }
+
+// --- Recuperação de vínculo lead <-> assessment ---------------------------
+// Quando a geração do relatório falha, o botão "tentar novamente" do CGI
+// reenvia a conclusão sob um public_assessment_id NOVO, criado no cliente
+// (src/pages/CGI.tsx, forceNewAttempt). Esse id nunca passou por
+// /api/cgi/start nem por /api/cgi/lead, então a linha criada por ele nasce
+// sem lead_id -- e a guarda anti-phantom do e-mail de relatório, corretamente,
+// recusa enviar para um assessment sem lead. Resultado observado em produção:
+// a pessoa vê o relatório na tela, baixa o PDF, e nunca recebe o e-mail.
+//
+// O que a retentativa preserva é o anonymous_session_id: é a mesma aba, da
+// mesma pessoa, que minutos antes identificou-se e deu consentimento. Este
+// lookup recupera esse vínculo -- e só ele, nada mais.
+//
+// Deliberadamente conservador: exige que a sessão tenha UM único lead. Se
+// houver mais de um (duas pessoas na mesma aba, o que não deveria acontecer),
+// devolve null e o comportamento atual permanece -- nenhum e-mail é enviado.
+// Falhar sem enviar é sempre preferível a enviar para a pessoa errada.
+
+export async function findLeadIdByAnonymousSession(
+  anonymousSessionId: string
+): Promise<string | null> {
+  const sessionId = String(anonymousSessionId || "").trim();
+  if (!sessionId) return null;
+  const result = await supabaseRequest<Array<{ lead_id: string | null }>>(
+    `cgi_assessments?anonymous_session_id=${eqFilter(sessionId)}&lead_id=not.is.null&select=lead_id&order=created_at.asc&limit=5`,
+    { method: "GET" }
+  );
+  if (!result.ok || !Array.isArray(result.data)) return null;
+  const distinct = [...new Set(result.data.map((row) => row.lead_id).filter(Boolean))];
+  return distinct.length === 1 ? (distinct[0] as string) : null;
+}
