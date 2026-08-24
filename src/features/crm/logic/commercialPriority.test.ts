@@ -225,7 +225,7 @@ describe("fila — filtros e ordenação", () => {
   const view = (over: Record<string, unknown> = {}) => ({
     priority: { level: "P1" as const, reason: "x." },
     contact: { kind: "never" } as ContactState,
-    crmStatus: "novo", completed: true, ...over,
+    crmStatus: "novo", completed: true, size: PORTE_MEDIO, ...over,
   });
 
   it("'A contatar' é concluído e sem contato humano", () => {
@@ -238,6 +238,26 @@ describe("fila — filtros e ordenação", () => {
     for (const s of ["reuniao_agendada", "enviar_proposta", "proposta_enviada"]) {
       expect(matchesQueueFilter("em_proposta", view({ crmStatus: s }))).toBe(true);
     }
+  });
+
+  it("'Grandes empresas' é um recorte de porte, independente da prioridade", () => {
+    const grande = deriveCompanySize("R$ 50-200 milhões");
+    const maior = deriveCompanySize("Acima de R$ 200 milhões");
+    const media = deriveCompanySize("R$ 10-50 milhões");
+
+    // Atravessa todos os níveis: uma grande em P2 continua aparecendo.
+    expect(matchesQueueFilter("grandes", view({ size: grande, priority: { level: "P2" as const, reason: "" } }))).toBe(true);
+    expect(matchesQueueFilter("grandes", view({ size: maior, priority: { level: "P4" as const, reason: "" }, crmStatus: "descartado" }))).toBe(true);
+    // E não promove ninguém: R$ 10-50 milhões não é "grande".
+    expect(matchesQueueFilter("grandes", view({ size: media }))).toBe(false);
+    expect(matchesQueueFilter("grandes", view({ size: SEM_PORTE }))).toBe(false);
+  });
+
+  it("o filtro de porte não altera nenhuma regra de prioridade", () => {
+    // A mesma empresa grande, sem contato, continua sendo classificada pelas
+    // regras normais -- o filtro é só um recorte de visualização.
+    const p = derivePriority(base({ size: deriveCompanySize("R$ 50-200 milhões"), crmStatus: "reuniao_agendada" }));
+    expect(p.level).toBe("P2");
   });
 
   it("'Todos' nunca esconde ninguém", () => {

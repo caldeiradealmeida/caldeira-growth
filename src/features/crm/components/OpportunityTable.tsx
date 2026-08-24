@@ -35,7 +35,7 @@ function scoreTone(score: number | null): string {
   return "text-destructive";
 }
 
-const FILTROS: QueueFilter[] = ["todos", "a_contatar", "follow_up", "em_proposta", "aguardando"];
+const FILTROS: QueueFilter[] = ["todos", "a_contatar", "follow_up", "em_proposta", "aguardando", "grandes"];
 
 export function OpportunityTable({ rows }: { rows: OpportunityRow[] }) {
   const navigate = useNavigate();
@@ -55,7 +55,7 @@ export function OpportunityTable({ rows }: { rows: OpportunityRow[] }) {
   );
 
   const contagens = useMemo(() => {
-    const acc: Record<QueueFilter, number> = { todos: 0, a_contatar: 0, follow_up: 0, em_proposta: 0, aguardando: 0 };
+    const acc: Record<QueueFilter, number> = { todos: 0, a_contatar: 0, follow_up: 0, em_proposta: 0, aguardando: 0, grandes: 0 };
     for (const filtroAtual of FILTROS) {
       acc[filtroAtual] = linhas.filter(({ view }) => matchesQueueFilter(filtroAtual, view)).length;
     }

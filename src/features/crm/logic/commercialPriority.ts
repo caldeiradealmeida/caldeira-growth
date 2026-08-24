@@ -290,7 +290,13 @@ export function deriveMessageChips(row: {
 // FILTROS DA FILA
 // ---------------------------------------------------------------------------
 
-export type QueueFilter = "todos" | "a_contatar" | "follow_up" | "em_proposta" | "aguardando";
+export type QueueFilter =
+  | "todos"
+  | "a_contatar"
+  | "follow_up"
+  | "em_proposta"
+  | "aguardando"
+  | "grandes";
 
 export const QUEUE_FILTER_LABELS: Record<QueueFilter, string> = {
   todos: "Todos",
@@ -298,11 +304,22 @@ export const QUEUE_FILTER_LABELS: Record<QueueFilter, string> = {
   follow_up: "Follow-up",
   em_proposta: "Em proposta",
   aguardando: "Aguardando",
+  grandes: "Grandes empresas",
 };
+
+/** "Grande" é uma faixa de faturamento, não um nível de prioridade. O filtro é
+ * um recorte independente: atravessa P1..P4 sem alterar nenhuma regra de
+ * priorização. Uma empresa de R$ 50-200 milhões que já está em processo
+ * comercial continua P2 -- e continua aparecendo aqui. */
+export const LARGE_COMPANY_MIN_TIER = 4; // R$ 50-200 milhões e acima
+
+export function isLargeCompany(size: CompanySize): boolean {
+  return size.tier >= LARGE_COMPANY_MIN_TIER;
+}
 
 export function matchesQueueFilter(
   filter: QueueFilter,
-  view: { priority: Priority; contact: ContactState; crmStatus: string; completed: boolean }
+  view: { priority: Priority; contact: ContactState; crmStatus: string; completed: boolean; size: CompanySize }
 ): boolean {
   switch (filter) {
     case "todos":
@@ -315,6 +332,8 @@ export function matchesQueueFilter(
       return IN_COMMERCIAL_PROCESS.has(view.crmStatus);
     case "aguardando":
       return view.crmStatus === "contato_pendente" || view.priority.reason.startsWith("Ação combinada venceu");
+    case "grandes":
+      return isLargeCompany(view.size);
     default:
       return true;
   }
