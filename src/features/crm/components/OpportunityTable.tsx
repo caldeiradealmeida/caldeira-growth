@@ -37,7 +37,15 @@ function scoreTone(score: number | null): string {
   return "text-destructive";
 }
 
-const FILTROS: QueueFilter[] = ["todos", "a_contatar", "follow_up", "em_proposta", "aguardando", "grandes"];
+const FILTROS: QueueFilter[] = [
+  "todos",
+  "a_contatar",
+  "follow_up",
+  "em_proposta",
+  "vencidos",
+  "recuperar",
+  "grandes",
+];
 
 export function OpportunityTable({ rows }: { rows: OpportunityRow[] }) {
   const navigate = useNavigate();
@@ -49,15 +57,33 @@ export function OpportunityTable({ rows }: { rows: OpportunityRow[] }) {
         .map((row) => ({ row, view: deriveQueueView(row) }))
         .sort((a, b) =>
           compareForQueue(
-            { priority: a.view.priority, size: a.view.size, bestScore: a.row.bestScore },
-            { priority: b.view.priority, size: b.view.size, bestScore: b.row.bestScore }
+            {
+              priority: a.view.priority,
+              size: a.view.size,
+              bestScore: a.row.bestScore,
+              progressPercent: a.view.progressPercent,
+            },
+            {
+              priority: b.view.priority,
+              size: b.view.size,
+              bestScore: b.row.bestScore,
+              progressPercent: b.view.progressPercent,
+            }
           )
         ),
     [rows]
   );
 
   const contagens = useMemo(() => {
-    const acc: Record<QueueFilter, number> = { todos: 0, a_contatar: 0, follow_up: 0, em_proposta: 0, aguardando: 0, grandes: 0 };
+    const acc: Record<QueueFilter, number> = {
+      todos: 0,
+      a_contatar: 0,
+      follow_up: 0,
+      em_proposta: 0,
+      vencidos: 0,
+      recuperar: 0,
+      grandes: 0,
+    };
     for (const filtroAtual of FILTROS) {
       acc[filtroAtual] = linhas.filter(({ view }) => matchesQueueFilter(filtroAtual, view)).length;
     }
@@ -237,8 +263,22 @@ export function OpportunityTable({ rows }: { rows: OpportunityRow[] }) {
                     <StatusBadge status={row.opportunity?.status ?? "novo"} />
                   </TableCell>
 
-                  <TableCell className="whitespace-nowrap text-muted-foreground">
-                    {formatDate(row.opportunity?.next_action_at)}
+                  <TableCell
+                    className={cn(
+                      "whitespace-nowrap",
+                      // Destaque moderado: peso e cor, sem badge e sem vermelho.
+                      // Uma dívida de agenda precisa ser vista, não gritar.
+                      view.nextAction.kind === "overdue"
+                        ? "font-medium text-amber-700"
+                        : "text-muted-foreground"
+                    )}
+                    title={
+                      view.nextAction.kind === "overdue"
+                        ? "A ação combinada com este lead já venceu."
+                        : undefined
+                    }
+                  >
+                    {view.nextAction.kind === "none" ? "—" : view.nextAction.label}
                   </TableCell>
                 </TableRow>
               );

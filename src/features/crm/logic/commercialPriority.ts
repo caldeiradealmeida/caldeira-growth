@@ -99,9 +99,30 @@ export function isContacted(state: ContactState): boolean {
 
 export type PriorityLevel = "P1" | "P2" | "P3" | "P4";
 
+/** Identificador estável da regra que decidiu o nível.
+ *
+ * É ISTO que a lógica enxerga -- filtros, ordenação e testes. A frase de
+ * justificativa existe só para o humano ler no tooltip, e pode ser reescrita a
+ * qualquer momento sem quebrar nada. Filtro que casa por texto é filtro que
+ * some em silêncio no dia em que alguém melhora a redação. */
+export type PriorityRule =
+  | "converted"
+  | "closed"
+  | "overdue_commitment"
+  | "large_account_no_next_action"
+  | "in_commercial_process"
+  | "completed_uncontacted"
+  | "completed_contacted"
+  | "large_account_recovery"
+  | "incomplete"
+  | "no_signal";
+
 export type Priority = {
   level: PriorityLevel;
-  /** Uma frase. É o contrato: nenhum nível existe sem explicação. */
+  /** A regra que decidiu. Único campo que a lógica pode ler. */
+  rule: PriorityRule;
+  /** Uma frase, para o humano. É o contrato: nenhum nível existe sem
+   * explicação. Nenhuma lógica funcional pode depender deste texto. */
   reason: string;
 };
 
@@ -146,25 +167,55 @@ function overdueDays(nextActionAt: string | null | undefined, now: number): numb
 export function derivePriority(input: PriorityInput): Priority {
   const now = input.now ?? Date.now();
   const porte = input.size.known ? `Empresa ${input.size.short}` : "Porte não informado";
+  const contaGrande = isLargeCompany(input.size);
 
   // 1. Encerrados saem da fila -- mas continuam na lista.
-  if (input.crmStatus === "convertido") return { level: "P4", reason: "Convertido — fora da fila." };
+  if (input.crmStatus === "convertido") {
+    return { level: "P4", rule: "converted", reason: "Convertido — fora da fila." };
+  }
   if (CLOSED_STATUSES.has(input.crmStatus)) {
-    return { level: "P4", reason: `${input.crmStatus === "sem_interesse" ? "Sem interesse" : "Descartado"} — fora da fila.` };
+    return {
+      level: "P4",
+      rule: "closed",
+      reason: `${input.crmStatus === "sem_interesse" ? "Sem interesse" : "Descartado"} — fora da fila.`,
+    };
   }
 
   // 2. Compromisso vencido é a coisa mais acionável que existe.
   const atrasado = overdueDays(input.nextActionAt, now);
   if (atrasado !== null) {
-    return { level: "P1", reason: `Ação combinada venceu há ${atrasado} ${atrasado === 1 ? "dia" : "dias"}.` };
+    return {
+      level: "P1",
+      rule: "overdue_commitment",
+      reason: `Ação combinada venceu há ${atrasado} ${atrasado === 1 ? "dia" : "dias"}.`,
+    };
   }
 
-  // 3. Processo comercial em andamento: já tem dono e próximo passo.
+  // 3. Conta grande já tocada e sem próximo passo marcado.
+  //
+  // Isto NÃO é "empresa grande = urgente". É uma conta grande onde alguém já
+  // gastou uma conversa e ninguém marcou o que vem depois -- exatamente onde
+  // se perde negócio grande em silêncio. Conta grande que ninguém contatou
+  // ainda não entra aqui; conta grande com próximo passo marcado também não,
+  // porque essa já tem plano.
+  if (contaGrande && isContacted(input.contact) && !input.nextActionAt) {
+    return {
+      level: "P1",
+      rule: "large_account_no_next_action",
+      reason: `Conta de R$ ${input.size.short} já contatada, mas sem próximo passo definido.`,
+    };
+  }
+
+  // 4. Processo comercial em andamento: já tem dono e próximo passo.
   if (IN_COMMERCIAL_PROCESS.has(input.crmStatus)) {
-    return { level: "P2", reason: `${porte}, em processo comercial (${input.crmStatus.replace(/_/g, " ")}).` };
+    return {
+      level: "P2",
+      rule: "in_commercial_process",
+      reason: `${porte}, em processo comercial (${input.crmStatus.replace(/_/g, " ")}).`,
+    };
   }
 
-  // 4. O coração da fila: concluiu o diagnóstico e ninguém falou com a pessoa.
+  // 5. O coração da fila: concluiu o diagnóstico e ninguém falou com a pessoa.
   if (input.completed && !isContacted(input.contact)) {
     const reforcos: string[] = [];
     if (input.reportOpened) reforcos.push("abriu o relatório");
@@ -174,29 +225,85 @@ export function derivePriority(input: PriorityInput): Priority {
 
     // Porte relevante, ou sinal comercial forte, sobe para P1.
     if (input.size.tier >= 2 || reforcos.length > 0) {
-      return { level: "P1", reason: `${porte}, CGI concluído, nenhum contato humano${sufixo}.` };
+      return {
+        level: "P1",
+        rule: "completed_uncontacted",
+        reason: `${porte}, CGI concluído, nenhum contato humano${sufixo}.`,
+      };
     }
-    return { level: "P2", reason: `${porte}, CGI concluído, nenhum contato humano.` };
+    return {
+      level: "P2",
+      rule: "completed_uncontacted",
+      reason: `${porte}, CGI concluído, nenhum contato humano.`,
+    };
   }
 
-  // 5. Concluiu e já foi contatado: follow-up.
+  // 6. Concluiu e já foi contatado: follow-up.
   if (input.completed && isContacted(input.contact)) {
     if (input.contact.kind === "contacted") {
-      return { level: "P2", reason: `${porte}, concluído e contatado há ${input.contact.daysAgo} ${input.contact.daysAgo === 1 ? "dia" : "dias"}.` };
+      return {
+        level: "P2",
+        rule: "completed_contacted",
+        reason: `${porte}, concluído e contatado há ${input.contact.daysAgo} ${input.contact.daysAgo === 1 ? "dia" : "dias"}.`,
+      };
     }
-    return { level: "P2", reason: `${porte}, concluído e já contatado (sem data registrada).` };
+    return {
+      level: "P2",
+      rule: "completed_contacted",
+      reason: `${porte}, concluído e já contatado (sem data registrada).`,
+    };
   }
 
-  // 6. Não concluiu. Porte relevante ainda merece um olhar.
-  if (input.size.tier >= 3) {
-    return { level: "P3", reason: `${porte}, CGI ${input.started ? "abandonado no meio" : "não iniciado"}.` };
+  // 7. Não concluiu, nunca foi contatada, e é conta grande.
+  //
+  // Porte não vira urgência: vira P2, não P1. A diferença que importa é que
+  // uma conta de R$ 10M+ que abandonou o diagnóstico merece uma tentativa
+  // humana de recuperação, e uma de ≤ R$ 1M no mesmo estado não merece --
+  // e até aqui as duas caíam no mesmo P3 indistinguível.
+  if (contaGrande && !isContacted(input.contact)) {
+    return {
+      level: "P2",
+      rule: "large_account_recovery",
+      reason: `Conta de R$ ${input.size.short}, CGI ${input.started ? "abandonado no meio" : "não iniciado"} e nenhum contato humano.`,
+    };
   }
+
+  // 8. Resto do abandono.
   if (input.started || input.size.known) {
-    return { level: "P3", reason: `${porte}, CGI ${input.started ? "abandonado no meio" : "não iniciado"}.` };
+    return {
+      level: "P3",
+      rule: "incomplete",
+      reason: `${porte}, CGI ${input.started ? "abandonado no meio" : "não iniciado"}.`,
+    };
   }
 
-  // 7. Resto.
-  return { level: "P4", reason: "Sem porte informado e sem engajamento no diagnóstico." };
+  // 9. Sem nenhum sinal.
+  return { level: "P4", rule: "no_signal", reason: "Sem porte informado e sem engajamento no diagnóstico." };
+}
+
+// ---------------------------------------------------------------------------
+// PRÓXIMA AÇÃO
+// ---------------------------------------------------------------------------
+
+/** Uma data no passado na coluna "Próxima ação" não é uma data: é uma dívida.
+ * Renderizar as duas do mesmo jeito faz o operador ler a linha e não ver nada. */
+export type NextActionView =
+  | { kind: "none" }
+  | { kind: "scheduled"; label: string }
+  | { kind: "overdue"; label: string; days: number };
+
+export function describeNextAction(
+  nextActionAt: string | null | undefined,
+  now: number = Date.now()
+): NextActionView {
+  if (!nextActionAt) return { kind: "none" };
+  const ms = new Date(nextActionAt).getTime();
+  if (!Number.isFinite(ms)) return { kind: "none" };
+  const data = new Date(ms).toLocaleDateString("pt-BR");
+  const atrasado = overdueDays(nextActionAt, now);
+  if (atrasado === null) return { kind: "scheduled", label: data };
+  const sufixo = atrasado === 0 ? "vencida hoje" : `vencida há ${atrasado}d`;
+  return { kind: "overdue", label: `${data} · ${sufixo}`, days: atrasado };
 }
 
 // ---------------------------------------------------------------------------
@@ -368,7 +475,8 @@ export type QueueFilter =
   | "a_contatar"
   | "follow_up"
   | "em_proposta"
-  | "aguardando"
+  | "vencidos"
+  | "recuperar"
   | "grandes";
 
 export const QUEUE_FILTER_LABELS: Record<QueueFilter, string> = {
@@ -376,7 +484,10 @@ export const QUEUE_FILTER_LABELS: Record<QueueFilter, string> = {
   a_contatar: "A contatar",
   follow_up: "Follow-up",
   em_proposta: "Em proposta",
-  aguardando: "Aguardando",
+  // "Aguardando" dizia a coisa errada: sugeria que estávamos esperando o lead,
+  // quando o que o filtro seleciona é compromisso NOSSO que já venceu.
+  vencidos: "Vencidos",
+  recuperar: "Recuperar",
   grandes: "Grandes empresas",
 };
 
@@ -384,7 +495,9 @@ export const QUEUE_FILTER_LABELS: Record<QueueFilter, string> = {
  * um recorte independente: atravessa P1..P4 sem alterar nenhuma regra de
  * priorização. Uma empresa de R$ 50-200 milhões que já está em processo
  * comercial continua P2 -- e continua aparecendo aqui. */
-export const LARGE_COMPANY_MIN_TIER = 4; // R$ 50-200 milhões e acima
+// Recorte comercial da Caldeira Growth, não classificação econômica oficial:
+// para este funil, "grande" começa em R$ 10 milhões de faturamento.
+export const LARGE_COMPANY_MIN_TIER = 3; // R$ 10-50M, R$ 50-200M e acima
 
 export function isLargeCompany(size: CompanySize): boolean {
   return size.tier >= LARGE_COMPANY_MIN_TIER;
@@ -403,8 +516,15 @@ export function matchesQueueFilter(
       return isContacted(view.contact) && !IN_COMMERCIAL_PROCESS.has(view.crmStatus) && !CLOSED_STATUSES.has(view.crmStatus);
     case "em_proposta":
       return IN_COMMERCIAL_PROCESS.has(view.crmStatus);
-    case "aguardando":
-      return view.crmStatus === "contato_pendente" || view.priority.reason.startsWith("Ação combinada venceu");
+    case "vencidos":
+      // Casa pela REGRA, nunca pelo texto. Reescrever a justificativa não pode
+      // esvaziar um filtro em silêncio.
+      return view.priority.rule === "overdue_commitment";
+    case "recuperar":
+      // Quem começou o diagnóstico e não terminou, e ainda faz sentido
+      // trabalhar. Encerrados (convertido, sem interesse, descartado) ficam de
+      // fora -- não há o que recuperar.
+      return !view.completed && !CLOSED_STATUSES.has(view.crmStatus);
     case "grandes":
       return isLargeCompany(view.size);
     default:
@@ -414,16 +534,26 @@ export function matchesQueueFilter(
 
 const PRIORITY_RANK: Record<PriorityLevel, number> = { P1: 0, P2: 1, P3: 2, P4: 3 };
 
-/** Ordenação padrão da fila: prioridade, depois porte, depois score. */
-export function compareForQueue(
-  a: { priority: Priority; size: CompanySize; bestScore: number | null },
-  b: { priority: Priority; size: CompanySize; bestScore: number | null }
-): number {
+type QueueSortable = {
+  priority: Priority;
+  size: CompanySize;
+  bestScore: number | null;
+  /** Só existe para quem não concluiu. Ver comentário abaixo. */
+  progressPercent?: number | null;
+};
+
+/** Ordenação padrão da fila: prioridade, depois porte, depois score --
+ * e, para quem não concluiu e portanto não tem score, o progresso. */
+export function compareForQueue(a: QueueSortable, b: QueueSortable): number {
   const byPriority = PRIORITY_RANK[a.priority.level] - PRIORITY_RANK[b.priority.level];
   if (byPriority !== 0) return byPriority;
   const bySize = b.size.tier - a.size.tier;
   if (bySize !== 0) return bySize;
-  return (b.bestScore ?? -1) - (a.bestScore ?? -1);
+  const byScore = (b.bestScore ?? -1) - (a.bestScore ?? -1);
+  if (byScore !== 0) return byScore;
+  // Dentro do bloco de abandono ninguém tem score: todos empatam em -1. Quem
+  // chegou mais longe no diagnóstico é quem mais vale a pena recuperar.
+  return (b.progressPercent ?? -1) - (a.progressPercent ?? -1);
 }
 
 /** Monta tudo o que a linha da fila precisa, a partir de uma OpportunityRow. */
@@ -461,5 +591,19 @@ export function deriveQueueView(row: OpportunityRow, now: number = Date.now()) {
     nextActionAt: row.opportunity?.next_action_at,
     now,
   });
-  return { size, contact, crmStatus, completed, started, chips, reportDelivered, reportOpened, reportEvidence, priority };
+  const nextAction = describeNextAction(row.opportunity?.next_action_at, now);
+  return {
+    size,
+    contact,
+    crmStatus,
+    completed,
+    started,
+    chips,
+    reportDelivered,
+    reportOpened,
+    reportEvidence,
+    priority,
+    nextAction,
+    progressPercent: row.latestAssessment?.progress_percent ?? null,
+  };
 }
