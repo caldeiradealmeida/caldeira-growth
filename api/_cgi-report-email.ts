@@ -10,6 +10,8 @@ import { buildCgiReportReadyEmail, extractExecutiveSummary } from "./_cgi-email-
 import { dispatchCgiParticipantEmail } from "./_cgi-email-dispatch.js";
 import { buildReportAccessUrl, issueReportAccessToken } from "./_cgi-report-token.js";
 import { recordCommunicationSafely } from "./_cgi-communications.js";
+import { ensureContactToken } from "./_cgi-contact-token.js";
+import { buildCgiInsightsOptInUrl } from "./_cgi-email-content.js";
 
 // P0 -- out-of-band delivery of the report-ready email.
 //
@@ -176,11 +178,20 @@ export async function deliverReportEmailForAssessment(input: {
   const token = await issueReportAccessToken(publicAssessmentId);
   if (!token) return result("error_token");
 
+  // Reentrada de opt-in: so faz sentido para quem ainda NAO consentiu. Quem ja
+  // consentiu nao precisa ver convite nenhum. Se o token de contato nao estiver
+  // configurado, a linha simplesmente nao existe -- o e-mail sai igual.
+  const contactToken =
+    lead.consent_marketing === true || !state.lead_id
+      ? null
+      : await ensureContactToken(state.lead_id, lead.contact_token_hash);
+
   const content = buildCgiReportReadyEmail({
     name: String(lead.name || ""),
     company: String(lead.company || ""),
     executiveSummary: summary,
     reportAccessUrl: buildReportAccessUrl(token.token),
+    insightsOptInUrl: contactToken ? buildCgiInsightsOptInUrl(contactToken) : null,
   });
 
   const dispatchResult = await dispatchCgiParticipantEmail({
@@ -213,6 +224,12 @@ export async function deliverReportEmailForAssessment(input: {
       subject: content.subject,
       provider: "apps_script_mailapp",
       actor: input.reason === "completion" ? "system:completion" : `system:${input.reason}`,
+      // F-A -- estado REAL do consentimento no momento do evento, lido do lead.
+      // null quando a pessoa nunca respondeu, que e diferente de "recusou".
+      // Nao altera elegibilidade: a entrega do relatorio e transacional e nao
+      // depende de consentimento. Isto e auditoria.
+      consentMarketing:
+        typeof lead.consent_marketing === "boolean" ? lead.consent_marketing : null,
       metadata: { reason: input.reason },
       now,
       ...(extra.errorCode ? { errorCode: extra.errorCode } : {}),

@@ -59,3 +59,32 @@ export async function revokeMarketingConsentByToken(token: string): Promise<Cons
   if (!token || token.length < 16) return "invalid_link";
   return callRpc("cgi_marketing_optout", { p_token: token });
 }
+
+/** Opt-in dado na tela de resultado.
+ *
+ * Diferente do opt-in por e-mail, aqui não há token: a prova é o par
+ * (sessão anônima, assessment) que o CGI já usa para escrever tudo o mais
+ * desta sessão, verificado no servidor. `consent_marketing: true` vai
+ * explícito no corpo -- o servidor recusa qualquer outro valor, para que
+ * nenhum POST acidental possa ser lido como consentimento. */
+export async function grantMarketingConsentFromReport(input: {
+  anonymousSessionId: string;
+  publicAssessmentId: string;
+}): Promise<ConsentCallResult> {
+  if (!input.anonymousSessionId || !input.publicAssessmentId) return "invalid_link";
+  try {
+    const response = await fetch("/api/cgi/lead", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        event_name: "cgi_marketing_consent_granted",
+        anonymous_session_id: input.anonymousSessionId,
+        public_assessment_id: input.publicAssessmentId,
+        consent_marketing: true,
+      }),
+    });
+    return response.ok ? "ok" : "unavailable";
+  } catch {
+    return "unavailable";
+  }
+}

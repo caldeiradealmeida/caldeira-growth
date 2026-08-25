@@ -293,6 +293,11 @@ export async function deliverAbandonmentEmailForAssessment(input: {
       subject: base.subject,
       provider: "apps_script_mailapp",
       actor: input.enforceMaxAge ? "system:cron" : "system:backfill",
+      // F-A -- estado REAL do consentimento no momento do evento. O e-mail de
+      // abandono e operacional e deliberadamente NAO consulta consent_marketing
+      // para decidir se envia; registrar o estado aqui e auditoria, nao regra.
+      consentMarketing:
+        typeof lead.consent_marketing === "boolean" ? lead.consent_marketing : null,
       metadata: {
         inactive_hours: base.inactiveHours,
         enforce_max_age: input.enforceMaxAge,

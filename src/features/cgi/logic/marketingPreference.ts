@@ -12,10 +12,10 @@ export const MARKETING_PREFERENCE_COPY: Record<
   { titulo: string; corpo: string; acao: string; feito: string }
 > = {
   optout: {
-    titulo: "Cancelar recebimento",
+    titulo: "Cancelar recebimento de insights",
     corpo:
       "Você não receberá mais conteúdos e insights da Caldeira Growth.",
-    acao: "Cancelar recebimento",
+    acao: "Cancelar recebimento de insights",
     feito:
       "Pronto. Você não receberá mais conteúdos e insights da Caldeira Growth. Comunicações sobre diagnósticos que você mesmo solicitar continuam funcionando normalmente.",
   },

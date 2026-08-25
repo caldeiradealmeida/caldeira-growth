@@ -20,7 +20,7 @@ describe("descadastro — uma frase, uma ação", () => {
     expect(MARKETING_PREFERENCE_COPY.optout.corpo).toBe(
       "Você não receberá mais conteúdos e insights da Caldeira Growth."
     );
-    expect(MARKETING_PREFERENCE_COPY.optout.acao).toBe("Cancelar recebimento");
+    expect(MARKETING_PREFERENCE_COPY.optout.acao).toBe("Cancelar recebimento de insights");
   });
 
   it("tem um único botão: não é Preference Center", () => {

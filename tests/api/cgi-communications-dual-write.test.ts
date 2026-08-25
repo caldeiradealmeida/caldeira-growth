@@ -23,6 +23,10 @@ const supabaseMocks = vi.hoisted(() => ({
   // ledger
   supabaseInsert: vi.fn(),
   logSupabaseFailure: vi.fn(),
+  // consentimento / token de contato
+  setContactTokenHash: vi.fn(),
+  recordMarketingConsentProvenance: vi.fn(),
+  grantMarketingConsentFromReport: vi.fn(),
 }));
 vi.mock("../../api/_cgi-supabase.js", () => supabaseMocks);
 
@@ -113,6 +117,7 @@ describe("Communication Engine -- dual-write nos envios existentes", () => {
     supabaseMocks.getAbandonmentState.mockResolvedValue(abandonmentState());
     supabaseMocks.markAbandonmentEmailSent.mockResolvedValue(true);
     supabaseMocks.upsertReportAccessToken.mockResolvedValue(true);
+    supabaseMocks.setContactTokenHash.mockResolvedValue(true);
     supabaseMocks.supabaseInsert.mockResolvedValue({ ok: true, status: 201 });
 
     vi.stubGlobal(
@@ -217,5 +222,95 @@ describe("Communication Engine -- dual-write nos envios existentes", () => {
     expect(report.outcome).toBe("sent");
     expect(abandonment.outcome).toBe("sent");
     expect(supabaseMocks.supabaseInsert).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// F-A -- snapshot de consentimento no ledger
+// ---------------------------------------------------------------------------
+//
+// A coluna consent_marketing_snapshot existia e nunca era preenchida: nenhum
+// dos dois call sites passava o valor. Sem ela não há prova, por mensagem, de
+// qual era o consentimento no instante do envio -- que é exatamente a prova
+// que importa quando um envio depende de consentimento.
+//
+// Nada aqui muda elegibilidade. Os dois e-mails continuam saindo pelas mesmas
+// regras de antes; o que muda é que agora fica registrado.
+
+describe("F-A -- o ledger registra o consentimento real do momento do envio", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.CGI_COMMUNICATIONS_LEDGER_ENABLED = "true";
+    supabaseMocks.getReportEmailState.mockResolvedValue(reportState());
+    supabaseMocks.getAssessmentEmailState.mockResolvedValue(reportState());
+    supabaseMocks.getReadyCgiReport.mockResolvedValue({
+      publicAssessmentId: PID,
+      reportStatus: "report_ready",
+      aiReport: JSON.stringify({ executive_summary: "Uma leitura inicial." }),
+    });
+    supabaseMocks.getCrmOpportunityByLeadId.mockResolvedValue({ ok: true, opportunity: null });
+    supabaseMocks.markReportEmailSent.mockResolvedValue(true);
+    supabaseMocks.getAbandonmentState.mockResolvedValue(abandonmentState());
+    supabaseMocks.markAbandonmentEmailSent.mockResolvedValue(true);
+    supabaseMocks.upsertReportAccessToken.mockResolvedValue(true);
+    supabaseMocks.setContactTokenHash.mockResolvedValue(true);
+    supabaseMocks.supabaseInsert.mockResolvedValue({ ok: true, status: 201 });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify({ ok: true, sent: true }), { status: 200 }))
+    );
+  });
+
+  it("report_delivery: lead com consentimento → snapshot true", async () => {
+    supabaseMocks.getLeadById.mockResolvedValue(lead({ consent_marketing: true }));
+    await deliverReport();
+    expect(ledgerBodies()[0].consent_marketing_snapshot).toBe(true);
+  });
+
+  it("report_delivery: lead sem consentimento → snapshot false", async () => {
+    supabaseMocks.getLeadById.mockResolvedValue(lead({ consent_marketing: false }));
+    await deliverReport();
+    expect(ledgerBodies()[0].consent_marketing_snapshot).toBe(false);
+  });
+
+  it("report_delivery: quem nunca respondeu fica null, não false", async () => {
+    // "nunca respondeu" e "recusou" são fatos diferentes e não podem colapsar
+    // no mesmo valor.
+    supabaseMocks.getLeadById.mockResolvedValue(lead({ consent_marketing: null }));
+    await deliverReport();
+    expect(ledgerBodies()[0].consent_marketing_snapshot).toBeNull();
+  });
+
+  it("abandonment: snapshot true", async () => {
+    supabaseMocks.getLeadById.mockResolvedValue(lead({ consent_marketing: true }));
+    await deliverAbandonment();
+    expect(ledgerBodies()[0].consent_marketing_snapshot).toBe(true);
+  });
+
+  it("abandonment: snapshot false", async () => {
+    supabaseMocks.getLeadById.mockResolvedValue(lead({ consent_marketing: false }));
+    await deliverAbandonment();
+    expect(ledgerBodies()[0].consent_marketing_snapshot).toBe(false);
+  });
+
+  it("o snapshot não muda elegibilidade: os dois e-mails saem igual em qualquer estado", async () => {
+    for (const consent of [true, false, null]) {
+      vi.clearAllMocks();
+      supabaseMocks.getReportEmailState.mockResolvedValue(reportState());
+      supabaseMocks.getReadyCgiReport.mockResolvedValue({
+        publicAssessmentId: PID, reportStatus: "report_ready",
+        aiReport: JSON.stringify({ executive_summary: "x" }),
+      });
+      supabaseMocks.getLeadById.mockResolvedValue(lead({ consent_marketing: consent }));
+      supabaseMocks.getCrmOpportunityByLeadId.mockResolvedValue({ ok: true, opportunity: null });
+      supabaseMocks.markReportEmailSent.mockResolvedValue(true);
+      supabaseMocks.upsertReportAccessToken.mockResolvedValue(true);
+      supabaseMocks.setContactTokenHash.mockResolvedValue(true);
+      supabaseMocks.supabaseInsert.mockResolvedValue({ ok: true, status: 201 });
+      vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ ok: true, sent: true }), { status: 200 })));
+
+      const resultado = await deliverReport();
+      expect((resultado as { outcome: string }).outcome).toBe("sent");
+    }
   });
 });

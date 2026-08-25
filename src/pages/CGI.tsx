@@ -1362,6 +1362,9 @@ export default function CGI() {
               retryReport={retryReport}
               regenerateSavedAssessment={regenerateSavedAssessment}
               onCtaClick={trackCtaClick}
+              anonymousSessionId={anonymousSessionId}
+              publicAssessmentId={publicAssessmentId}
+              marketingConsentGranted={consent.marketing}
             />
           )}
         </div>

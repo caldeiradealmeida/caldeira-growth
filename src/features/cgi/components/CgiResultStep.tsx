@@ -20,6 +20,7 @@ import {
 } from "../services/reportBlocks";
 import { getScoreTone } from "../utils/form";
 import { CgiResultActions } from "./CgiResultActions";
+import { CgiInsightsOptIn } from "./CgiInsightsOptIn";
 
 type CgiResultStepProps = {
   t: CgiUiText;
@@ -39,6 +40,9 @@ type CgiResultStepProps = {
   retryReport: () => void;
   regenerateSavedAssessment: () => void;
   onCtaClick: () => void;
+  anonymousSessionId: string;
+  publicAssessmentId: string;
+  marketingConsentGranted: boolean;
 };
 
 export function CgiResultStep({
@@ -58,6 +62,9 @@ export function CgiResultStep({
   downloadPdf,
   retryReport,
   regenerateSavedAssessment,
+  anonymousSessionId,
+  publicAssessmentId,
+  marketingConsentGranted,
   onCtaClick,
 }: CgiResultStepProps) {
   return (
@@ -382,6 +389,12 @@ export function CgiResultStep({
               </CardContent>
             </Card>
           )}
+
+          <CgiInsightsOptIn
+            anonymousSessionId={anonymousSessionId}
+            publicAssessmentId={publicAssessmentId}
+            alreadyConsented={marketingConsentGranted}
+          />
         </div>
       </div>
     </div>

@@ -95,11 +95,29 @@ export function buildCgiReportReadyEmail(input: {
   company: string;
   executiveSummary: string;
   reportAccessUrl: string;
+  /** Reentrada de opt-in. Omitido quando a pessoa ja consentiu, ou quando o
+   * token de contato nao esta configurado -- nos dois casos a linha
+   * simplesmente nao existe. */
+  insightsOptInUrl?: string | null;
 }): CgiEmailContent {
   const name = String(input.name || "").trim();
   const company = String(input.company || "").trim();
   const summary = String(input.executiveSummary || "").trim();
   const url = input.reportAccessUrl;
+  const optInUrl = String(input.insightsOptInUrl || "").trim();
+
+  // Uma linha, no rodape, depois da assinatura. O e-mail continua sendo a
+  // entrega de um relatorio pedido; o convite e um pos-escrito, nao a mensagem.
+  const optInPlain = optInUrl
+    ? [
+        "",
+        "Se quiser continuar recebendo leituras relacionadas aos pontos identificados no seu CGI, você pode ativar isso aqui:",
+        optInUrl,
+      ].join("\n")
+    : "";
+  const optInHtml = optInUrl
+    ? `<p style="margin:24px 0 0 0;font-size:13px;color:#666666;">Se quiser continuar recebendo leituras relacionadas aos pontos identificados no seu CGI, <a href="${optInUrl}" style="color:#666666;">quero receber insights personalizados</a>.</p>`
+    : "";
 
   const subject = `Seu relatório CGI${company ? ` — ${company}` : ""}`;
 
@@ -120,7 +138,7 @@ export function buildCgiReportReadyEmail(input: {
     "O CGI traduz para um diagnóstico prático princípios que desenvolvi em Cresça ou Desapareça e na minha atuação com empresas e lideranças. O CGI foi desenhado para levantar boas hipóteses — não para substituir contexto, julgamento ou conhecimento profundo do negócio.",
     "",
     SIGNATURE_PLAIN,
-  ].join("\n");
+  ].join("\n") + optInPlain;
 
   const htmlBody = htmlShell(`
     <p style="margin:0 0 20px 0;">Olá, ${escapeHtml(name)}.</p>
@@ -131,6 +149,7 @@ export function buildCgiReportReadyEmail(input: {
     ${ctaButtonHtml("Ler meu relatório CGI", url)}
     <p style="margin:20px 0;font-size:14px;color:#555555;">O CGI traduz para um diagnóstico prático princípios que desenvolvi em Cresça ou Desapareça e na minha atuação com empresas e lideranças. O CGI foi desenhado para levantar boas hipóteses — não para substituir contexto, julgamento ou conhecimento profundo do negócio.</p>
     <p style="margin:28px 0 0 0;font-size:15px;">${SIGNATURE_HTML}</p>
+    ${optInHtml}
   `);
 
   return { subject, plainText, htmlBody };

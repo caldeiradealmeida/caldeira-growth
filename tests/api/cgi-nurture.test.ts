@@ -4,6 +4,8 @@ import {
   NURTURE_FLAG_BY_TYPE,
   decideNurture,
   isNurtureTypeEnabled,
+  buildSuppressionRecord,
+  shouldRecordSuppression,
   type NurtureCandidate,
 } from "../../api/_cgi-nurture.js";
 
@@ -238,5 +240,70 @@ describe("nenhum caminho devolve 'send' por omissão", () => {
     expect(decidir("report_followup_d2", { reportEmailSentAtIso: "nao-e-data" })).toMatchObject({
       reason: "report_not_delivered",
     });
+  });
+});
+
+describe("supressões — medir sem poluir o ledger", () => {
+  const suprimir = (tipo: "report_followup_d2" | "howto_d7", over = {}, env = LIGADO) =>
+    decideNurture(tipo, candidato(over), { now: AGORA, env });
+
+  it("motivo que informa sobre a pessoa vira linha", () => {
+    const d = suprimir("howto_d7", { reportEmailSentAtIso: "2026-08-17T13:00:00Z", consentMarketing: false });
+    const linha = buildSuppressionRecord(d);
+    expect(linha).toMatchObject({
+      type: "howto_d7", status: "suppressed", reason: "no_marketing_consent",
+      dedupeKey: "PID1:howto_d7:suppressed:no_marketing_consent",
+    });
+  });
+
+  it("flag desligada NÃO vira linha: é fato sobre o sistema, não sobre a pessoa", () => {
+    expect(buildSuppressionRecord(suprimir("howto_d7", {}, {}))).toBeNull();
+    expect(shouldRecordSuppression("flag_disabled")).toBe(false);
+  });
+
+  it("fora da janela NÃO vira linha: é transitório e viraria uma linha por dia", () => {
+    const d = suprimir("report_followup_d2", { reportEmailSentAtIso: "2026-07-01T13:00:00Z" });
+    expect(buildSuppressionRecord(d)).toBeNull();
+    expect(shouldRecordSuppression("outside_window")).toBe(false);
+  });
+
+  it("já registrado NÃO vira linha: a linha que interessa já existe", () => {
+    const d = suprimir("report_followup_d2", { alreadyRecordedTypes: ["report_followup_d2"] });
+    expect(buildSuppressionRecord(d)).toBeNull();
+  });
+
+  it("uma decisão de envio nunca vira linha de supressão", () => {
+    expect(buildSuppressionRecord(suprimir("report_followup_d2"))).toBeNull();
+  });
+
+  it("a chave usa namespace próprio, para não ocupar o slot do envio real", () => {
+    // Se a supressão usasse a mesma chave, ela consumiria o único slot daquele
+    // tipo e o envio real seria recusado como duplicata mais tarde.
+    const envio = suprimir("report_followup_d2");
+    const chaveDeEnvio = envio.decision === "send" ? envio.dedupeKey : "";
+    const supressao = buildSuppressionRecord(
+      suprimir("report_followup_d2", { reportOpenedAtIso: "2026-08-23T10:00:00Z" })
+    );
+    expect(chaveDeEnvio).toBe("PID1:report_followup_d2");
+    expect(supressao?.dedupeKey).toBe("PID1:report_followup_d2:suppressed:report_already_opened");
+    expect(supressao?.dedupeKey).not.toBe(chaveDeEnvio);
+  });
+
+  it("um motivo, uma chave: a mesma supressão duas vezes é a mesma linha", () => {
+    const a = buildSuppressionRecord(suprimir("report_followup_d2", { crmStatus: "contato_realizado" }));
+    const b = buildSuppressionRecord(suprimir("report_followup_d2", { crmStatus: "reuniao_agendada" }));
+    expect(a?.dedupeKey).toBe(b?.dedupeKey);
+    expect(a?.dedupeKey).toBe("PID1:report_followup_d2:suppressed:human_contact");
+  });
+
+  it("motivos distintos são linhas distintas — o teto é o número de motivos", () => {
+    const chaves = new Set(
+      [
+        suprimir("report_followup_d2", { crmStatus: "contato_realizado" }),
+        suprimir("report_followup_d2", { reportOpenedAtIso: "2026-08-23T10:00:00Z" }),
+        suprimir("report_followup_d2", { unsubscribedAtIso: "2026-08-23T10:00:00Z" }),
+      ].map((d) => buildSuppressionRecord(d)?.dedupeKey)
+    );
+    expect(chaves.size).toBe(3);
   });
 });

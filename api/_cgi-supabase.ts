@@ -990,11 +990,16 @@ export type CgiLeadRow = {
   growth_goal: string | null;
   investment_intent: string | null;
   comments: string | null;
+  /** Estado atual do opt-in de marketing. Lido -- nunca inferido -- para virar
+   * consent_marketing_snapshot no ledger. null significa "nunca respondeu",
+   * que e diferente de "recusou". */
+  consent_marketing: boolean | null;
+  contact_token_hash: string | null;
 };
 
 export async function getLeadById(leadId: string): Promise<CgiLeadRow | null> {
   const result = await supabaseRequest<CgiLeadRow[]>(
-    `cgi_leads?id=${eqFilter(leadId)}&select=id,name,email,phone,company,company_website,role,sector,commercial_relationship_model,employee_count,annual_revenue_range,current_challenge,growth_goal,investment_intent,comments&limit=1`,
+    `cgi_leads?id=${eqFilter(leadId)}&select=id,name,email,phone,company,company_website,role,sector,commercial_relationship_model,employee_count,annual_revenue_range,current_challenge,growth_goal,investment_intent,comments,consent_marketing,contact_token_hash&limit=1`,
     { method: "GET" }
   );
   if (!result.ok) return null;
@@ -1107,10 +1112,28 @@ export async function persistLeadForAssessment(input: {
     investment_intent: input.lead.investment_intent,
     comments: input.lead.comments,
     consent_privacy: input.consentPrivacy,
-    consent_marketing: input.consentMarketing,
     privacy_policy_version: input.privacyPolicyVersion,
+    // Legado: consent_timestamp e reescrito a cada gravacao do lead e NAO
+    // representa a data do consentimento de marketing. Mantido como estava
+    // para nao mudar dado historico; quem responde "quando consentiu" e
+    // consent_marketing_at.
     consent_timestamp: new Date().toISOString(),
   };
+
+  // F-D -- consentimento nao e last-write-wins.
+  //
+  // O CGI grava o lead tres vezes (identificacao, contexto, telefone) e envia o
+  // estado do consentimento em todas. Uma sessao retomada nao reidrata esse
+  // estado: ela nasce em false. Se essa gravacao mandasse false, um opt-in
+  // dado antes seria apagado sem que ninguem tivesse pedido.
+  //
+  // A regra, entao: `true` nasce de acao explicita; `false` so nasce de opt-out
+  // explicito (a RPC de descadastro); ausencia de valor nao muda nada. Por isso
+  // este upsert so escreve a coluna quando o valor recebido e true.
+  const marketingOptIn = input.consentMarketing === true;
+  if (marketingOptIn) {
+    (leadBody as Record<string, unknown>).consent_marketing = true;
+  }
 
   let leadId = assessment.lead_id || null;
   if (leadId) {
@@ -1146,6 +1169,16 @@ export async function persistLeadForAssessment(input: {
     }
   }
 
+  // F-B -- proveniencia do consentimento dado no formulario inicial.
+  //
+  // Escrita separada e FILTRADA em consent_marketing_at=is.null, para que so
+  // aconteca na primeira vez. O filtro e avaliado no servidor, entao duas
+  // gravacoes concorrentes da mesma sessao nao reescrevem a data -- e nao
+  // precisamos de um read-then-write com corrida no meio.
+  if (leadId && marketingOptIn) {
+    await recordMarketingConsentProvenance(leadId, "cgi_initial_form");
+  }
+
   // Attach the lead to the assessment -- and nothing else. This step used to
   // unconditionally rewrite status to "lead_captured" and progress_percent to
   // 0, which corrupted any assessment whose lead step arrived late: a
@@ -1164,6 +1197,95 @@ export async function persistLeadForAssessment(input: {
   }
 
   return { leadId, assessmentId: assessment.id };
+}
+
+/** Carimba QUANDO e DE ONDE veio o consentimento de marketing, uma unica vez.
+ *
+ * "Primeira vez vence": o filtro consent_marketing_at=is.null garante que uma
+ * gravacao posterior nunca reescreva a data original. Nao devolve erro para o
+ * chamador -- proveniencia e auditoria, e falhar aqui nao pode derrubar a
+ * captura do lead. */
+export async function recordMarketingConsentProvenance(
+  leadId: string,
+  source: "cgi_initial_form" | "cgi_report" | "report_email"
+): Promise<boolean> {
+  if (!leadId) return false;
+  const result = await supabaseRequest(
+    `cgi_leads?id=${eqFilter(leadId)}&consent_marketing_at=is.null`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({
+        consent_marketing_at: new Date().toISOString(),
+        consent_marketing_source: source,
+      }),
+      prefer: "return=minimal",
+    }
+  );
+  if (!result.ok) {
+    logSupabaseFailure("record_consent_provenance", {
+      status: result.status,
+      error: result.error,
+      leadId,
+    });
+  }
+  return result.ok;
+}
+
+/** Concede opt-in de marketing a partir da tela de resultado.
+ *
+ * A prova de identidade aqui NAO e um token: e o par
+ * (anonymous_session_id, public_assessment_id) que o proprio CGI ja usa para
+ * escrever tudo o mais desta sessao. Um public_assessment_id sozinho nao basta
+ * -- e por isso que a busca exige os dois. */
+export async function grantMarketingConsentFromReport(input: {
+  publicAssessmentId: string;
+  anonymousSessionId: string;
+}): Promise<{ ok: boolean; leadId: string | null }> {
+  const found = await supabaseRequest<Array<{ lead_id: string | null }>>(
+    `cgi_assessments?public_assessment_id=${eqFilter(input.publicAssessmentId)}` +
+      `&anonymous_session_id=${eqFilter(input.anonymousSessionId)}&select=lead_id&limit=1`,
+    { method: "GET" }
+  );
+  if (!found.ok) return { ok: false, leadId: null };
+  const leadId = Array.isArray(found.data) ? found.data[0]?.lead_id ?? null : null;
+  if (!leadId) return { ok: false, leadId: null };
+
+  const updated = await supabaseRequest(`cgi_leads?id=${eqFilter(leadId)}`, {
+    method: "PATCH",
+    // Um opt-in explicito tambem revoga um opt-out anterior: a pessoa acabou
+    // de pedir para receber. Mesma semantica da RPC cgi_marketing_optin.
+    body: JSON.stringify({ consent_marketing: true, unsubscribed_at: null }),
+    prefer: "return=minimal",
+  });
+  if (!updated.ok) {
+    logSupabaseFailure("grant_consent_from_report", {
+      status: updated.status,
+      error: updated.error,
+      leadId,
+    });
+    return { ok: false, leadId };
+  }
+  await recordMarketingConsentProvenance(leadId, "cgi_report");
+  return { ok: true, leadId };
+}
+
+/** Guarda o hash do token de contato. O token em claro nunca e persistido --
+ * ele e derivavel de novo por HMAC (ver api/_cgi-contact-token.ts). */
+export async function setContactTokenHash(leadId: string, tokenHash: string): Promise<boolean> {
+  if (!leadId || !tokenHash) return false;
+  const result = await supabaseRequest(`cgi_leads?id=${eqFilter(leadId)}`, {
+    method: "PATCH",
+    body: JSON.stringify({ contact_token_hash: tokenHash }),
+    prefer: "return=minimal",
+  });
+  if (!result.ok) {
+    logSupabaseFailure("set_contact_token_hash", {
+      status: result.status,
+      error: result.error,
+      leadId,
+    });
+  }
+  return result.ok;
 }
 
 // Fixes a gap where the comments textarea (rendered on the final
