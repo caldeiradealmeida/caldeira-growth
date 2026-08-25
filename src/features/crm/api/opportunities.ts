@@ -47,6 +47,10 @@ async function fetchCommunicationsSoft(leadIds: string[]): Promise<CgiCommunicat
  * "lido". É informação acessória, e informação acessória nunca pode derrubar a
  * tela inteira.
  *
+ * A view crm_report_access_v resolve a permissão sem alargar nada, mas o
+ * fail-soft continua: ele cobre o intervalo entre este deploy e a migration,
+ * e cobre qualquer falha futura.
+ *
  * Foi exatamente isso que aconteceu: sem GRANT para `authenticated`, o
  * Postgres devolve 42501 permission denied, o unwrap() lançava, e o Pipe
  * inteiro morria por causa de uma coluna de telemetria. Mesma disciplina do
@@ -59,7 +63,10 @@ async function fetchReportAccessSoft(
   if (publicAssessmentIds.length === 0) return [];
   try {
     const res = await crmSupabase
-      .from("cgi_report_access")
+      // View, não a tabela. crm_report_access_v expõe exatamente estas duas
+      // colunas e nada mais -- token_hash, expires_at e revoked_at não existem
+      // nela. O portão é is_crm_admin(), dentro da própria view.
+      .from("crm_report_access_v")
       .select("public_assessment_id,last_accessed_at")
       .in("public_assessment_id", publicAssessmentIds);
     if (res.error) {

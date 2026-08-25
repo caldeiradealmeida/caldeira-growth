@@ -234,3 +234,165 @@ export function buildCgiAbandonmentEmail(input: {
 /** Semantic alias: the historical name for what is now one of two abandonment
  * copies. Kept so existing call sites and tests do not churn. */
 export const buildCgiProgressAbandonmentEmail = buildCgiAbandonmentEmail;
+
+// ---------------------------------------------------------------------------
+// RÉGUA V1 -- D+2 e D+7
+// ---------------------------------------------------------------------------
+//
+// Mesma disciplina dos dois e-mails acima: nenhum template roda em Apps Script,
+// tudo é construído aqui e passa pela suíte. Nenhuma destas funções envia nada
+// -- quem envia é um executor que ainda não existe.
+
+/** Rodapé de descadastro. Só entra em mensagem de nurturing: um relatório que a
+ * pessoa pediu não é algo de que ela precise se descadastrar, e oferecer isso
+ * numa entrega transacional confunde as duas coisas. */
+function unsubscribeFooterPlain(url: string): string {
+  return `\n\n---\nSe preferir não receber mais estas leituras: ${url}`;
+}
+
+function unsubscribeFooterHtml(url: string): string {
+  return `<p style="margin:32px 0 0 0;font-size:12px;color:#888888;">Se preferir não receber mais estas leituras, <a href="${url}" style="color:#888888;">cancele o recebimento</a>.</p>`;
+}
+
+/** D+2 -- confirmação de entrega, não conteúdo.
+ *
+ * Só sai para quem não abriu o relatório (ver api/_cgi-nurture.ts). Por isso a
+ * copy pode ser direta sobre o assunto real: o link pode não ter chegado. Nada
+ * de "não perca", nada de resumo do relatório -- se o problema é acesso,
+ * mandar conteúdo por cima é ruído. */
+export function buildCgiReportFollowupD2Email(input: {
+  name: string;
+  company: string;
+  reportAccessUrl: string;
+}): CgiEmailContent {
+  const name = String(input.name || "").trim();
+  const company = String(input.company || "").trim();
+  const url = input.reportAccessUrl;
+
+  const subject = `Seu relatório CGI${company ? ` — ${company}` : ""}: conseguiu abrir?`;
+
+  const plainText = [
+    `Olá, ${name}.`,
+    "",
+    "Enviei o seu relatório CGI há alguns dias e não consta que ele tenha sido aberto. Como esse tipo de link às vezes se perde em filtro de spam ou em caixa corporativa, prefiro checar a mandar mais uma coisa por cima.",
+    "",
+    "O link continua válido:",
+    url,
+    "",
+    "Se não abrir, é só responder este e-mail que eu envio de outra forma. E se você já leu e o registro simplesmente não marcou, ignore esta mensagem.",
+    "",
+    SIGNATURE_PLAIN,
+  ].join("\n");
+
+  const htmlBody = htmlShell(`
+    <p style="margin:0 0 20px 0;">Olá, ${escapeHtml(name)}.</p>
+    <p style="margin:0 0 20px 0;">Enviei o seu relatório CGI há alguns dias e não consta que ele tenha sido aberto. Como esse tipo de link às vezes se perde em filtro de spam ou em caixa corporativa, prefiro checar a mandar mais uma coisa por cima.</p>
+    ${ctaButtonHtml("Abrir meu relatório CGI", url)}
+    <p style="margin:20px 0 0 0;">Se não abrir, é só responder este e-mail que eu envio de outra forma. E se você já leu e o registro simplesmente não marcou, ignore esta mensagem.</p>
+    <p style="margin:28px 0 0 0;font-size:15px;">${SIGNATURE_HTML}</p>
+  `);
+
+  return { subject, plainText, htmlBody };
+}
+
+/** D+7 -- uma leitura curta sobre a dimensão que apareceu mais frágil.
+ *
+ * Template por dimensão, não geração por IA. A razão não é custo: é que o valor
+ * desta mensagem está em dizer UMA coisa verdadeira e específica sobre um
+ * padrão que se repete em muitas empresas -- e isso um texto escrito uma vez,
+ * revisado, diz melhor e com risco menor do que um texto novo gerado a cada
+ * envio. Se a V1 mostrar que as pessoas respondem, aí vale personalizar. */
+export type CgiInsightDimensionId =
+  | "strategy"
+  | "market"
+  | "growthMachine"
+  | "execution"
+  | "leadership";
+
+const INSIGHT_D7_BY_DIMENSION: Record<
+  CgiInsightDimensionId,
+  { titulo: string; leitura: string[] }
+> = {
+  strategy: {
+    titulo: "Estratégia",
+    leitura: [
+      "O padrão que eu mais vejo em empresas com essa dimensão frágil não é falta de plano. É excesso de plano válido ao mesmo tempo.",
+      "Quase toda empresa consegue listar o que quer fazer nos próximos 12 meses. Muito poucas conseguem listar o que decidiram NÃO fazer. E é essa segunda lista que faz a primeira acontecer, porque é ela que libera as pessoas, o dinheiro e a atenção que a estratégia precisa.",
+      "Um teste rápido: pergunte separadamente a três das suas principais lideranças quais são as três prioridades da empresa neste ano. Se as respostas não forem praticamente iguais, o problema não está na execução — está antes dela.",
+    ],
+  },
+  market: {
+    titulo: "Mercado e Cliente",
+    leitura: [
+      "Quando essa dimensão aparece frágil, quase nunca é porque a empresa não conhece o mercado. É porque conhece o mercado pela própria descrição, não pela do cliente.",
+      "A pergunta que separa as duas coisas é simples e desconfortável: por que o último cliente relevante escolheu vocês em vez do concorrente? Se a resposta vier em palavras da empresa — qualidade, atendimento, know-how — provavelmente ela é uma hipótese, não um dado.",
+      "Cinco conversas de trinta minutos com clientes que compraram recentemente costumam mudar mais o posicionamento do que um trimestre de discussão interna. E o que muda não é a comunicação: é a escolha de para quem vender.",
+    ],
+  },
+  growthMachine: {
+    titulo: "Máquina de Crescimento",
+    leitura: [
+      "Empresas com essa dimensão frágil quase sempre tratam o problema como falta de volume: mais leads, mais visitas, mais investimento em mídia.",
+      "Na prática, o que costuma faltar é conhecer a conversão entre as etapas. Sem saber quantos contatos viram reunião, quantas reuniões viram proposta e quantas propostas viram contrato, aumentar a entrada só aumenta o desperdício — e torna o resultado do mês uma função do esforço, não do sistema.",
+      "O que diferencia quem destrava essa dimensão raramente é uma ferramenta nova. É passar a olhar a mesma pergunta toda semana: onde exatamente o funil perde, e por quê. Previsibilidade é consequência disso, não causa.",
+    ],
+  },
+  execution: {
+    titulo: "Execução e Gestão",
+    leitura: [
+      "Quando essa dimensão aparece frágil, normalmente não faltam reuniões. Falta reunião em que alguma decisão muda.",
+      "É comum encontrar uma rotina de acompanhamento que funciona como prestação de contas: cada área relata o que fez, todos concordam que está difícil, e a próxima reunião repete a anterior. O ciclo é longo demais para corrigir desvio e curto demais para discutir o que importa.",
+      "O que costuma destravar é reduzir o escopo: menos prioridades acompanhadas, cadência mais curta, e uma regra explícita de que quem levanta um desvio sai da sala com um responsável e uma data. Não é rigor a mais — é acabar antes que o trimestre acabe por você.",
+    ],
+  },
+  leadership: {
+    titulo: "Liderança e Cultura de Crescimento",
+    leitura: [
+      "Essa é a dimensão em que o gargalo mais frequentemente é a própria pessoa que está lendo — e digo isso sem nenhuma crítica.",
+      "Empresas param de crescer no número de decisões que precisam passar pelo fundador. Enquanto o julgamento não estiver distribuído, todo crescimento vira mais trabalho para a mesma cabeça, e a organização aprende a esperar em vez de decidir.",
+      "O sinal de que isso está mudando não é ter mais gente contratada. É ter mais gente tomando decisões que você teria tomado do mesmo jeito — e algumas que você não teria tomado, e que se mostraram melhores.",
+    ],
+  },
+};
+
+export function buildCgiInsightD7Email(input: {
+  name: string;
+  company: string;
+  dimensionId: CgiInsightDimensionId;
+  unsubscribeUrl: string;
+}): CgiEmailContent {
+  const name = String(input.name || "").trim();
+  const company = String(input.company || "").trim();
+  const bloco = INSIGHT_D7_BY_DIMENSION[input.dimensionId];
+  const url = input.unsubscribeUrl;
+
+  const subject = `Sobre ${bloco.titulo}${company ? ` na ${company}` : ""}`;
+
+  const abertura = `Olá, ${name}.`;
+  const contexto = `Seu CGI apontou ${bloco.titulo} como a dimensão hoje mais frágil${company ? ` na ${company}` : ""}. Escrevo uma leitura curta sobre isso — uma observação só, do que costuma estar por trás quando essa dimensão aparece assim.`;
+  const fechamento =
+    "Se fizer sentido para o seu momento, responda este e-mail contando como isso aparece aí. Leio todas.";
+
+  const plainText =
+    [abertura, "", contexto, "", ...bloco.leitura.flatMap((p) => [p, ""]), fechamento, "", SIGNATURE_PLAIN].join("\n") +
+    unsubscribeFooterPlain(url);
+
+  const htmlBody = htmlShell(`
+    <p style="margin:0 0 20px 0;">${escapeHtml(abertura)}</p>
+    <p style="margin:0 0 20px 0;">${escapeHtml(contexto)}</p>
+    ${bloco.leitura.map((p) => `<p style="margin:0 0 20px 0;">${escapeHtml(p)}</p>`).join("\n    ")}
+    <p style="margin:0 0 20px 0;">${escapeHtml(fechamento)}</p>
+    <p style="margin:28px 0 0 0;font-size:15px;">${SIGNATURE_HTML}</p>
+    ${unsubscribeFooterHtml(url)}
+  `);
+
+  return { subject, plainText, htmlBody };
+}
+
+export function buildCgiUnsubscribeUrl(token: string): string {
+  return `https://www.caldeiragrowth.com/cgi/descadastrar#t=${token}`;
+}
+
+export function buildCgiInsightsOptInUrl(token: string): string {
+  return `https://www.caldeiragrowth.com/cgi/insights#t=${token}`;
+}

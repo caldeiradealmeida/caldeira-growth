@@ -27,6 +27,12 @@ import NotFound from "./pages/NotFound";
 // public site's bundle -- only fetched when someone actually visits /admin/crm.
 const CrmApp = lazy(() => import("@/features/crm/CrmApp"));
 const CgiReportView = lazy(() => import("./pages/CgiReportView"));
+// Preferência de marketing: duas rotas, uma tela. Lazy porque nenhuma delas é
+// caminho de navegação normal -- só se chega por link de e-mail.
+const CgiUnsubscribe = lazy(() => import("./pages/CgiMarketingPreference"));
+const CgiInsightsOptIn = lazy(() =>
+  import("./pages/CgiMarketingPreference").then((m) => ({ default: m.CgiInsightsOptInPage }))
+);
 
 function CrmLoadingFallback() {
   return <div className="flex min-h-screen items-center justify-center bg-background" />;
@@ -79,6 +85,22 @@ const App = () => (
               element={
                 <Suspense fallback={<CrmLoadingFallback />}>
                   <CgiReportView />
+                </Suspense>
+              }
+            />
+            <Route
+              path="/cgi/descadastrar"
+              element={
+                <Suspense fallback={<CrmLoadingFallback />}>
+                  <CgiUnsubscribe />
+                </Suspense>
+              }
+            />
+            <Route
+              path="/cgi/insights"
+              element={
+                <Suspense fallback={<CrmLoadingFallback />}>
+                  <CgiInsightsOptIn />
                 </Suspense>
               }
             />

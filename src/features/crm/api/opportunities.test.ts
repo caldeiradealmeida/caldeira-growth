@@ -70,7 +70,7 @@ function cenarioBase() {
   supabaseMocks.porTabela.set("cgi_attribution", { data: [], error: null });
   supabaseMocks.porTabela.set("cgi_reports", { data: [], error: null });
   supabaseMocks.porTabela.set("cgi_communications", { data: [], error: null });
-  supabaseMocks.porTabela.set("cgi_report_access", { data: [], error: null });
+  supabaseMocks.porTabela.set("crm_report_access_v", { data: [], error: null });
 }
 
 describe("fetchOpportunityRows — leitura acessória nunca derruba o Pipe", () => {
@@ -83,11 +83,11 @@ describe("fetchOpportunityRows — leitura acessória nunca derruba o Pipe", () 
     vi.restoreAllMocks();
   });
 
-  it("permission denied em cgi_report_access não derruba o Pipe", async () => {
+  it("permission denied em crm_report_access_v não derruba o Pipe", async () => {
     // Este é o erro literal de Production.
-    supabaseMocks.porTabela.set("cgi_report_access", {
+    supabaseMocks.porTabela.set("crm_report_access_v", {
       data: null,
-      error: { message: "permission denied for table cgi_report_access" },
+      error: { message: "permission denied for table crm_report_access_v" },
     });
 
     const rows = await fetchOpportunityRows();
@@ -99,12 +99,12 @@ describe("fetchOpportunityRows — leitura acessória nunca derruba o Pipe", () 
     expect(rows[0].reportOpenedAt).toBeNull();
     expect(console.warn).toHaveBeenCalledWith(
       "[CRM] sinal de abertura de relatório indisponível:",
-      "permission denied for table cgi_report_access"
+      "permission denied for table crm_report_access_v"
     );
   });
 
   it("erro de rede na mesma leitura também é absorvido", async () => {
-    supabaseMocks.porTabela.set("cgi_report_access", () => {
+    supabaseMocks.porTabela.set("crm_report_access_v", () => {
       throw new Error("Failed to fetch");
     });
 
@@ -130,8 +130,8 @@ describe("fetchOpportunityRows — leitura acessória nunca derruba o Pipe", () 
   });
 
   it("as duas leituras acessórias podem falhar juntas sem quebrar a tela", async () => {
-    supabaseMocks.porTabela.set("cgi_report_access", {
-      data: null, error: { message: "permission denied for table cgi_report_access" },
+    supabaseMocks.porTabela.set("crm_report_access_v", {
+      data: null, error: { message: "permission denied for table crm_report_access_v" },
     });
     supabaseMocks.porTabela.set("cgi_communications", {
       data: null, error: { message: "permission denied for table cgi_communications" },
@@ -145,7 +145,7 @@ describe("fetchOpportunityRows — leitura acessória nunca derruba o Pipe", () 
 
   it("o caminho feliz continua entregando o sinal de abertura", async () => {
     // Fail-soft não pode virar silêncio: quando a leitura funciona, o dado chega.
-    supabaseMocks.porTabela.set("cgi_report_access", {
+    supabaseMocks.porTabela.set("crm_report_access_v", {
       data: [{ public_assessment_id: "PID1", last_accessed_at: "2026-08-20T13:02:47Z" }],
       error: null,
     });
@@ -163,10 +163,10 @@ describe("fetchOpportunityRows — leitura acessória nunca derruba o Pipe", () 
     await expect(fetchOpportunityRows()).rejects.toThrow(/permission denied for table cgi_leads/);
   });
 
-  it("não consulta cgi_report_access quando não há assessment nenhum", async () => {
+  it("não consulta a view de acesso quando não há assessment nenhum", async () => {
     supabaseMocks.porTabela.set("cgi_assessments", { data: [], error: null });
 
     await fetchOpportunityRows();
-    expect(supabaseMocks.tabelasConsultadas).not.toContain("cgi_report_access");
+    expect(supabaseMocks.tabelasConsultadas).not.toContain("crm_report_access_v");
   });
 });
