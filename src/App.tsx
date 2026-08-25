@@ -3,7 +3,9 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Navigate, Routes, Route, useLocation } from "react-router-dom";
+import { useEffect } from "react";
+import { BrowserRouter, Navigate, Routes, Route, useLocation, useNavigate } from "react-router-dom";
+import { resolveAuthLanding } from "@/features/crm/auth/authRedirect";
 import ScrollToTop from "@/components/layout/ScrollToTop";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import Index from "./pages/Index";
@@ -40,6 +42,24 @@ function CrmLoadingFallback() {
 
 const queryClient = new QueryClient();
 
+/** O magic link do CRM pode pousar fora do CRM -- ver
+ * features/crm/auth/authRedirect.ts. Quando isso acontece, o fragmento é
+ * levado para a rota certa preservado e sem entrada no histórico, e é lá que o
+ * cliente do Supabase o consome. Nenhuma rota que não seja de autenticação é
+ * afetada: fragmentos como /cgi/relatorio#t=... não casam. */
+function CrmAuthLanding() {
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const destino = resolveAuthLanding(location.pathname, location.hash);
+    if (!destino) return;
+    navigate(`${destino}${location.hash}`, { replace: true });
+  }, [location.pathname, location.hash, navigate]);
+
+  return null;
+}
+
 function RedirectWithParams({ to }: { to: string }) {
   const location = useLocation();
   return <Navigate to={`${to}${location.search}${location.hash}`} replace />;
@@ -53,6 +73,7 @@ const App = () => (
       <BrowserRouter>
         <LanguageProvider>
           <ScrollToTop />
+          <CrmAuthLanding />
           <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/consultoria" element={<Consultoria />} />

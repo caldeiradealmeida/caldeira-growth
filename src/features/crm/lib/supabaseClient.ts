@@ -14,6 +14,10 @@ export const crmSupabase = createClient(url, anonKey, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
+    // Explícito de propósito: é este flag que faz o cliente consumir o
+    // fragmento do magic link e limpar a URL. É o padrão da biblioteca, mas
+    // depender de um padrão para uma garantia de autenticação é frágil.
+    detectSessionInUrl: true,
     storageKey: "caldeira-crm-auth",
   },
 });
