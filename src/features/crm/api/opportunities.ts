@@ -39,6 +39,43 @@ async function fetchCommunicationsSoft(leadIds: string[]): Promise<CgiCommunicat
   }
 }
 
+/** Leitura FAIL-SOFT de quem abriu o relatório.
+ *
+ * cgi_report_access guarda o hash do token de acesso ao relatório, então o
+ * frontend não tem -- e não deve ter -- SELECT amplo nela. A coluna que a fila
+ * comercial quer é uma só: last_accessed_at, para separar "entregue" de
+ * "lido". É informação acessória, e informação acessória nunca pode derrubar a
+ * tela inteira.
+ *
+ * Foi exatamente isso que aconteceu: sem GRANT para `authenticated`, o
+ * Postgres devolve 42501 permission denied, o unwrap() lançava, e o Pipe
+ * inteiro morria por causa de uma coluna de telemetria. Mesma disciplina do
+ * ledger de comunicações: qualquer falha -- permissão, tabela ausente, rede --
+ * vira ausência de informação de abertura, e o relatório aparece como
+ * "Enviado" ou "CGI legado" em vez de "Aberto". Nunca como erro de tela. */
+async function fetchReportAccessSoft(
+  publicAssessmentIds: string[]
+): Promise<Array<{ public_assessment_id: string; last_accessed_at: string | null }>> {
+  if (publicAssessmentIds.length === 0) return [];
+  try {
+    const res = await crmSupabase
+      .from("cgi_report_access")
+      .select("public_assessment_id,last_accessed_at")
+      .in("public_assessment_id", publicAssessmentIds);
+    if (res.error) {
+      console.warn("[CRM] sinal de abertura de relatório indisponível:", res.error.message);
+      return [];
+    }
+    return (res.data as Array<{ public_assessment_id: string; last_accessed_at: string | null }>) ?? [];
+  } catch (error) {
+    console.warn(
+      "[CRM] sinal de abertura de relatório indisponível:",
+      error instanceof Error ? error.message : String(error)
+    );
+    return [];
+  }
+}
+
 /** Assembles the opportunity list from several RLS-scoped reads. No
  * server-side view/RPC exists for this on purpose (schema frozen for v0.1) --
  * the join happens here, client-side, over a small dataset. */
@@ -65,7 +102,7 @@ export async function fetchOpportunityRows() {
   const assessmentIds = assessments.map((a) => a.id);
   const publicAssessmentIds = assessments.map((a) => a.public_assessment_id);
 
-  const [attributionRes, reportsRes, accessRes] = await Promise.all([
+  const [attributionRes, reportsRes, reportAccess] = await Promise.all([
     assessmentIds.length
       ? crmSupabase.from("cgi_attribution").select("*").in("assessment_id", assessmentIds)
       : Promise.resolve({ data: [], error: null }),
@@ -76,18 +113,13 @@ export async function fetchOpportunityRows() {
           .in("public_assessment_id", publicAssessmentIds)
       : Promise.resolve({ data: [], error: null }),
     // Quem realmente ABRIU o relatório. Entrega e leitura são coisas
-    // diferentes, e a fila comercial precisa distinguir as duas.
-    publicAssessmentIds.length
-      ? crmSupabase
-          .from("cgi_report_access")
-          .select("public_assessment_id,last_accessed_at")
-          .in("public_assessment_id", publicAssessmentIds)
-      : Promise.resolve({ data: [], error: null }),
+    // diferentes, e a fila comercial precisa distinguir as duas -- mas não ao
+    // preço de derrubar o Pipe quando esse sinal não estiver disponível.
+    fetchReportAccessSoft(publicAssessmentIds),
   ]);
 
   const attribution = unwrap<CgiAttribution[]>(attributionRes);
   const reports = unwrap<CgiReportSummary[]>(reportsRes);
-  const reportAccess = unwrap<Array<{ public_assessment_id: string; last_accessed_at: string | null }>>(accessRes);
 
   return buildOpportunities({ leads, opportunities, assessments, attribution, reports, personLinks, communications, reportAccess });
 }
