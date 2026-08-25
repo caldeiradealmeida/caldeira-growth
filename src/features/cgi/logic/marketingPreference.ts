@@ -5,7 +5,7 @@ import type { ConsentCallResult } from "@/features/cgi/services/marketingConsent
 
 export type ModoPreferencia = "optout" | "optin";
 
-export type EstadoPreferencia = "pronto" | "enviando" | "concluido" | "sem_link";
+export type EstadoPreferencia = "pronto" | "enviando" | "concluido" | "sem_link" | "indisponivel";
 
 export const MARKETING_PREFERENCE_COPY: Record<
   ModoPreferencia,
@@ -29,11 +29,19 @@ export const MARKETING_PREFERENCE_COPY: Record<
   },
 };
 
-/** O que a tela mostra depois da chamada. "unavailable" também conclui: o que a
- * pessoa precisa saber é o resultado pretendido, e um erro de rede num link
- * clicado uma vez não deve virar um pedido para tentar de novo. O registro real
- * está no banco, e reclicar é idempotente. */
+/** O que a tela mostra depois da chamada.
+ *
+ * Só "ok" confirma. A tentação era tratar falha de rede como sucesso -- afinal
+ * pedir para clicar de novo é chato --, mas dizer "você não receberá mais
+ * nada" quando nada foi gravado é uma promessa falsa, e a promessa aqui é
+ * justamente a coisa que não pode ser falsa. Melhor pedir outra tentativa do
+ * que mentir sobre um descadastro.
+ *
+ * Este caso deixa de ser hipotético antes da migration: sem as RPCs no banco,
+ * TODA chamada falha. */
 export function estadoAposChamada(resultado: ConsentCallResult): EstadoPreferencia {
-  return resultado === "invalid_link" ? "sem_link" : "concluido";
+  if (resultado === "ok") return "concluido";
+  if (resultado === "invalid_link") return "sem_link";
+  return "indisponivel";
 }
 

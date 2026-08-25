@@ -54,8 +54,13 @@ describe("descadastro", () => {
     expect(f).not.toHaveBeenCalled();
   });
 
-  it("falha de rede não vira exceção na tela", async () => {
+  it("falha de rede não vira exceção, e não vira sucesso", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("offline"); }));
+    expect(await revokeMarketingConsentByToken(TOKEN)).toBe("unavailable");
+  });
+
+  it("RPC ausente (404, antes da migration) também é 'unavailable', nunca 'ok'", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("", { status: 404 })));
     expect(await revokeMarketingConsentByToken(TOKEN)).toBe("unavailable");
   });
 

@@ -64,10 +64,11 @@ describe("opt-in — a ação é explícita", () => {
 });
 
 describe("resultado da chamada", () => {
-  it("link inválido é a única coisa que não conclui", () => {
-    expect(estadoAposChamada("invalid_link")).toBe("sem_link");
+  it("só um 'ok' de verdade confirma o descadastro", () => {
     expect(estadoAposChamada("ok")).toBe("concluido");
-    // Falha de rede não vira erro na cara da pessoa.
-    expect(estadoAposChamada("unavailable")).toBe("concluido");
+    expect(estadoAposChamada("invalid_link")).toBe("sem_link");
+    // Nunca prometer um descadastro que não foi gravado. Antes da migration
+    // as RPCs não existem e TODA chamada cai aqui.
+    expect(estadoAposChamada("unavailable")).toBe("indisponivel");
   });
 });

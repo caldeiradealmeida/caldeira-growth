@@ -46,7 +46,12 @@ export function CgiMarketingPreference({ modo }: { modo: ModoPreferencia }) {
     <main className="mx-auto flex min-h-[70vh] max-w-xl flex-col justify-center px-6 py-16">
       <h1 className="text-2xl font-semibold tracking-tight">{copy.titulo}</h1>
 
-      {estado === "sem_link" ? (
+      {estado === "indisponivel" ? (
+        <p className="mt-4 text-muted-foreground">
+          Não conseguimos confirmar agora. Tente novamente em alguns minutos — o link continua
+          válido.
+        </p>
+      ) : estado === "sem_link" ? (
         <p className="mt-4 text-muted-foreground">
           Este link não está mais válido. Se você quiser ajustar o que recebe, use o link no rodapé
           de qualquer e-mail que tenhamos enviado.

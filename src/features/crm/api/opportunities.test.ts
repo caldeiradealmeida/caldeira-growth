@@ -103,6 +103,29 @@ describe("fetchOpportunityRows — leitura acessória nunca derruba o Pipe", () 
     );
   });
 
+  it("VIEW AINDA NÃO EXISTE (Preview antes da migration) não derruba o Pipe", async () => {
+    // Este é o estado exato do Preview de 05be3f8: a migration não foi aplicada,
+    // então o PostgREST não conhece a relação e responde PGRST205.
+    supabaseMocks.porTabela.set("crm_report_access_v", {
+      data: null,
+      error: {
+        message:
+          "Could not find the table 'public.crm_report_access_v' in the schema cache",
+        code: "PGRST205",
+      },
+    });
+
+    const rows = await fetchOpportunityRows();
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0].lead.company).toBe("Grupo MNGT");
+    expect(rows[0].reportOpenedAt).toBeNull();
+    expect(console.warn).toHaveBeenCalledWith(
+      "[CRM] sinal de abertura de relatório indisponível:",
+      "Could not find the table 'public.crm_report_access_v' in the schema cache"
+    );
+  });
+
   it("erro de rede na mesma leitura também é absorvido", async () => {
     supabaseMocks.porTabela.set("crm_report_access_v", () => {
       throw new Error("Failed to fetch");
