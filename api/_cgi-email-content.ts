@@ -80,6 +80,41 @@ function htmlShell(bodyHtml: string): string {
 </html>`;
 }
 
+// --- Estilo pessoal -------------------------------------------------------
+//
+// htmlShell acima e o layout de PECA: fundo bege (#f5f4f1), card branco com
+// canto arredondado, 40px de respiro e serifa. Funciona para a entrega do
+// relatorio, que e um documento. Nao funciona para uma mensagem curta que
+// deveria parecer escrita a mao -- ali o proprio enquadramento anuncia
+// "isto saiu de um sistema" antes da primeira palavra ser lida.
+//
+// Este shell e o oposto: fundo branco, nenhum container, nenhuma borda,
+// nenhum raio, sans-serif neutra. Sobra o minimo que um cliente de e-mail
+// precisa para renderizar HTML de forma previsivel -- doctype, charset,
+// viewport e uma largura maxima para nao virar uma linha de 200 caracteres
+// numa tela larga. Nada disso e decoracao; e legibilidade.
+function personalHtmlShell(bodyHtml: string): string {
+  return `<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+  </head>
+  <body style="margin:0;padding:0;background-color:#ffffff;">
+    <div style="max-width:600px;padding:16px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.5;color:#222222;">
+      ${bodyHtml}
+    </div>
+  </body>
+</html>`;
+}
+
+/** Link como texto, do jeito que ele apareceria num e-mail digitado: a propria
+ * URL visivel, sem botao e sem rotulo de campanha. */
+function plainLinkHtml(url: string): string {
+  const seguro = escapeHtml(url);
+  return `<a href="${seguro}" style="color:#1155cc;">${seguro}</a>`;
+}
+
 function ctaButtonHtml(label: string, url: string): string {
   return `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:28px 0;">
     <tr>
@@ -300,15 +335,18 @@ export function buildCgiReportFollowupD2Email(input: {
     "",
     "Se não abrir, é só responder este e-mail que eu envio de outra forma. E se você já leu e o registro simplesmente não marcou, ignore esta mensagem.",
     "",
-    SIGNATURE_PLAIN,
+    "Abraço,",
+    "Denis",
   ].join("\n");
 
-  const htmlBody = htmlShell(`
-    <p style="margin:0 0 20px 0;">Olá, ${escapeHtml(name)}.</p>
-    <p style="margin:0 0 20px 0;">Enviei o seu relatório CGI há alguns dias e não consta que ele tenha sido aberto. Como esse tipo de link às vezes se perde em filtro de spam ou em caixa corporativa, prefiro checar a mandar mais uma coisa por cima.</p>
-    ${ctaButtonHtml("Abrir meu relatório CGI", url)}
-    <p style="margin:20px 0 0 0;">Se não abrir, é só responder este e-mail que eu envio de outra forma. E se você já leu e o registro simplesmente não marcou, ignore esta mensagem.</p>
-    <p style="margin:28px 0 0 0;font-size:15px;">${SIGNATURE_HTML}</p>
+  // Shell pessoal, nao o de peca: este e-mail so faz sentido se parecer que eu
+  // digitei. Sem card, sem botao, link como texto, assinatura de uma linha.
+  const htmlBody = personalHtmlShell(`
+    <p style="margin:0 0 16px 0;">Olá, ${escapeHtml(name)}.</p>
+    <p style="margin:0 0 16px 0;">Enviei o seu relatório CGI há alguns dias e não consta que ele tenha sido aberto. Como esse tipo de link às vezes se perde em filtro de spam ou em caixa corporativa, prefiro checar a mandar mais uma coisa por cima.</p>
+    <p style="margin:0 0 16px 0;">O link continua válido:<br />${plainLinkHtml(url)}</p>
+    <p style="margin:0 0 16px 0;">Se não abrir, é só responder este e-mail que eu envio de outra forma. E se você já leu e o registro simplesmente não marcou, ignore esta mensagem.</p>
+    <p style="margin:16px 0 0 0;">Abraço,<br />Denis</p>
   `);
 
   return { subject, plainText, htmlBody };

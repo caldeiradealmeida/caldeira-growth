@@ -44,8 +44,11 @@ describe("D+2 — copy de entrega, não de conteúdo", () => {
     expect(email.plainText).not.toMatch(/não perca|última chance|urgente|imperdível|garanta/i);
   });
 
-  it("assina como Denis", () => {
-    expect(email.plainText).toContain("Denis Caldeira");
+  it("assina como uma pessoa, não como um cargo", () => {
+    // A assinatura completa (nome, cargo, empresa) é da peça de entrega. Aqui
+    // ela contradiria o resto do e-mail.
+    expect(email.plainText.trimEnd().endsWith("Abraço,\nDenis")).toBe(true);
+    expect(email.plainText).not.toContain("CEO e Founder");
   });
 });
 
@@ -148,5 +151,88 @@ describe("linha de opt-in no e-mail de entrega", () => {
     const com = buildCgiReportReadyEmail({ ...base, insightsOptInUrl: "https://x/cgi/insights#t=tok" });
     expect(com.subject).toBe(sem.subject);
     expect(com.plainText.startsWith(sem.plainText)).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Estilo visual do D+2 -- e-mail pessoal, não peça de campanha
+// ---------------------------------------------------------------------------
+//
+// O enquadramento anuncia a origem da mensagem antes da primeira palavra ser
+// lida. Um card bege com botão preto diz "sistema"; fundo branco com um link
+// em texto diz "alguém escreveu". Estes testes travam essa diferença, porque
+// ela é fácil de perder sem ninguém notar -- basta alguém reusar o shell de
+// peça na próxima mensagem curta.
+
+describe("D+2 — visual de e-mail pessoal", () => {
+  const email = buildCgiReportFollowupD2Email({
+    name: "Ana", company: "ACME", reportAccessUrl: "https://x/cgi/relatorio#t=abc",
+  });
+  const peca = buildCgiReportReadyEmail({
+    name: "Ana", company: "ACME", executiveSummary: "s",
+    reportAccessUrl: "https://x/cgi/relatorio#t=abc",
+  });
+
+  it("não tem fundo bege em lugar nenhum", () => {
+    expect(email.htmlBody).not.toContain("#f5f4f1");
+    expect(email.htmlBody).not.toMatch(/background-color:\s*#(?!ffffff)/i);
+    // Contraste: a peça de entrega continua bege — este teste falha se alguém
+    // "consertar" o D+2 mudando o shell compartilhado por engano.
+    expect(peca.htmlBody).toContain("#f5f4f1");
+  });
+
+  it("fundo é branco e declarado", () => {
+    expect(email.htmlBody).toContain("background-color:#ffffff");
+  });
+
+  it("não tem botão de CTA", () => {
+    // O botão é uma tabela com fundo escuro e um link sem sublinhado dentro.
+    expect(email.htmlBody).not.toContain("text-decoration:none");
+    expect(email.htmlBody).not.toContain("background-color:#1a1a1a");
+    expect(email.htmlBody).not.toMatch(/padding:14px 28px/);
+  });
+
+  it("não tem wrapper visual de newsletter", () => {
+    expect(email.htmlBody).not.toContain("<table");
+    expect(email.htmlBody).not.toContain('role="presentation"');
+    expect(email.htmlBody).not.toContain("border-radius");
+    expect(email.htmlBody).not.toContain("overflow:hidden");
+  });
+
+  it("não tem hero, imagem nem borda decorativa", () => {
+    expect(email.htmlBody).not.toContain("<img");
+    expect(email.htmlBody).not.toMatch(/border:/);
+    expect(email.htmlBody).not.toMatch(/box-shadow/);
+  });
+
+  it("o link aparece como texto, mostrando a própria URL", () => {
+    expect(email.htmlBody).toContain(">https://x/cgi/relatorio#t=abc</a>");
+    expect((email.htmlBody.match(/<a /g) || []).length).toBe(1);
+  });
+
+  it("tipografia neutra, não a serifa da peça", () => {
+    expect(email.htmlBody).toContain("Arial,Helvetica,sans-serif");
+    expect(email.htmlBody).not.toContain("Georgia");
+  });
+
+  it("assinatura curta: só 'Denis'", () => {
+    expect(email.plainText.trimEnd().endsWith("Abraço,\nDenis")).toBe(true);
+    expect(email.plainText).not.toContain("CEO e Founder");
+    expect(email.htmlBody).not.toContain("Caldeira Growth Consulting");
+  });
+
+  it("preserva o mínimo de compatibilidade de e-mail", () => {
+    expect(email.htmlBody).toContain("<!doctype html>");
+    expect(email.htmlBody).toContain('charset="utf-8"');
+    expect(email.htmlBody).toContain("viewport");
+  });
+
+  it("continua escapando o que vem do lead", () => {
+    const hostil = buildCgiReportFollowupD2Email({
+      name: "<script>alert(1)</script>", company: "A & B",
+      reportAccessUrl: "https://x/cgi/relatorio#t=abc",
+    });
+    expect(hostil.htmlBody).not.toContain("<script>");
+    expect(hostil.htmlBody).toContain("&lt;script&gt;");
   });
 });
