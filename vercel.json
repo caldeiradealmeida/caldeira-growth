@@ -3,6 +3,10 @@
     {
       "path": "/api/cgi/abandonment-sweep",
       "schedule": "0 13 * * *"
+    },
+    {
+      "path": "/api/cgi/report-followup-sweep",
+      "schedule": "0 12 * * *"
     }
   ],
   "headers": [

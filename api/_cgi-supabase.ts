@@ -1669,3 +1669,163 @@ export async function supabaseInsert(
     ...(result.error ? { error: result.error } : {}),
   };
 }
+
+// ---------------------------------------------------------------------------
+// D+2 -- confirmacao de entrega do relatorio
+// ---------------------------------------------------------------------------
+
+export type ReportFollowupCandidateRow = {
+  id: string;
+  public_assessment_id: string;
+  lead_id: string | null;
+  completed_at: string | null;
+  report_email_sent_at: string | null;
+};
+
+/** Assessments cuja entrega de relatorio caiu na janela do D+2.
+ *
+ * A janela e aplicada aqui, no banco, e nao so na decisao: o executor nunca
+ * carrega a base historica inteira para depois descartar. Quem esta fora da
+ * janela nem vira candidato. */
+export async function getReportFollowupCandidates(input: {
+  sentFromIso: string;
+  sentToIso: string;
+  limit: number;
+}): Promise<ReportFollowupCandidateRow[]> {
+  const query = [
+    "completed_at=not.is.null",
+    "lead_id=not.is.null",
+    "report_email_sent_at=not.is.null",
+    `report_email_sent_at=${gteFilter(input.sentFromIso)}`,
+    `report_email_sent_at=lte.${encodeURIComponent(input.sentToIso)}`,
+    "select=id,public_assessment_id,lead_id,completed_at,report_email_sent_at",
+    "order=report_email_sent_at.asc",
+    `limit=${Math.max(1, Math.min(input.limit, 100))}`,
+  ].join("&");
+  const result = await supabaseRequest<ReportFollowupCandidateRow[]>(`cgi_assessments?${query}`, {
+    method: "GET",
+  });
+  if (!result.ok) {
+    logSupabaseFailure("get_report_followup_candidates", {
+      status: result.status,
+      error: result.error,
+    });
+    return [];
+  }
+  return Array.isArray(result.data) ? result.data : [];
+}
+
+/** last_accessed_at do relatorio. Le a TABELA, nao a view: a view existe para o
+ * browser do CRM e tem portao is_crm_admin(); aqui quem le e o service_role,
+ * no servidor. token_hash nao e selecionado -- nao ha motivo para carrega-lo. */
+export async function getReportAccessTimestamps(
+  publicAssessmentIds: string[]
+): Promise<Map<string, string | null>> {
+  const mapa = new Map<string, string | null>();
+  if (publicAssessmentIds.length === 0) return mapa;
+  const lista = publicAssessmentIds.map((id) => `"${id}"`).join(",");
+  const result = await supabaseRequest<Array<{ public_assessment_id: string; last_accessed_at: string | null }>>(
+    `cgi_report_access?public_assessment_id=in.(${encodeURIComponent(lista)})&select=public_assessment_id,last_accessed_at`,
+    { method: "GET" }
+  );
+  if (!result.ok) {
+    logSupabaseFailure("get_report_access_timestamps", { status: result.status, error: result.error });
+    return mapa;
+  }
+  for (const row of result.data ?? []) mapa.set(row.public_assessment_id, row.last_accessed_at);
+  return mapa;
+}
+
+export type NurtureLeadRow = {
+  id: string;
+  name: string;
+  email: string;
+  company: string;
+  consent_marketing: boolean | null;
+  unsubscribed_at: string | null;
+  contact_token_hash: string | null;
+};
+
+export async function getNurtureLeads(leadIds: string[]): Promise<Map<string, NurtureLeadRow>> {
+  const mapa = new Map<string, NurtureLeadRow>();
+  if (leadIds.length === 0) return mapa;
+  const lista = leadIds.map((id) => `"${id}"`).join(",");
+  const result = await supabaseRequest<NurtureLeadRow[]>(
+    `cgi_leads?id=in.(${encodeURIComponent(lista)})&select=id,name,email,company,consent_marketing,unsubscribed_at,contact_token_hash`,
+    { method: "GET" }
+  );
+  if (!result.ok) {
+    logSupabaseFailure("get_nurture_leads", { status: result.status, error: result.error });
+    return mapa;
+  }
+  for (const row of result.data ?? []) mapa.set(row.id, row);
+  return mapa;
+}
+
+export type NurtureOpportunityRow = {
+  lead_id: string;
+  status: string | null;
+  last_contact_at: string | null;
+};
+
+export async function getNurtureOpportunities(
+  leadIds: string[]
+): Promise<Map<string, NurtureOpportunityRow>> {
+  const mapa = new Map<string, NurtureOpportunityRow>();
+  if (leadIds.length === 0) return mapa;
+  const lista = leadIds.map((id) => `"${id}"`).join(",");
+  const result = await supabaseRequest<NurtureOpportunityRow[]>(
+    `crm_opportunities?lead_id=in.(${encodeURIComponent(lista)})&select=lead_id,status,last_contact_at`,
+    { method: "GET" }
+  );
+  if (!result.ok) {
+    // Falha de leitura do CRM NAO pode virar "ninguem foi contatado" -- isso
+    // mandaria e-mail para quem esta em conversa. Quem chama trata o null como
+    // "estado desconhecido" e suprime.
+    logSupabaseFailure("get_nurture_opportunities", { status: result.status, error: result.error });
+    return mapa;
+  }
+  for (const row of result.data ?? []) mapa.set(row.lead_id, row);
+  return mapa;
+}
+
+/** Tipos ja registrados no ledger, por assessment. E o que da idempotencia. */
+export async function getRecordedCommunicationTypes(
+  publicAssessmentIds: string[]
+): Promise<Map<string, string[]>> {
+  const mapa = new Map<string, string[]>();
+  if (publicAssessmentIds.length === 0) return mapa;
+  const lista = publicAssessmentIds.map((id) => `"${id}"`).join(",");
+  const result = await supabaseRequest<Array<{ public_assessment_id: string; communication_type: string; status: string }>>(
+    `cgi_communications?public_assessment_id=in.(${encodeURIComponent(lista)})&select=public_assessment_id,communication_type,status`,
+    { method: "GET" }
+  );
+  if (!result.ok) {
+    logSupabaseFailure("get_recorded_communication_types", { status: result.status, error: result.error });
+    return mapa;
+  }
+  for (const row of result.data ?? []) {
+    // Supressao nao conta como "ja recebeu": ela registra que NAO recebeu.
+    if (row.status === "suppressed") continue;
+    const atual = mapa.get(row.public_assessment_id) ?? [];
+    atual.push(row.communication_type);
+    mapa.set(row.public_assessment_id, atual);
+  }
+  return mapa;
+}
+
+/** PATCH por dedupe_key. Usado para fechar uma linha 'sending' como
+ * 'sent' ou 'failed'. */
+export async function updateCommunicationByDedupeKey(
+  dedupeKey: string,
+  body: Record<string, unknown>
+): Promise<{ ok: boolean; status: number }> {
+  const result = await supabaseRequest(
+    `cgi_communications?dedupe_key=${eqFilter(dedupeKey)}`,
+    { method: "PATCH", body: JSON.stringify(body), prefer: "return=minimal" }
+  );
+  if (!result.ok) {
+    logSupabaseFailure("update_communication", { status: result.status, error: result.error });
+  }
+  return { ok: result.ok, status: result.status };
+}

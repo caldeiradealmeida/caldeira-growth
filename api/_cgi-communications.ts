@@ -168,12 +168,21 @@ export function isCommunicationsLedgerEnabled(): boolean {
 
 export type RecordCommunicationInput = {
   type: CommunicationType;
-  status: Extract<CommunicationStatus, "sent" | "failed" | "scheduled" | "suppressed" | "cancelled">;
+  status: Extract<CommunicationStatus, "sending" | "sent" | "failed" | "scheduled" | "suppressed" | "cancelled">;
   channel?: CommunicationChannel;
   leadId?: string | null;
   assessmentId?: string | null;
   publicAssessmentId?: string | null;
   occurrenceKey?: string | null;
+  /** Chave explicita, quando o chamador precisa de um namespace proprio.
+   *
+   * Existe por causa das supressoes: elas usam
+   * `{pid}:{tipo}:suppressed:{motivo}` justamente para NAO ocupar a chave do
+   * envio real. Sem este campo, buildCommunicationDedupeKey ignoraria o
+   * occurrenceKey -- que so vale para tipos repetiveis -- e a linha de
+   * supressao roubaria o unico slot daquele tipo, fazendo o envio verdadeiro
+   * ser recusado como duplicata mais tarde. */
+  dedupeKey?: string | null;
   recipient?: string | null;
   recipientMasked?: string | null;
   subject?: string | null;
@@ -191,7 +200,7 @@ export type RecordCommunicationInput = {
   now?: number;
 };
 
-function maskRecipient(email: string | null | undefined): string | null {
+export function maskRecipient(email: string | null | undefined): string | null {
   const value = String(email || "").trim();
   if (!value) return null;
   const at = value.indexOf("@");
@@ -214,12 +223,14 @@ export async function recordCommunication(
     return { outcome: "skipped_invalid", dedupeKey: null, detail: `unknown_type:${input.type}` };
   }
 
-  const dedupeKey = buildCommunicationDedupeKey({
-    type: input.type,
-    publicAssessmentId: input.publicAssessmentId,
-    leadId: input.leadId,
-    occurrenceKey: input.occurrenceKey,
-  });
+  const dedupeKey =
+    input.dedupeKey?.trim() ||
+    buildCommunicationDedupeKey({
+      type: input.type,
+      publicAssessmentId: input.publicAssessmentId,
+      leadId: input.leadId,
+      occurrenceKey: input.occurrenceKey,
+    });
 
   const nowIso = new Date(input.now ?? Date.now()).toISOString();
   const body: Record<string, unknown> = {
