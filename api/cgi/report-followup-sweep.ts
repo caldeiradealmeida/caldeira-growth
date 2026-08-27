@@ -154,6 +154,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       mode: "inspect",
       flag_enabled: isNurtureTypeEnabled("report_followup_d2"),
       window: { from: plan.windowFromIso, to: plan.windowToIso },
+      degraded: plan.degraded,
+      failed_reads: plan.failedReads,
       candidates: plan.candidates,
       would_send: sendablesFromPlan(plan).length,
       would_record_suppressions: suppressionsFromPlan(plan).length,
@@ -235,10 +237,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
   }
 
+  if (plan.degraded) {
+    // Loud: os logs da Vercel expiram, entao esta linha e a chance de alguem
+    // ver que a regua ficou muda por causa de leitura, e nao por prudencia.
+    console.warn("[D+2] varredura degradada, nada enviado. Leituras que falharam:", plan.failedReads.join(", "));
+  }
+
   res.status(200).json({
     ok: true,
     mode: "run",
     dry_run: dryRun,
+    degraded: plan.degraded,
+    failed_reads: plan.failedReads,
     window: { from: plan.windowFromIso, to: plan.windowToIso },
     candidates: plan.candidates,
     sent,

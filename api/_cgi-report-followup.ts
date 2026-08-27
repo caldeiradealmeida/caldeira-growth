@@ -46,6 +46,10 @@ export type ReportFollowupPlan = {
   windowToIso: string;
   candidates: number;
   items: ReportFollowupPlanItem[];
+  /** Alguma leitura necessaria falhou. Quando true, NENHUM item pode ser
+   * enviado -- ver o comentario em planReportFollowup. */
+  degraded: boolean;
+  failedReads: string[];
 };
 
 /** Mascara do plano. Reusa a do ledger de proposito: duas mascaras diferentes
@@ -76,21 +80,48 @@ export async function planReportFollowup(input: {
 }): Promise<ReportFollowupPlan> {
   const { fromIso, toIso } = reportFollowupWindow(input.now);
 
-  const candidatos = await getReportFollowupCandidates({
+  const consulta = await getReportFollowupCandidates({
     sentFromIso: fromIso,
     sentToIso: toIso,
     limit: input.limit,
   });
+  const candidatos = consulta.rows;
 
   const publicIds = candidatos.map((c) => c.public_assessment_id);
   const leadIds = candidatos.map((c) => c.lead_id).filter((id): id is string => Boolean(id));
 
-  const [acessos, leads, oportunidades, registrados] = await Promise.all([
+  const [acessosRead, leadsRead, oportunidadesRead, registradosRead] = await Promise.all([
     getReportAccessTimestamps(publicIds),
     getNurtureLeads(leadIds),
     getNurtureOpportunities(leadIds),
     getRecordedCommunicationTypes(publicIds),
   ]);
+
+  const acessos = acessosRead.rows;
+  const leads = leadsRead.rows;
+  const oportunidades = oportunidadesRead.rows;
+  const registrados = registradosRead.rows;
+
+  // FAIL-CLOSED.
+  //
+  // Cada uma destas leituras responde uma pergunta que decide seguranca
+  // comercial. Se qualquer uma falhar, a resposta nao e "nao ha dado" -- e
+  // "nao sabemos". As duas sao indistinguiveis num Map vazio, e tratar a
+  // segunda como a primeira e o erro que manda e-mail para quem esta em
+  // conversa no WhatsApp.
+  //
+  // A supressao vale para a varredura INTEIRA, nao so para o candidato
+  // afetado: sem o CRM nao da para saber QUEM esta em conversa, entao nenhum
+  // dos candidatos daquela janela pode ser considerado seguro. Ninguem perde
+  // a vez -- a janela dura de 2 a 5 dias e a proxima execucao tenta de novo.
+  const failedReads = [
+    consulta.ok ? null : "candidates",
+    acessosRead.ok ? null : "report_access",
+    leadsRead.ok ? null : "leads",
+    oportunidadesRead.ok ? null : "crm_opportunities",
+    registradosRead.ok ? null : "ledger",
+  ].filter((nome): nome is string => nome !== null);
+  const degraded = failedReads.length > 0;
 
   const items: ReportFollowupPlanItem[] = candidatos.map((c) => {
     const lead = c.lead_id ? leads.get(c.lead_id) ?? null : null;
@@ -111,10 +142,17 @@ export async function planReportFollowup(input: {
       alreadyRecordedTypes: registrados.get(c.public_assessment_id) ?? [],
     };
 
-    const decision = decideNurture("report_followup_d2", candidate, {
-      now: input.now,
-      env: input.env ?? process.env,
-    });
+    const decision: NurtureDecision = degraded
+      ? {
+          decision: "suppress",
+          type: "report_followup_d2",
+          reason: "infrastructure_error",
+          publicAssessmentId: c.public_assessment_id,
+        }
+      : decideNurture("report_followup_d2", candidate, {
+          now: input.now,
+          env: input.env ?? process.env,
+        });
 
     const ms = c.report_email_sent_at ? new Date(c.report_email_sent_at).getTime() : NaN;
 
@@ -132,7 +170,14 @@ export async function planReportFollowup(input: {
     };
   });
 
-  return { windowFromIso: fromIso, windowToIso: toIso, candidates: candidatos.length, items };
+  return {
+    windowFromIso: fromIso,
+    windowToIso: toIso,
+    candidates: candidatos.length,
+    items,
+    degraded,
+    failedReads,
+  };
 }
 
 /** Linhas de supressao que o plano produziria. Nao escreve -- so descreve. */
@@ -143,6 +188,9 @@ export function suppressionsFromPlan(plan: ReportFollowupPlan) {
 }
 
 export function sendablesFromPlan(plan: ReportFollowupPlan): ReportFollowupPlanItem[] {
+  // Segunda barreira do fail-closed: mesmo que algo passasse pela primeira,
+  // um plano degradado nao produz nada enviavel.
+  if (plan.degraded) return [];
   // Um item so e enviavel se a decisao for "send" E houver lead com e-mail.
   // A segunda condicao nao e redundante: decideNurture nao conhece o lead.
   return plan.items.filter(

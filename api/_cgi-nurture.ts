@@ -92,7 +92,9 @@ export type NurtureSuppressionReason =
   | "no_marketing_consent"
   | "unsubscribed"
   | "human_contact"
-  | "unknown_dimension";
+  | "unknown_dimension"
+  // Nao foi possivel LER o que decide. Nunca significa "pode enviar".
+  | "infrastructure_error";
 
 export type NurtureCandidate = {
   publicAssessmentId: string;
@@ -235,6 +237,11 @@ const SUPPRESSION_REASONS_NOT_RECORDED: ReadonlySet<NurtureSuppressionReason> = 
   "flag_disabled",
   "outside_window",
   "already_recorded",
+  // Fato sobre o sistema, nao sobre a pessoa -- mesma regra dos dois
+  // primeiros. Numa queda do PostgREST, toda a janela seria suprimida por
+  // este motivo e o ledger ganharia uma linha por candidato por dia, sem
+  // dizer nada sobre ninguem. Fica observavel na resposta do sweep e no log.
+  "infrastructure_error",
 ]);
 
 export function shouldRecordSuppression(reason: NurtureSuppressionReason): boolean {

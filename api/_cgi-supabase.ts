@@ -1691,7 +1691,7 @@ export async function getReportFollowupCandidates(input: {
   sentFromIso: string;
   sentToIso: string;
   limit: number;
-}): Promise<ReportFollowupCandidateRow[]> {
+}): Promise<SoftRead<ReportFollowupCandidateRow[]>> {
   const query = [
     "completed_at=not.is.null",
     "lead_id=not.is.null",
@@ -1710,19 +1710,21 @@ export async function getReportFollowupCandidates(input: {
       status: result.status,
       error: result.error,
     });
-    return [];
+    return { ok: false, rows: [] };
   }
-  return Array.isArray(result.data) ? result.data : [];
+  return { ok: true, rows: Array.isArray(result.data) ? result.data : [] };
 }
 
 /** last_accessed_at do relatorio. Le a TABELA, nao a view: a view existe para o
  * browser do CRM e tem portao is_crm_admin(); aqui quem le e o service_role,
  * no servidor. token_hash nao e selecionado -- nao ha motivo para carrega-lo. */
+export type SoftRead<T> = { ok: boolean; rows: T };
+
 export async function getReportAccessTimestamps(
   publicAssessmentIds: string[]
-): Promise<Map<string, string | null>> {
+): Promise<SoftRead<Map<string, string | null>>> {
   const mapa = new Map<string, string | null>();
-  if (publicAssessmentIds.length === 0) return mapa;
+  if (publicAssessmentIds.length === 0) return { ok: true, rows: mapa };
   const lista = publicAssessmentIds.map((id) => `"${id}"`).join(",");
   const result = await supabaseRequest<Array<{ public_assessment_id: string; last_accessed_at: string | null }>>(
     `cgi_report_access?public_assessment_id=in.(${encodeURIComponent(lista)})&select=public_assessment_id,last_accessed_at`,
@@ -1730,10 +1732,10 @@ export async function getReportAccessTimestamps(
   );
   if (!result.ok) {
     logSupabaseFailure("get_report_access_timestamps", { status: result.status, error: result.error });
-    return mapa;
+    return { ok: false, rows: mapa };
   }
   for (const row of result.data ?? []) mapa.set(row.public_assessment_id, row.last_accessed_at);
-  return mapa;
+  return { ok: true, rows: mapa };
 }
 
 export type NurtureLeadRow = {
@@ -1746,9 +1748,11 @@ export type NurtureLeadRow = {
   contact_token_hash: string | null;
 };
 
-export async function getNurtureLeads(leadIds: string[]): Promise<Map<string, NurtureLeadRow>> {
+export async function getNurtureLeads(
+  leadIds: string[]
+): Promise<SoftRead<Map<string, NurtureLeadRow>>> {
   const mapa = new Map<string, NurtureLeadRow>();
-  if (leadIds.length === 0) return mapa;
+  if (leadIds.length === 0) return { ok: true, rows: mapa };
   const lista = leadIds.map((id) => `"${id}"`).join(",");
   const result = await supabaseRequest<NurtureLeadRow[]>(
     `cgi_leads?id=in.(${encodeURIComponent(lista)})&select=id,name,email,company,consent_marketing,unsubscribed_at,contact_token_hash`,
@@ -1756,10 +1760,10 @@ export async function getNurtureLeads(leadIds: string[]): Promise<Map<string, Nu
   );
   if (!result.ok) {
     logSupabaseFailure("get_nurture_leads", { status: result.status, error: result.error });
-    return mapa;
+    return { ok: false, rows: mapa };
   }
   for (const row of result.data ?? []) mapa.set(row.id, row);
-  return mapa;
+  return { ok: true, rows: mapa };
 }
 
 export type NurtureOpportunityRow = {
@@ -1770,9 +1774,9 @@ export type NurtureOpportunityRow = {
 
 export async function getNurtureOpportunities(
   leadIds: string[]
-): Promise<Map<string, NurtureOpportunityRow>> {
+): Promise<SoftRead<Map<string, NurtureOpportunityRow>>> {
   const mapa = new Map<string, NurtureOpportunityRow>();
-  if (leadIds.length === 0) return mapa;
+  if (leadIds.length === 0) return { ok: true, rows: mapa };
   const lista = leadIds.map((id) => `"${id}"`).join(",");
   const result = await supabaseRequest<NurtureOpportunityRow[]>(
     `crm_opportunities?lead_id=in.(${encodeURIComponent(lista)})&select=lead_id,status,last_contact_at`,
@@ -1780,21 +1784,22 @@ export async function getNurtureOpportunities(
   );
   if (!result.ok) {
     // Falha de leitura do CRM NAO pode virar "ninguem foi contatado" -- isso
-    // mandaria e-mail para quem esta em conversa. Quem chama trata o null como
-    // "estado desconhecido" e suprime.
+    // mandaria e-mail para quem esta em conversa. Por isso o ok:false, e por
+    // isso quem chama suprime a varredura inteira: sem o CRM nao da para
+    // distinguir quem esta em conversa de quem nao esta.
     logSupabaseFailure("get_nurture_opportunities", { status: result.status, error: result.error });
-    return mapa;
+    return { ok: false, rows: mapa };
   }
   for (const row of result.data ?? []) mapa.set(row.lead_id, row);
-  return mapa;
+  return { ok: true, rows: mapa };
 }
 
 /** Tipos ja registrados no ledger, por assessment. E o que da idempotencia. */
 export async function getRecordedCommunicationTypes(
   publicAssessmentIds: string[]
-): Promise<Map<string, string[]>> {
+): Promise<SoftRead<Map<string, string[]>>> {
   const mapa = new Map<string, string[]>();
-  if (publicAssessmentIds.length === 0) return mapa;
+  if (publicAssessmentIds.length === 0) return { ok: true, rows: mapa };
   const lista = publicAssessmentIds.map((id) => `"${id}"`).join(",");
   const result = await supabaseRequest<Array<{ public_assessment_id: string; communication_type: string; status: string }>>(
     `cgi_communications?public_assessment_id=in.(${encodeURIComponent(lista)})&select=public_assessment_id,communication_type,status`,
@@ -1802,7 +1807,7 @@ export async function getRecordedCommunicationTypes(
   );
   if (!result.ok) {
     logSupabaseFailure("get_recorded_communication_types", { status: result.status, error: result.error });
-    return mapa;
+    return { ok: false, rows: mapa };
   }
   for (const row of result.data ?? []) {
     // Supressao nao conta como "ja recebeu": ela registra que NAO recebeu.
@@ -1811,7 +1816,7 @@ export async function getRecordedCommunicationTypes(
     atual.push(row.communication_type);
     mapa.set(row.public_assessment_id, atual);
   }
-  return mapa;
+  return { ok: true, rows: mapa };
 }
 
 /** PATCH por dedupe_key. Usado para fechar uma linha 'sending' como

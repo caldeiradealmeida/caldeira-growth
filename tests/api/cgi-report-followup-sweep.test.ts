@@ -87,11 +87,11 @@ function cenario(over: {
   oportunidades?: Array<[string, Record<string, unknown>]>;
   registrados?: Array<[string, string[]]>;
 } = {}) {
-  db.getReportFollowupCandidates.mockResolvedValue(over.assessments ?? [assessment()]);
-  db.getReportAccessTimestamps.mockResolvedValue(new Map(over.acessos ?? []));
-  db.getNurtureLeads.mockResolvedValue(new Map((over.leads ?? [lead()]).map((l) => [l.id as string, l])));
-  db.getNurtureOpportunities.mockResolvedValue(new Map(over.oportunidades ?? []));
-  db.getRecordedCommunicationTypes.mockResolvedValue(new Map(over.registrados ?? []));
+  db.getReportFollowupCandidates.mockResolvedValue({ ok: true, rows: over.assessments ?? [assessment()] });
+  db.getReportAccessTimestamps.mockResolvedValue({ ok: true, rows: new Map(over.acessos ?? []) });
+  db.getNurtureLeads.mockResolvedValue({ ok: true, rows: new Map((over.leads ?? [lead()]).map((l) => [l.id as string, l])) });
+  db.getNurtureOpportunities.mockResolvedValue({ ok: true, rows: new Map(over.oportunidades ?? []) });
+  db.getRecordedCommunicationTypes.mockResolvedValue({ ok: true, rows: new Map(over.registrados ?? []) });
 }
 
 beforeEach(() => {
@@ -438,5 +438,121 @@ describe("LEDGER", () => {
     await handler(req(), res() as never);
     expect(ledger()[0].dedupe_key).toBe("PID1:report_followup_d2:suppressed:unsubscribed");
     expect(ledger()[0].dedupe_key).not.toBe("PID1:report_followup_d2");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// FAIL-CLOSED -- ausência de dado nunca é permissão
+// ---------------------------------------------------------------------------
+//
+// Um Map vazio não distingue "não há linhas" de "não consegui ler". Tratar a
+// segunda como a primeira é o erro que manda D+2 para quem está em conversa no
+// WhatsApp. Cada leitura abaixo responde uma pergunta que decide segurança
+// comercial, e falhar em qualquer uma delas cala a varredura inteira -- não só
+// o candidato afetado, porque sem a leitura não dá para saber QUEM é afetado.
+
+describe("FAIL-CLOSED", () => {
+  const LEITURAS: Array<[string, keyof typeof db, string]> = [
+    ["CRM (human override)", "getNurtureOpportunities", "crm_opportunities"],
+    ["abertura do relatório", "getReportAccessTimestamps", "report_access"],
+    ["leads", "getNurtureLeads", "leads"],
+    ["ledger (idempotência)", "getRecordedCommunicationTypes", "ledger"],
+    ["candidatos", "getReportFollowupCandidates", "candidates"],
+  ];
+
+  for (const [nome, metodo, rotulo] of LEITURAS) {
+    it(`falha ao ler ${nome}: não envia, não chama o provider, não emite token`, async () => {
+      cenario();
+      const vazio = metodo === "getReportFollowupCandidates" ? [] : new Map();
+      (db[metodo] as ReturnType<typeof vi.fn>).mockResolvedValue({ ok: false, rows: vazio });
+
+      const r = res();
+      await handler(req(), r as never);
+
+      expect(mail.dispatchCgiParticipantEmail).not.toHaveBeenCalled();
+      expect(token.issueReportAccessToken).not.toHaveBeenCalled();
+      expect(r.payload).toMatchObject({ sent: 0, failed: 0, degraded: true });
+      expect(r.payload?.failed_reads).toContain(rotulo);
+    });
+  }
+
+  it("a falha do CRM NÃO vira 'novo' — é exatamente o fallback proibido", async () => {
+    // Sem o CRM, um lead em conversa e um lead intocado são indistinguíveis.
+    // Antes desta correção o mapa vazio virava crmStatus 'novo' e o e-mail saía.
+    cenario();
+    db.getNurtureOpportunities.mockResolvedValue({ ok: false, rows: new Map() });
+
+    const r = res();
+    await handler(req(), r as never);
+
+    expect(r.payload).toMatchObject({ sent: 0 });
+    const item = (r.payload?.results as Array<unknown>) ?? [];
+    expect(item).toHaveLength(0);
+  });
+
+  it("erro na leitura de acesso não é lido como 'não abriu'", async () => {
+    cenario();
+    db.getReportAccessTimestamps.mockResolvedValue({ ok: false, rows: new Map() });
+    const r = res();
+    await handler(req(), r as never);
+    expect(r.payload).toMatchObject({ sent: 0, degraded: true });
+    expect(mail.dispatchCgiParticipantEmail).not.toHaveBeenCalled();
+  });
+
+  it("infrastructure_error NÃO vira linha no ledger — é fato do sistema, não da pessoa", async () => {
+    cenario();
+    db.getNurtureOpportunities.mockResolvedValue({ ok: false, rows: new Map() });
+    const r = res();
+    await handler(req(), r as never);
+    expect(ledger()).toHaveLength(0);
+    // Observável na resposta, que é onde a informação é útil.
+    expect(r.payload).toMatchObject({ degraded: true, failed_reads: ["crm_opportunities"] });
+  });
+
+  it("o candidato continua retryable: nada bloqueia a próxima execução", async () => {
+    cenario();
+    db.getNurtureOpportunities.mockResolvedValue({ ok: false, rows: new Map() });
+    await handler(req(), res() as never);
+    // Nenhuma linha gravada => a chave de envio segue livre.
+    expect(ledger()).toHaveLength(0);
+
+    // Execução seguinte, com o CRM de volta: envia normalmente.
+    vi.clearAllMocks();
+    db.supabaseInsert.mockResolvedValue({ ok: true, status: 201 });
+    db.updateCommunicationByDedupeKey.mockResolvedValue({ ok: true, status: 204 });
+    token.issueReportAccessToken.mockResolvedValue({ token: "t", expiresAt: "2026-11-01T00:00:00Z" });
+    mail.dispatchCgiParticipantEmail.mockResolvedValue({ status: "sent" });
+    cenario();
+
+    const r2 = res();
+    await handler(req(), r2 as never);
+    expect(r2.payload).toMatchObject({ sent: 1, degraded: false });
+  });
+
+  it("inspect também mostra a degradação, em vez de fingir uma fila vazia", async () => {
+    cenario();
+    db.getNurtureOpportunities.mockResolvedValue({ ok: false, rows: new Map() });
+    const r = res();
+    await handler(req({ query: { mode: "inspect" } }), r as never);
+
+    expect(r.payload).toMatchObject({ degraded: true, would_send: 0 });
+    const item = (r.payload?.items as Array<Record<string, unknown>>)[0];
+    expect(item).toMatchObject({ decision: "suppress", reason: "infrastructure_error" });
+  });
+
+  it("sem report_email_sent_at não envia", async () => {
+    cenario({ assessments: [assessment({ report_email_sent_at: null })] });
+    const r = res();
+    await handler(req(), r as never);
+    expect(r.payload).toMatchObject({ sent: 0 });
+    expect(mail.dispatchCgiParticipantEmail).not.toHaveBeenCalled();
+  });
+
+  it("lead ausente ou sem e-mail não envia", async () => {
+    cenario({ leads: [] });
+    const r = res();
+    await handler(req(), r as never);
+    expect(r.payload).toMatchObject({ sent: 0 });
+    expect(mail.dispatchCgiParticipantEmail).not.toHaveBeenCalled();
   });
 });
