@@ -6,6 +6,10 @@ import SEO from "@/components/SEO";
 import { useToast } from "@/hooks/use-toast";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { sectionLayout } from "@/lib/sectionLayout";
+import {
+  analyticsSafeQualification,
+  analyticsSafeSector,
+} from "@/features/cgi/logic/analyticsVocabulary";
 import { CGI_QUESTIONS, getCgiConfig } from "@/data/cgiConfig";
 import {
   areCgiAnswersComplete,
@@ -784,9 +788,12 @@ export default function CGI() {
         event_id: response.event_id || eventId,
         anonymous_session_id: anonymousSessionId,
         public_assessment_id: assessmentId,
-        company_size: normalizedLead.employeeCount || null,
-        industry: normalizedLead.sector || null,
-        investment_intent: normalizedLead.investmentIntent || null,
+        // Allowlist, nao denylist: so sai o que veio da lista do formulario.
+        // `sector` carrega o texto livre do campo "Outro" depois da
+        // normalizacao, e ele nao pode chegar ao GA4.
+        company_size: analyticsSafeQualification("employeeCount", normalizedLead.employeeCount),
+        industry: analyticsSafeSector(normalizedLead.sector),
+        investment_intent: analyticsSafeQualification("investmentIntent", normalizedLead.investmentIntent),
       });
     }
 
