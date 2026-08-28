@@ -12,6 +12,7 @@ const supabaseMocks = vi.hoisted(() => ({
   getReadyCgiReport: vi.fn(),
   getLeadById: vi.fn(),
   getCrmOpportunityByLeadId: vi.fn(),
+  countCompletedAssessmentsForLead: vi.fn(),
   markReportEmailSent: vi.fn(),
   // abandono
   getAbandonmentState: vi.fn(),
@@ -113,6 +114,7 @@ describe("Communication Engine -- dual-write nos envios existentes", () => {
     });
     supabaseMocks.getLeadById.mockResolvedValue(lead());
     supabaseMocks.getCrmOpportunityByLeadId.mockResolvedValue({ ok: true, opportunity: null });
+    supabaseMocks.countCompletedAssessmentsForLead.mockReset().mockResolvedValue({ ok: true, rows: 0 });
     supabaseMocks.markReportEmailSent.mockResolvedValue(true);
     supabaseMocks.getAbandonmentState.mockResolvedValue(abandonmentState());
     supabaseMocks.markAbandonmentEmailSent.mockResolvedValue(true);

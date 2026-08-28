@@ -7,6 +7,7 @@ const supabaseMocks = vi.hoisted(() => ({
   getReadyCgiReport: vi.fn(),
   getLeadById: vi.fn(),
   getCrmOpportunityByLeadId: vi.fn(),
+  countCompletedAssessmentsForLead: vi.fn(),
   markAbandonmentEmailSent: vi.fn(),
   upsertReportAccessToken: vi.fn(),
   getReportAccessTokenByHash: vi.fn(),
@@ -89,6 +90,7 @@ describe("abandonment V2", () => {
     supabaseMocks.getReadyCgiReport.mockReset().mockResolvedValue(null);
     supabaseMocks.getLeadById.mockReset().mockResolvedValue(lead());
     supabaseMocks.getCrmOpportunityByLeadId.mockReset().mockResolvedValue({ ok: true, opportunity: null });
+    supabaseMocks.countCompletedAssessmentsForLead.mockReset().mockResolvedValue({ ok: true, rows: 0 });
     supabaseMocks.markAbandonmentEmailSent.mockReset().mockResolvedValue(true);
     supabaseMocks.upsertReportAccessToken.mockReset().mockResolvedValue(true);
     supabaseMocks.getAbandonmentCandidates.mockReset().mockResolvedValue([]);
@@ -186,6 +188,71 @@ describe("abandonment V2", () => {
 
     it("does not treat consent_marketing=false as a blocker (operational email)", async () => {
       supabaseMocks.getLeadById.mockResolvedValue(lead({ consent_marketing: false }));
+      const response = createResponse();
+      await handler(createRequest() as never, response as never);
+      expect(results(response)[0].outcome).toBe("sent");
+    });
+  });
+
+  // A pessoa terminou -- em outra linha.
+  //
+  // Caso real de 21/08/2026: a geracao do relatorio falhou, o "tentar
+  // novamente" criou um public_assessment_id novo, e a conclusao e o relatorio
+  // pronto foram os dois para a linha nova. A linha antiga -- mesma pessoa,
+  // mesmo lead, mesma sessao -- continuou in_progress e recebeu, no dia
+  // seguinte, "seu diagnostico ficou em aberto".
+  //
+  // As guardas 2 e 4 nao pegam isso: as duas olham ESTE assessment.
+  describe("conclusao da mesma pessoa em outro assessment", () => {
+    it("bloqueia quando o lead ja concluiu em outra linha", async () => {
+      supabaseMocks.countCompletedAssessmentsForLead.mockResolvedValue({ ok: true, rows: 1 });
+      const response = createResponse();
+      await handler(createRequest() as never, response as never);
+      expect(results(response)[0].outcome).toBe("skipped_completed_elsewhere");
+      expect(globalThis.fetch).not.toHaveBeenCalled();
+      expect(supabaseMocks.upsertReportAccessToken).not.toHaveBeenCalled();
+      expect(supabaseMocks.markAbandonmentEmailSent).not.toHaveBeenCalled();
+    });
+
+    it("reproduz o caso real: linha antiga in_progress, conclusao na retentativa", async () => {
+      supabaseMocks.getAbandonmentState.mockResolvedValue(
+        state({
+          status: "in_progress",
+          completed_at: null,
+          progress_percent: 99,
+          current_question: 40,
+          last_activity_at: hoursAgo(36),
+        })
+      );
+      // O relatorio DESTA linha falhou -- nao ha relatorio pronto aqui.
+      supabaseMocks.getReadyCgiReport.mockResolvedValue(null);
+      // Mas a pessoa tem uma conclusao na linha da retentativa.
+      supabaseMocks.countCompletedAssessmentsForLead.mockResolvedValue({ ok: true, rows: 1 });
+      const response = createResponse();
+      await handler(createRequest() as never, response as never);
+      expect(results(response)[0].outcome).toBe("skipped_completed_elsewhere");
+      expect(globalThis.fetch).not.toHaveBeenCalled();
+    });
+
+    it("pergunta por lead e exclui a propria linha", async () => {
+      const response = createResponse();
+      await handler(createRequest() as never, response as never);
+      expect(supabaseMocks.countCompletedAssessmentsForLead).toHaveBeenCalledWith({
+        leadId: "lead_1",
+        excludePublicAssessmentId: PID,
+      });
+    });
+
+    it("falha closed: sem conseguir ler as conclusoes da pessoa, nao envia", async () => {
+      supabaseMocks.countCompletedAssessmentsForLead.mockResolvedValue({ ok: false, rows: 0 });
+      const response = createResponse();
+      await handler(createRequest() as never, response as never);
+      expect(results(response)[0].outcome).toBe("skipped_completion_state_unknown");
+      expect(globalThis.fetch).not.toHaveBeenCalled();
+    });
+
+    it("nao suprime alem da conta: sem outra conclusao, o envio continua", async () => {
+      supabaseMocks.countCompletedAssessmentsForLead.mockResolvedValue({ ok: true, rows: 0 });
       const response = createResponse();
       await handler(createRequest() as never, response as never);
       expect(results(response)[0].outcome).toBe("sent");

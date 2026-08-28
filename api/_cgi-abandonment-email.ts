@@ -1,4 +1,5 @@
 import {
+  countCompletedAssessmentsForLead,
   getAbandonmentState,
   getCrmOpportunityByLeadId,
   getLeadById,
@@ -45,6 +46,8 @@ export type AbandonmentOutcome =
   | "skipped_completed"
   | "skipped_already_sent"
   | "skipped_report_ready"
+  | "skipped_completed_elsewhere"
+  | "skipped_completion_state_unknown"
   | "skipped_report_email_sent"
   | "skipped_no_lead"
   | "skipped_recipient"
@@ -182,6 +185,44 @@ export async function evaluateAbandonmentCandidate(input: {
 
   // 5. Recipient.
   if (!state.lead_id) return { decision: make("skipped_no_lead", { inactiveHours, abandonmentKind }), state, lead: null };
+
+  // 5b. A pessoa terminou -- em OUTRA linha.
+  //
+  // A guarda 2 (completed_at) e a guarda 4 (relatorio pronto) fazem a pergunta
+  // certa no objeto errado: as duas olham ESTE assessment. Quando a geracao do
+  // relatorio falha, o botao "tentar novamente" cria um public_assessment_id
+  // novo, e tanto a conclusao quanto o relatorio pronto passam a viver na linha
+  // nova. A linha antiga continua in_progress, sem completed_at, sem relatorio
+  // -- e, para as guardas acima, indistinguivel de alguem que largou no meio.
+  //
+  // Foi assim que uma pessoa que concluiu o CGI as 02:02 do dia 21/08 recebeu,
+  // no dia 22, um e-mail dizendo que o diagnostico dela tinha ficado em aberto.
+  // A persistencia antecipada da conclusao (commit anterior) impede que isso
+  // volte a acontecer pela causa original; esta guarda impede que aconteca por
+  // QUALQUER caminho que produza uma segunda linha, incluindo as linhas que ja
+  // existem no banco de antes da correcao.
+  //
+  // So suprime, nunca habilita: nao ha valor de retorno desta leitura capaz de
+  // fazer um e-mail sair que nao sairia sem ela. Leitura falha => nao envia.
+  const conclusoesDaPessoa = await countCompletedAssessmentsForLead({
+    leadId: state.lead_id,
+    excludePublicAssessmentId: publicAssessmentId,
+  });
+  if (!conclusoesDaPessoa.ok) {
+    return {
+      decision: make("skipped_completion_state_unknown", { inactiveHours, abandonmentKind }),
+      state,
+      lead: null,
+    };
+  }
+  if (conclusoesDaPessoa.rows > 0) {
+    return {
+      decision: make("skipped_completed_elsewhere", { inactiveHours, abandonmentKind }),
+      state,
+      lead: null,
+    };
+  }
+
   const lead = await getLeadById(state.lead_id);
   if (!lead) return { decision: make("skipped_no_lead", { inactiveHours, abandonmentKind }), state, lead: null };
   const recipient = String(lead.email || "").trim();

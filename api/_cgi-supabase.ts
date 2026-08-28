@@ -1873,3 +1873,42 @@ export async function findLeadIdByAnonymousSession(
   const distinct = [...new Set(result.data.map((row) => row.lead_id).filter(Boolean))];
   return distinct.length === 1 ? (distinct[0] as string) : null;
 }
+
+// --- Conclusoes da mesma pessoa em outro assessment ------------------------
+// A guarda de abandono pergunta "esta pessoa terminou?" olhando UMA linha. Isso
+// bastava enquanto uma pessoa tinha um assessment. Nao basta mais: a
+// retentativa do cliente (forceNewAttempt) cria um public_assessment_id novo, e
+// a conclusao passa a viver na linha nova enquanto a antiga fica para tras.
+//
+// Caso real (21/08/2026): a conclusao ficou em cgi_1002f847..., o relatorio
+// pronto tambem, e a linha original Y4TFaDzmxA55aazU -- mesma pessoa, mesmo
+// lead, mesma sessao -- recebeu "seu diagnostico ficou em aberto" no dia 22.
+//
+// Esta leitura e por lead, nao por assessment: e a pergunta certa.
+export async function countCompletedAssessmentsForLead(input: {
+  leadId: string;
+  excludePublicAssessmentId?: string | null;
+}): Promise<SoftRead<number>> {
+  const leadId = String(input.leadId || "").trim();
+  if (!leadId) return { ok: true, rows: 0 };
+  const filtros = [
+    `lead_id=${eqFilter(leadId)}`,
+    "completed_at=not.is.null",
+    "select=public_assessment_id",
+    "limit=200",
+  ];
+  const excluir = String(input.excludePublicAssessmentId || "").trim();
+  if (excluir) filtros.push(`public_assessment_id=neq.${encodeURIComponent(excluir)}`);
+  const result = await supabaseRequest<Array<{ public_assessment_id: string }>>(
+    `cgi_assessments?${filtros.join("&")}`,
+    { method: "GET" }
+  );
+  if (!result.ok) {
+    logSupabaseFailure("count_completed_assessments_for_lead", {
+      status: result.status,
+      error: result.error,
+    });
+    return { ok: false, rows: 0 };
+  }
+  return { ok: true, rows: Array.isArray(result.data) ? result.data.length : 0 };
+}

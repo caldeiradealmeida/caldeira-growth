@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  countCompletedAssessmentsForLead,
   findLeadIdByAnonymousSession,
   getActiveAssessmentByAnonymousSession,
   getMaxCgiReportVersion,
@@ -386,6 +387,49 @@ describe("findLeadIdByAnonymousSession", () => {
   it("sessao vazia nao chega ao banco", async () => {
     const fetchMock = stubRows([{ lead_id: "lead_1" }]);
     expect(await findLeadIdByAnonymousSession("   ")).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("countCompletedAssessmentsForLead", () => {
+  beforeEach(() => {
+    process.env.SUPABASE_URL = "https://example.supabase.co";
+    process.env.SUPABASE_SERVICE_ROLE_KEY = "test-service-role";
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    process.env = { ...originalEnv };
+  });
+
+  it("conta as conclusoes da pessoa em outras linhas", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify([{ public_assessment_id: "cgi_retry_1" }]), { status: 200 })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const r = await countCompletedAssessmentsForLead({
+      leadId: "lead_1",
+      excludePublicAssessmentId: "Y4TFaDzmxA55aazU",
+    });
+    expect(r).toEqual({ ok: true, rows: 1 });
+    const url = String(fetchMock.mock.calls[0][0]);
+    expect(url).toContain("lead_id=eq.lead_1");
+    expect(url).toContain("completed_at=not.is.null");
+    // Nunca conta a si mesma: senao toda linha concluida se auto-suprimiria e a
+    // guarda nao diria nada de novo.
+    expect(url).toContain("public_assessment_id=neq.Y4TFaDzmxA55aazU");
+  });
+
+  it("uma leitura que falha devolve ok:false, e nao zero", async () => {
+    // Zero e o unico valor que PERMITE o envio. Uma falha nunca pode virar zero.
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("{}", { status: 500 })));
+    expect(await countCompletedAssessmentsForLead({ leadId: "lead_1" })).toEqual({ ok: false, rows: 0 });
+  });
+
+  it("lead vazio nao chega ao banco", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    expect(await countCompletedAssessmentsForLead({ leadId: "" })).toEqual({ ok: true, rows: 0 });
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });
