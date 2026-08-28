@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  findLeadIdByAnonymousSession,
   getActiveAssessmentByAnonymousSession,
   getMaxCgiReportVersion,
   getReportAccessTokenByHash,
@@ -332,5 +333,59 @@ describe("cgi_report_access helpers", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     await expect(touchReportAccessToken("row_1")).resolves.toBeUndefined();
+  });
+});
+
+// --- Recuperacao de vinculo e conclusoes por pessoa -------------------------
+// Duas leituras cuja unica funcao e responder "e a mesma pessoa?" e "ela ja
+// terminou?". Ambas so podem errar para o lado de nao enviar.
+
+describe("findLeadIdByAnonymousSession", () => {
+  beforeEach(() => {
+    process.env.SUPABASE_URL = "https://example.supabase.co";
+    process.env.SUPABASE_SERVICE_ROLE_KEY = "test-service-role";
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    process.env = { ...originalEnv };
+  });
+
+  function stubRows(rows: Array<{ lead_id: string | null }>, status = 200) {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify(rows), { status }));
+    vi.stubGlobal("fetch", fetchMock);
+    return fetchMock;
+  }
+
+  it("devolve o lead quando a sessao resolve para um unico lead", async () => {
+    stubRows([{ lead_id: "lead_1" }, { lead_id: "lead_1" }]);
+    expect(await findLeadIdByAnonymousSession("session_1")).toBe("lead_1");
+  });
+
+  it("devolve null quando a sessao e ambigua", async () => {
+    stubRows([{ lead_id: "lead_1" }, { lead_id: "lead_2" }]);
+    expect(await findLeadIdByAnonymousSession("session_1")).toBeNull();
+  });
+
+  it("a janela de leitura e grande o bastante para a ambiguidade aparecer", async () => {
+    // Regressao do limit=5: cinco linhas do lead A seguidas de uma do lead B
+    // pareciam inequivocas quando a consulta so trazia cinco. O corte nao pode
+    // ser menor do que qualquer sessao real.
+    const fetchMock = stubRows([]);
+    await findLeadIdByAnonymousSession("session_1");
+    const url = String(fetchMock.mock.calls[0][0]);
+    const limite = Number(/limit=(\d+)/.exec(url)?.[1]);
+    expect(limite).toBeGreaterThanOrEqual(100);
+  });
+
+  it("uma leitura que falha nao vira 'nenhum lead' silencioso -- devolve null", async () => {
+    stubRows([], 500);
+    expect(await findLeadIdByAnonymousSession("session_1")).toBeNull();
+  });
+
+  it("sessao vazia nao chega ao banco", async () => {
+    const fetchMock = stubRows([{ lead_id: "lead_1" }]);
+    expect(await findLeadIdByAnonymousSession("   ")).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

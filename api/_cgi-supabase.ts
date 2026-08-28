@@ -1859,7 +1859,14 @@ export async function findLeadIdByAnonymousSession(
   const sessionId = String(anonymousSessionId || "").trim();
   if (!sessionId) return null;
   const result = await supabaseRequest<Array<{ lead_id: string | null }>>(
-    `cgi_assessments?anonymous_session_id=${eqFilter(sessionId)}&lead_id=not.is.null&select=lead_id&order=created_at.asc&limit=5`,
+    // limit alto de proposito. O `limit` aqui nao e paginacao: e o tamanho da
+    // janela onde a ambiguidade pode ser VISTA. Com limit=5, uma sessao com
+    // cinco linhas do lead A e uma sexta do lead B parecia inequivoca, e o
+    // lookup devolvia A -- exatamente o erro que a regra do "unico lead" existe
+    // para evitar. 200 e folgado o suficiente para que qualquer sessao real
+    // caiba inteira; se um dia nao couber, o corte esconde ambiguidade de novo,
+    // e por isso o teto e explicito e nao um default.
+    `cgi_assessments?anonymous_session_id=${eqFilter(sessionId)}&lead_id=not.is.null&select=lead_id&order=created_at.asc&limit=200`,
     { method: "GET" }
   );
   if (!result.ok || !Array.isArray(result.data)) return null;

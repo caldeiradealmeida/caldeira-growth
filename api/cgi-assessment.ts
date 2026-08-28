@@ -2695,6 +2695,14 @@ export default async function handler(
       public_assessment_id: normalizePublicAssessmentId(payload.public_assessment_id),
       error: error instanceof Error ? error.message : String(error || ""),
     });
+    logCgiOperation({
+      correlationId,
+      publicAssessmentId: normalizedPublicAssessmentId,
+      operation: "assessment_persistence",
+      success: false,
+      errorCode: "assessment_persistence_exception",
+      durationMs: Date.now() - handlerStartedAt,
+    });
   }
 
   const requestContext = getRequestContext(req);

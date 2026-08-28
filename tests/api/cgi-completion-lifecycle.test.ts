@@ -303,3 +303,100 @@ describe("Conclusão do CGI -- recuperação do vínculo com o lead na retentati
     expect(supabaseMocks.updateLeadComments).toHaveBeenCalledWith("lead_original", expect.anything());
   });
 });
+
+// --- Onde a persistencia da conclusao AINDA nao chega -----------------------
+//
+// A correcao move a escrita da conclusao para antes da geracao do relatorio,
+// mas ela continua depois do portao de idempotencia (o lock de cgi_reports).
+// Estes testes fixam essa fronteira em vez de fingir que ela nao existe: se
+// alguem mover o bloco, eles falham e a decisao volta a ser explicita.
+//
+// Por que a fronteira e aceitavel hoje: nos tres desvios abaixo, ou a conclusao
+// ja foi persistida numa passagem anterior deste mesmo id (lock `failed`,
+// relatorio pronto), ou outra requisicao e dona da escrita (`in_progress`), ou
+// o banco esta fora do ar e nada seria gravado de qualquer forma
+// (`unavailable`). O que NAO fica coberto sao as linhas que travaram antes
+// desta correcao existir -- essas nao se curam sozinhas.
+
+describe("Conclusão do CGI -- a fronteira: desvios que acontecem ANTES da persistência", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.OPENAI_API_KEY = "sk-test";
+    process.env.OPENAI_MODEL = "gpt-5.1";
+    process.env.CONTACT_FORM_URL = "";
+    process.env.VITE_CONTACT_FORM_URL = "";
+    delete process.env.CGI_REPORT_EMAIL_ENABLED;
+    delete process.env.CGI_COMMUNICATIONS_LEDGER_ENABLED;
+
+    supabaseMocks.createEventId.mockReturnValue("completion_event_generated");
+    supabaseMocks.getCgiReportState.mockResolvedValue(null);
+    supabaseMocks.getReadyCgiReport.mockResolvedValue(null);
+    supabaseMocks.insertFunnelEvent.mockResolvedValue("completion_event_1");
+    supabaseMocks.markCgiReportFailed.mockResolvedValue(true);
+    supabaseMocks.saveCompletedCgiReport.mockResolvedValue(true);
+    supabaseMocks.tryCreateCgiReportGenerationLock.mockResolvedValue({ status: "acquired" });
+    supabaseMocks.updateCgiReportSecondarySyncStatus.mockResolvedValue(true);
+    supabaseMocks.updateLeadComments.mockResolvedValue(true);
+    supabaseMocks.upsertAnswers.mockResolvedValue(undefined);
+    supabaseMocks.upsertAssessment.mockResolvedValue({ id: "row_1", lead_id: "lead_1" });
+    supabaseMocks.findLeadIdByAnonymousSession.mockResolvedValue(null);
+    vi.stubGlobal("fetch", vi.fn(async () => openAiJsonResponse(validOpenAiReport())));
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    vi.spyOn(console, "info").mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it("lock 'failed': devolve 503 e NÃO persiste -- o id já passou por aqui uma vez", async () => {
+    supabaseMocks.tryCreateCgiReportGenerationLock.mockResolvedValue({
+      status: "failed",
+      errorCode: "ai_generation_failed",
+    });
+    const response = createResponse();
+    await handler({ method: "POST", body: createValidPayload(), headers: {} } as never, response as never);
+    expect(response.statusCode).toBe(503);
+    expect(completionUpserts()).toHaveLength(0);
+    // E o mais importante: nao chama o modelo de novo.
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
+  it("lock 'in_progress': devolve 202 e NÃO persiste -- outra requisição é dona da escrita", async () => {
+    supabaseMocks.tryCreateCgiReportGenerationLock.mockResolvedValue({ status: "in_progress" });
+    const response = createResponse();
+    await handler({ method: "POST", body: createValidPayload(), headers: {} } as never, response as never);
+    expect(response.statusCode).toBe(202);
+    expect(completionUpserts()).toHaveLength(0);
+  });
+
+  it("relatório já pronto: responde o relatório guardado e não reescreve a conclusão", async () => {
+    supabaseMocks.getReadyCgiReport.mockResolvedValue({
+      publicAssessmentId: "assessment_1",
+      completionEventId: "completion_event_1",
+      aiReport: JSON.stringify(validOpenAiReport()),
+      aiReportText: "texto",
+      aiStatus: "generated",
+      language: "pt",
+      reportStatus: "report_ready",
+      secondarySyncStatus: "secondary_sync_ok",
+      score: { cgiScore: 70 },
+    });
+    const response = createResponse();
+    await handler({ method: "POST", body: createValidPayload(), headers: {} } as never, response as never);
+    expect(response.statusCode).toBe(200);
+    expect(completionUpserts()).toHaveLength(0);
+    expect(supabaseMocks.tryCreateCgiReportGenerationLock).not.toHaveBeenCalled();
+  });
+
+  it("persistência que explode não derruba a requisição nem impede o relatório", async () => {
+    // "best effort" precisa ser verdade sob excecao, nao so sob resposta ruim:
+    // a pessoa respondeu 40 perguntas e tem que sair daqui com o parecer dela.
+    supabaseMocks.upsertAssessment.mockRejectedValue(new Error("supabase indisponível"));
+    const response = createResponse();
+    await handler({ method: "POST", body: createValidPayload(), headers: {} } as never, response as never);
+    expect(response.statusCode).toBe(200);
+    expect(supabaseMocks.saveCompletedCgiReport).toHaveBeenCalled();
+  });
+});
