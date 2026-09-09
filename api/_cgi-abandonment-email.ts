@@ -15,6 +15,10 @@ import {
 import { dispatchCgiParticipantEmail } from "./_cgi-email-dispatch.js";
 import { buildReportAccessUrl, issueReportAccessToken } from "./_cgi-report-token.js";
 import { recordCommunicationSafely } from "./_cgi-communications.js";
+import {
+  automationMaySend,
+  classificationSuppressionReason,
+} from "./_cgi-lead-classification.js";
 
 // Abandonment V2 -- one executor, two kinds, and a decision step that is
 // deliberately separated from the send step.
@@ -47,6 +51,7 @@ export type AbandonmentOutcome =
   | "skipped_already_sent"
   | "skipped_report_ready"
   | "skipped_completed_elsewhere"
+  | "skipped_lead_classification"
   | "skipped_completion_state_unknown"
   | "skipped_report_email_sent"
   | "skipped_no_lead"
@@ -225,6 +230,29 @@ export async function evaluateAbandonmentCandidate(input: {
 
   const lead = await getLeadById(state.lead_id);
   if (!lead) return { decision: make("skipped_no_lead", { inactiveHours, abandonmentKind }), state, lead: null };
+  // 5c. Classificacao do lead.
+  //
+  // Depois de carregar o lead, porque e nele que a classificacao mora, e antes
+  // do destinatario, porque nao ha por que calcular mascara de e-mail de quem
+  // nao vai receber nada.
+  //
+  // Fail-closed: so 'legitimate' passa. Ausente, nula ou desconhecida bloqueia
+  // -- inclusive quando a migration ainda nao rodou. O detalhe registra o
+  // motivo exato para o inspect, sem expor a pessoa.
+  if (!automationMaySend((lead as { classification?: unknown }).classification)) {
+    return {
+      decision: make("skipped_lead_classification", {
+        inactiveHours,
+        abandonmentKind,
+        detail: classificationSuppressionReason(
+          (lead as { classification?: unknown }).classification
+        ),
+      }),
+      state,
+      lead,
+    };
+  }
+
   const recipient = String(lead.email || "").trim();
   if (!recipient) return { decision: make("skipped_recipient", { inactiveHours, abandonmentKind }), state, lead };
   const maskedRecipient = maskEmail(recipient);

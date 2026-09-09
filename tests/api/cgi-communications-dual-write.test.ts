@@ -65,7 +65,11 @@ function abandonmentState(overrides: Record<string, unknown> = {}) {
 }
 
 function lead(overrides: Record<string, unknown> = {}) {
-  return { id: "lead_1", name: "Andre", email: "andre@example.com", company: "Pesc", ...overrides };
+  return {
+    id: "lead_1", name: "Andre", email: "andre@example.com", company: "Pesc",
+    classification: "legitimate",
+    ...overrides,
+  };
 }
 
 function ledgerBodies() {

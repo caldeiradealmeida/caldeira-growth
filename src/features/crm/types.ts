@@ -18,6 +18,15 @@ export type CgiLead = {
   investment_intent: string;
   comments: string | null;
   created_at: string;
+  /** Classificação canônica de qualidade -- ver a migration
+   *  20260904120000_cgi_lead_classification. Opcional no tipo para que uma
+   *  Preview cujo banco ainda não recebeu a migration continue carregando o
+   *  Pipe; a decisão de exibir trata ausente como legítimo, porque esconder
+   *  todo mundo por falta de coluna seria pior que mostrar. */
+  classification?: string | null;
+  classified_at?: string | null;
+  classified_by?: string | null;
+  classification_note?: string | null;
 };
 
 export type CgiAssessment = {

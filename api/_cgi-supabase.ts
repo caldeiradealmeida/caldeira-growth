@@ -976,6 +976,10 @@ export async function getAssessmentById(assessmentId: string): Promise<Completed
 
 export type CgiLeadRow = {
   id: string;
+  /** Classificação canônica de qualidade. Ver api/_cgi-lead-classification.ts.
+   *  Opcional no tipo, obrigatória na decisão: quem não vier como 'legitimate'
+   *  -- inclusive ausente -- não recebe automação. */
+  classification?: string | null;
   name: string;
   email: string;
   phone: string | null;
@@ -999,7 +1003,7 @@ export type CgiLeadRow = {
 
 export async function getLeadById(leadId: string): Promise<CgiLeadRow | null> {
   const result = await supabaseRequest<CgiLeadRow[]>(
-    `cgi_leads?id=${eqFilter(leadId)}&select=id,name,email,phone,company,company_website,role,sector,commercial_relationship_model,employee_count,annual_revenue_range,current_challenge,growth_goal,investment_intent,comments,consent_marketing,contact_token_hash&limit=1`,
+    `cgi_leads?id=${eqFilter(leadId)}&select=id,name,email,phone,company,company_website,role,sector,commercial_relationship_model,employee_count,annual_revenue_range,current_challenge,growth_goal,investment_intent,comments,consent_marketing,contact_token_hash,classification&limit=1`,
     { method: "GET" }
   );
   if (!result.ok) return null;
@@ -1746,6 +1750,7 @@ export type NurtureLeadRow = {
   consent_marketing: boolean | null;
   unsubscribed_at: string | null;
   contact_token_hash: string | null;
+  classification?: string | null;
 };
 
 export async function getNurtureLeads(
@@ -1755,7 +1760,7 @@ export async function getNurtureLeads(
   if (leadIds.length === 0) return { ok: true, rows: mapa };
   const lista = leadIds.map((id) => `"${id}"`).join(",");
   const result = await supabaseRequest<NurtureLeadRow[]>(
-    `cgi_leads?id=in.(${encodeURIComponent(lista)})&select=id,name,email,company,consent_marketing,unsubscribed_at,contact_token_hash`,
+    `cgi_leads?id=in.(${encodeURIComponent(lista)})&select=id,name,email,company,consent_marketing,unsubscribed_at,contact_token_hash,classification`,
     { method: "GET" }
   );
   if (!result.ok) {

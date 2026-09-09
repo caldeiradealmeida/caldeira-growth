@@ -70,6 +70,7 @@ function lead(over: Record<string, unknown> = {}) {
   return {
     id: "lead_1", name: "Ana", email: "ana@acme.com", company: "ACME",
     consent_marketing: false, unsubscribed_at: null, contact_token_hash: null,
+    classification: "legitimate",
     ...over,
   };
 }

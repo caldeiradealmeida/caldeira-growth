@@ -140,6 +140,9 @@ export async function planReportFollowup(input: {
       lastContactAtIso: oportunidade?.last_contact_at ?? null,
       lowestDimensionId: null, // irrelevante para o D+2
       alreadyRecordedTypes: registrados.get(c.public_assessment_id) ?? [],
+      // Sem lead nao ha classificacao, e sem classificacao nao se envia --
+      // que ja era o comportamento por outras razoes, e agora tambem por esta.
+      leadClassification: lead?.classification ?? null,
     };
 
     const decision: NurtureDecision = degraded

@@ -26,6 +26,7 @@ const cand = (r: (typeof REAIS)[number]): NurtureCandidate => ({
   reportOpenedAtIso: null, consentMarketing: r.consent, unsubscribedAtIso: null,
   crmStatus: "novo", lastContactAtIso: null, lowestDimensionId: "growthMachine",
   alreadyRecordedTypes: [],
+  leadClassification: "legitimate",
 });
 
 describe("base histórica real: ligar a flag hoje não dispara nada", () => {

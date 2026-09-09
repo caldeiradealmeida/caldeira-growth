@@ -67,7 +67,11 @@ function state(overrides: Record<string, unknown> = {}) {
 }
 
 function lead(overrides: Record<string, unknown> = {}) {
-  return { id: "lead_1", name: "Larissa", company: "Sawana", email: "larii@example.com", ...overrides };
+  return {
+    id: "lead_1", name: "Larissa", company: "Sawana", email: "larii@example.com",
+    classification: "legitimate",
+    ...overrides,
+  };
 }
 
 function results(r: ReturnType<typeof createResponse>) {
@@ -253,6 +257,35 @@ describe("abandonment V2", () => {
 
     it("nao suprime alem da conta: sem outra conclusao, o envio continua", async () => {
       supabaseMocks.countCompletedAssessmentsForLead.mockResolvedValue({ ok: true, rows: 0 });
+      const response = createResponse();
+      await handler(createRequest() as never, response as never);
+      expect(results(response)[0].outcome).toBe("sent");
+    });
+  });
+
+  describe("classificação do lead", () => {
+    for (const [valor, detalhe] of [
+      ["spam", "lead_spam"],
+      ["test", "lead_test"],
+      ["invalid", "lead_invalid"],
+      [null, "lead_classification_unknown"],
+    ] as const) {
+      it(`não envia para classification=${String(valor)}`, async () => {
+        supabaseMocks.getLeadById.mockResolvedValue(lead({ classification: valor }));
+        const response = createResponse();
+        await handler(createRequest() as never, response as never);
+        expect(results(response)[0]).toMatchObject({
+          outcome: "skipped_lead_classification",
+          detail: detalhe,
+        });
+        expect(globalThis.fetch).not.toHaveBeenCalled();
+        expect(supabaseMocks.upsertReportAccessToken).not.toHaveBeenCalled();
+        expect(supabaseMocks.markAbandonmentEmailSent).not.toHaveBeenCalled();
+      });
+    }
+
+    it("lead legítimo continua recebendo -- a guarda não sequestra o caminho feliz", async () => {
+      supabaseMocks.getLeadById.mockResolvedValue(lead({ classification: "legitimate" }));
       const response = createResponse();
       await handler(createRequest() as never, response as never);
       expect(results(response)[0].outcome).toBe("sent");

@@ -1,4 +1,9 @@
 import {
+  automationMaySend,
+  classificationSuppressionReason,
+} from "./_cgi-lead-classification.js";
+
+import {
   buildCommunicationDedupeKey,
   type CommunicationType,
 } from "./_cgi-communications.js";
@@ -93,6 +98,11 @@ export type NurtureSuppressionReason =
   | "unsubscribed"
   | "human_contact"
   | "unknown_dimension"
+  // Classificacao do lead. 'legitimate' e o unico valor que envia.
+  | "lead_test"
+  | "lead_spam"
+  | "lead_invalid"
+  | "lead_classification_unknown"
   // Nao foi possivel LER o que decide. Nunca significa "pode enviar".
   | "infrastructure_error";
 
@@ -112,6 +122,10 @@ export type NurtureCandidate = {
   lowestDimensionId: string | null;
   /** Tipos já registrados no ledger para este assessment. */
   alreadyRecordedTypes: readonly string[];
+  /** cgi_leads.classification. Deliberadamente `unknown`: o que chega aqui é o
+   *  que o banco devolveu, e a decisão não presume que seja um dos quatro
+   *  valores conhecidos. Ausente, nulo ou desconhecido bloqueia. */
+  leadClassification?: unknown;
 };
 
 export type NurtureDecision =
@@ -149,6 +163,25 @@ export function decideNurture(
   // 1. Flag. Primeiro de tudo: desligado é desligado, sem avaliar mais nada.
   if (!isNurtureTypeEnabled(type, options.env ?? process.env)) {
     return suprimir(type, "flag_disabled", candidate.publicAssessmentId);
+  }
+
+  // 1b. Classificação do lead.
+  //
+  // Vem logo depois da flag e antes de tudo que descreve a pessoa, porque é a
+  // pergunta mais barata e a mais decisiva: se esta linha não representa
+  // alguém real querendo falar conosco, nada abaixo importa.
+  //
+  // Fail-closed por construção -- só 'legitimate' passa. Um lead sem
+  // classificação (migration ainda não aplicada, leitura parcial, coluna
+  // ausente) não recebe. Foi assim que um troll recebeu relatório e D+2 em
+  // 31/08 e 03/09: o sistema não tinha como representar "esta pessoa não
+  // deveria estar aqui".
+  if (!automationMaySend(candidate.leadClassification)) {
+    return suprimir(
+      type,
+      classificationSuppressionReason(candidate.leadClassification),
+      candidate.publicAssessmentId
+    );
   }
 
   // 2. Idempotência. O ledger é a memória; timestamp não é proteção.
@@ -242,6 +275,11 @@ const SUPPRESSION_REASONS_NOT_RECORDED: ReadonlySet<NurtureSuppressionReason> = 
   // este motivo e o ledger ganharia uma linha por candidato por dia, sem
   // dizer nada sobre ninguem. Fica observavel na resposta do sweep e no log.
   "infrastructure_error",
+  // Mesma razao: nao saber a classificacao e um fato sobre o SISTEMA -- a
+  // migration ainda nao rodou, a leitura veio parcial. Os outros tres motivos
+  // de classificacao (lead_test, lead_spam, lead_invalid) descrevem a PESSOA e
+  // viram linha, uma vez cada, pela chave namespaced.
+  "lead_classification_unknown",
 ]);
 
 export function shouldRecordSuppression(reason: NurtureSuppressionReason): boolean {

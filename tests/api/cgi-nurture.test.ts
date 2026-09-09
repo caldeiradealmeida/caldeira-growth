@@ -25,6 +25,8 @@ function candidato(over: Partial<NurtureCandidate> = {}): NurtureCandidate {
     lastContactAtIso: null,
     lowestDimensionId: "growthMachine",
     alreadyRecordedTypes: [],
+    // O default do banco. Um candidato de teste representa uma pessoa real.
+    leadClassification: "legitimate",
     ...over,
   };
 }
