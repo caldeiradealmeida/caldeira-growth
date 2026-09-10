@@ -24,6 +24,7 @@ import type { LeadForm } from "@/features/cgi/types";
 import type { CgiScoreResult } from "@/lib/cgiScore";
 import { useLeadDetail, useRegenerateReport, useUnlinkPerson } from "../hooks/useLeadDetail";
 import { OpportunityForm } from "../components/OpportunityForm";
+import { LeadClassificationCard } from "../components/LeadClassificationCard";
 import { PersonLinkDialog } from "../components/PersonLinkDialog";
 import { pickLatestReport, canRegenerateReport } from "../logic/reportVersion";
 import { hasLeadComment, NO_COMMENT_MESSAGE } from "../logic/commentTab";
@@ -224,6 +225,7 @@ export function CrmDetail() {
 
         <div className="space-y-4 lg:col-span-2">
           <OpportunityForm leadId={lead.id} opportunity={opportunity} />
+              <LeadClassificationCard lead={lead} />
 
           <Card>
             <CardHeader>

@@ -8,7 +8,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { STATUS_LABELS, STATUS_ORDER } from "../constants";
-import type { OpportunityFilters, OpportunitySort } from "../logic/filterSortOpportunities";
+import {
+  RECENT_WINDOW_DAYS,
+  type OpportunityFilters,
+  type OpportunitySort,
+} from "../logic/filterSortOpportunities";
 
 const SCORE_OPTIONS = [
   { value: "all", label: "Qualquer score" },
@@ -137,6 +141,46 @@ export function FiltersBar({
           onChange={(e) => onFiltersChange({ ...filters, periodEnd: e.target.value ? new Date(e.target.value).toISOString() : null })}
         />
       </div>
+
+      {/* Dois interruptores, não dois filtros de lista.
+          "Recentes" precisa combinar com a fila "A contatar", e as fichas da
+          fila são exclusivas entre si -- só uma pode estar ativa. Como
+          alternância independente, as duas coisas se somam de graça.
+          E "Recentes" é FILTRO; "Mais recente", ali do lado, continua sendo
+          ORDENAÇÃO. São perguntas diferentes: uma corta a lista, a outra
+          reordena o que sobrou. */}
+      <button
+        type="button"
+        data-testid="filter-recent-toggle"
+        aria-pressed={filters.recentDays !== null}
+        onClick={() =>
+          onFiltersChange({
+            ...filters,
+            recentDays: filters.recentDays === null ? RECENT_WINDOW_DAYS : null,
+          })
+        }
+        className={`rounded-full border px-3 py-1.5 text-sm transition ${
+          filters.recentDays !== null
+            ? "border-foreground bg-foreground text-background"
+            : "border-border text-muted-foreground hover:text-foreground"
+        }`}
+      >
+        Recentes {RECENT_WINDOW_DAYS}d
+      </button>
+
+      <button
+        type="button"
+        data-testid="filter-discarded-toggle"
+        aria-pressed={filters.showDiscarded}
+        onClick={() => onFiltersChange({ ...filters, showDiscarded: !filters.showDiscarded })}
+        className={`rounded-full border px-3 py-1.5 text-sm transition ${
+          filters.showDiscarded
+            ? "border-foreground bg-foreground text-background"
+            : "border-border text-muted-foreground hover:text-foreground"
+        }`}
+      >
+        Ver descartados
+      </button>
 
       <div className="ml-auto">
         <Select value={sort} onValueChange={(v) => onSortChange(v as OpportunitySort)}>

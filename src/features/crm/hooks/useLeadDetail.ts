@@ -4,6 +4,7 @@ import { saveOpportunity } from "../api/updateOpportunity";
 import { regenerateCgiReport } from "../api/regenerateReport";
 import { createPerson, linkPersonToLead, unlinkPersonFromLead, searchPeople } from "../api/people";
 import { buildOpportunityUpdatePayload, type OpportunityUpdateInput } from "../logic/opportunityUpdate";
+import { classifyLead, type LeadClassification } from "../api/classifyLead";
 
 function detailKey(leadId: string) {
   return ["crm", "lead-detail", leadId] as const;
@@ -67,6 +68,20 @@ export function useUnlinkPerson(leadId: string) {
     mutationFn: () => unlinkPersonFromLead(leadId),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: detailKey(leadId) });
+      void queryClient.invalidateQueries({ queryKey: ["crm", "opportunities"] });
+    },
+  });
+}
+
+export function useClassifyLead(leadId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { classification: LeadClassification; note?: string }) =>
+      classifyLead({ leadId, classification: input.classification, note: input.note }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: detailKey(leadId) });
+      // A lista precisa recarregar: classificar tira (ou devolve) a linha da
+      // fila operacional.
       void queryClient.invalidateQueries({ queryKey: ["crm", "opportunities"] });
     },
   });
