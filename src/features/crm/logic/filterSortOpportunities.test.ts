@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_FILTERS, filterAndSortOpportunities, matchesFilters } from "./filterSortOpportunities";
+import { DEFAULT_FILTERS, filterOpportunities, matchesFilters } from "./filterSortOpportunities";
 import type { CgiLead, CrmOpportunity, OpportunityRow } from "../types";
 
 function row(overrides: {
@@ -117,33 +117,7 @@ describe("matchesFilters", () => {
   });
 });
 
-describe("filterAndSortOpportunities sorting", () => {
-  const rows = [
-    row({ id: "1", company: "Zulu Co", score: 50, lastActivityAt: "2026-07-01T00:00:00Z", nextActionAt: "2026-08-10T00:00:00Z" }),
-    row({ id: "2", company: "Alpha Co", score: 90, lastActivityAt: "2026-07-20T00:00:00Z", nextActionAt: null }),
-    row({ id: "3", company: "Mid Co", score: 70, lastActivityAt: "2026-07-10T00:00:00Z", nextActionAt: "2026-08-01T00:00:00Z" }),
-  ];
-
-  it("sorts by most recent activity", () => {
-    const sorted = filterAndSortOpportunities(rows, DEFAULT_FILTERS, "recent");
-    expect(sorted.map((r) => r.lead.id)).toEqual(["2", "3", "1"]);
-  });
-
-  it("sorts by score descending", () => {
-    const sorted = filterAndSortOpportunities(rows, DEFAULT_FILTERS, "score");
-    expect(sorted.map((r) => r.lead.id)).toEqual(["2", "3", "1"]);
-  });
-
-  it("sorts by soonest next action, pushing rows with none to the end", () => {
-    const sorted = filterAndSortOpportunities(rows, DEFAULT_FILTERS, "next_action");
-    expect(sorted.map((r) => r.lead.id)).toEqual(["3", "1", "2"]);
-  });
-
-  it("sorts by company name", () => {
-    const sorted = filterAndSortOpportunities(rows, DEFAULT_FILTERS, "company");
-    expect(sorted.map((r) => r.lead.id)).toEqual(["2", "3", "1"]);
-  });
-});
+// A ordenação mudou de casa: ./sortOpportunities.test.ts.
 
 
 // ---------------------------------------------------------------------------
@@ -178,13 +152,13 @@ describe("classificação: o Pipe é uma fila, não um arquivo", () => {
       row({ id: "2", classification: "spam" }),
       row({ id: "3", classification: "test" }),
     ];
-    expect(filterAndSortOpportunities(linhas, filtros, "recent", AGORA)).toHaveLength(3);
-    expect(filterAndSortOpportunities(linhas, DEFAULT_FILTERS, "recent", AGORA)).toHaveLength(1);
+    expect(filterOpportunities(linhas, filtros, AGORA)).toHaveLength(3);
+    expect(filterOpportunities(linhas, DEFAULT_FILTERS, AGORA)).toHaveLength(1);
   });
 
   it("nada é apagado: a linha descartada continua existindo, só não é listada", () => {
     const linhas = [row({ id: "1", classification: "spam" })];
-    expect(filterAndSortOpportunities(linhas, DEFAULT_FILTERS, "recent", AGORA)).toHaveLength(0);
+    expect(filterOpportunities(linhas, DEFAULT_FILTERS, AGORA)).toHaveLength(0);
     expect(linhas).toHaveLength(1);
   });
 });
@@ -223,16 +197,17 @@ describe("Recentes 7d", () => {
     expect(matchesFilters(row({ id: "2", createdAt: dias(5) }), filtros, AGORA)).toBe(false);
   });
 
-  it("é filtro, não ordenação -- 'Mais recente' continua reordenando o que sobrou", () => {
+  it("é filtro: corta antes de qualquer ordenação existir", () => {
+    // "fora" tem a atividade mais recente de todas e mesmo assim não passa. A
+    // prova de que ordenar não ressuscita quem o filtro cortou está em
+    // ./sortOpportunities.test.ts.
     const linhas = [
       row({ id: "antigo", createdAt: dias(2), lastActivityAt: dias(2) }),
       row({ id: "novo", createdAt: dias(1), lastActivityAt: dias(0.5) }),
       row({ id: "fora", createdAt: dias(90), lastActivityAt: dias(0.1) }),
     ];
-    const r = filterAndSortOpportunities(linhas, { ...DEFAULT_FILTERS, recentDays: 7 }, "recent", AGORA);
-    // "fora" tem a atividade mais recente de todas e mesmo assim não aparece:
-    // o filtro corta antes de a ordenação existir.
-    expect(r.map((x) => x.lead.id)).toEqual(["novo", "antigo"]);
+    const r = filterOpportunities(linhas, { ...DEFAULT_FILTERS, recentDays: 7 }, AGORA);
+    expect(r.map((x) => x.lead.id).sort()).toEqual(["antigo", "novo"]);
   });
 
   it("combina com classificação: descartado recente continua fora", () => {

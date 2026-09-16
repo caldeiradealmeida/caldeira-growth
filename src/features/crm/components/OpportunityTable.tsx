@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -17,6 +17,14 @@ import {
   matchesQueueFilter,
   type QueueFilter,
 } from "../logic/commercialPriority";
+import { deriveLastInteraction } from "../logic/lastInteraction";
+import {
+  DEFAULT_SORT,
+  compareEntries,
+  nextSortState,
+  type OpportunitySort,
+  type SortColumn,
+} from "../logic/sortOpportunities";
 import type { OpportunityRow } from "../types";
 
 // O Pipe deixou de ser uma tabela de registros e virou uma fila de trabalho.
@@ -47,32 +55,100 @@ const FILTROS: QueueFilter[] = [
   "grandes",
 ];
 
-export function OpportunityTable({ rows }: { rows: OpportunityRow[] }) {
+/** Cabeçalho clicável. Vive no escopo do módulo, e não dentro da tabela: um
+ *  componente redefinido a cada render é um componente novo para o React, que
+ *  desmonta e remonta o botão -- e um botão remontado no próprio clique perde o
+ *  foco do teclado. */
+function Cabecalho({
+  coluna,
+  sort,
+  onSort,
+  children,
+  className,
+}: {
+  coluna: SortColumn;
+  sort: OpportunitySort;
+  onSort: (coluna: SortColumn) => void;
+  children: ReactNode;
+  className?: string;
+}) {
+  const ativa = sort.column === coluna;
+  return (
+    <TableHead
+      className={className}
+      aria-sort={ativa ? (sort.direction === "asc" ? "ascending" : "descending") : "none"}
+    >
+      <button
+        type="button"
+        onClick={() => onSort(coluna)}
+        data-testid={`sort-${coluna}`}
+        className={cn(
+          "inline-flex items-center gap-1 whitespace-nowrap transition-colors hover:text-foreground",
+          ativa ? "font-medium text-foreground" : "text-muted-foreground"
+        )}
+      >
+        {children}
+        <span aria-hidden className={cn("text-[10px]", ativa ? "opacity-100" : "opacity-0")}>
+          {sort.direction === "asc" ? "▲" : "▼"}
+        </span>
+      </button>
+    </TableHead>
+  );
+}
+
+export function OpportunityTable({
+  rows,
+  sort = DEFAULT_SORT,
+  onSortChange,
+}: {
+  rows: OpportunityRow[];
+  sort?: OpportunitySort;
+  onSortChange?: (next: OpportunitySort) => void;
+}) {
   const navigate = useNavigate();
   const [filtro, setFiltro] = useState<QueueFilter>("todos");
 
-  const linhas = useMemo(
-    () =>
-      rows
-        .map((row) => ({ row, view: deriveQueueView(row) }))
-        .sort((a, b) =>
-          compareForQueue(
-            {
-              priority: a.view.priority,
-              size: a.view.size,
-              bestScore: a.row.bestScore,
-              progressPercent: a.view.progressPercent,
-            },
-            {
-              priority: b.view.priority,
-              size: b.view.size,
-              bestScore: b.row.bestScore,
-              progressPercent: b.view.progressPercent,
-            }
-          )
-        ),
-    [rows]
+  // A ordenação por prioridade vira um POSTO, calculado uma vez. Depois disso
+  // ela é só mais uma coluna, comparável como qualquer outra -- e é isso que
+  // permite existir uma autoridade só de ordenação em vez das duas que
+  // brigavam entre si.
+  const linhas = useMemo(() => {
+    const derivadas = rows.map((row) => ({
+      row,
+      view: deriveQueueView(row),
+      lastInteraction: deriveLastInteraction(row),
+      priorityRank: 0,
+    }));
+    const porPrioridade = [...derivadas].sort((a, b) =>
+      compareForQueue(
+        {
+          priority: a.view.priority,
+          size: a.view.size,
+          bestScore: a.row.bestScore,
+          progressPercent: a.view.progressPercent,
+        },
+        {
+          priority: b.view.priority,
+          size: b.view.size,
+          bestScore: b.row.bestScore,
+          progressPercent: b.view.progressPercent,
+        }
+      )
+    );
+    porPrioridade.forEach((entry, index) => {
+      entry.priorityRank = index;
+    });
+    return derivadas;
+  }, [rows]);
+
+  const ordenadas = useMemo(
+    () => [...linhas].sort((a, b) => compareEntries(a, b, sort)),
+    [linhas, sort]
   );
+
+  function ordenarPor(coluna: SortColumn) {
+    onSortChange?.(nextSortState(sort, coluna));
+  }
 
   const contagens = useMemo(() => {
     const acc: Record<QueueFilter, number> = {
@@ -90,7 +166,7 @@ export function OpportunityTable({ rows }: { rows: OpportunityRow[] }) {
     return acc;
   }, [linhas]);
 
-  const visiveis = linhas.filter(({ view }) => matchesQueueFilter(filtro, view));
+  const visiveis = ordenadas.filter(({ view }) => matchesQueueFilter(filtro, view));
 
   if (rows.length === 0) {
     return (
@@ -127,19 +203,21 @@ export function OpportunityTable({ rows }: { rows: OpportunityRow[] }) {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-[64px]">Prior.</TableHead>
-              <TableHead>Lead</TableHead>
+              <Cabecalho coluna="prioridade" sort={sort} onSort={ordenarPor} className="w-[64px]">Prior.</Cabecalho>
+              <Cabecalho coluna="lead" sort={sort} onSort={ordenarPor}>Lead</Cabecalho>
+              <Cabecalho coluna="entrada" sort={sort} onSort={ordenarPor}>Entrada</Cabecalho>
               <TableHead>Porte</TableHead>
-              <TableHead>CGI</TableHead>
+              <Cabecalho coluna="cgi" sort={sort} onSort={ordenarPor}>CGI</Cabecalho>
               <TableHead>Relatório</TableHead>
               <TableHead>Mensagens</TableHead>
+              <Cabecalho coluna="ultima_interacao" sort={sort} onSort={ordenarPor}>Última interação</Cabecalho>
               <TableHead>Contato</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Próxima ação</TableHead>
+              <Cabecalho coluna="status" sort={sort} onSort={ordenarPor}>Status</Cabecalho>
+              <Cabecalho coluna="proxima_acao" sort={sort} onSort={ordenarPor}>Próxima ação</Cabecalho>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {visiveis.map(({ row, view }) => {
+            {visiveis.map(({ row, view, lastInteraction }) => {
               const estagio = deriveCgiStage(row.latestAssessment);
               return (
                 <TableRow
@@ -168,6 +246,14 @@ export function OpportunityTable({ rows }: { rows: OpportunityRow[] }) {
                     ) : (
                       <span className="text-sm text-muted-foreground">sem telefone</span>
                     )}
+                  </TableCell>
+
+                  {/* Quando esta pessoa entrou no pipeline: lead.created_at, e
+                      só ele. last_contact_at, updated_at e a data do relatório
+                      mudam quando NÓS agimos -- nenhum deles responde "quando
+                      ela chegou". */}
+                  <TableCell className="whitespace-nowrap text-sm text-muted-foreground tabular-nums">
+                    {formatDate(row.lead.created_at)}
                   </TableCell>
 
                   <TableCell>
@@ -239,6 +325,25 @@ export function OpportunityTable({ rows }: { rows: OpportunityRow[] }) {
                           </span>
                         ))}
                       </div>
+                    )}
+                  </TableCell>
+
+                  {/* Qualquer movimento, do lado que for. Discordar da coluna
+                      "Contato" é o sinal útil: alguém que recebeu três e-mails
+                      e abriu o relatório ontem tem interação recente e continua
+                      "Nunca contatado". */}
+                  <TableCell className="whitespace-nowrap text-sm">
+                    {lastInteraction.atIso === null ? (
+                      <span className="text-muted-foreground">—</span>
+                    ) : (
+                      <>
+                        <div className="tabular-nums text-foreground">
+                          {lastInteraction.daysAgo === 0 ? "hoje" : `há ${lastInteraction.daysAgo}d`}
+                        </div>
+                        <div className="text-xs text-muted-foreground" title={formatDate(lastInteraction.atIso)}>
+                          {lastInteraction.label}
+                        </div>
+                      </>
                     )}
                   </TableCell>
 

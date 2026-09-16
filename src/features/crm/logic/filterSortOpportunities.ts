@@ -48,8 +48,6 @@ export function isDiscarded(lead: { classification?: string | null }): boolean {
   return displayClassification(lead) !== "legitimate";
 }
 
-export type OpportunitySort = "recent" | "score" | "next_action" | "company";
-
 function normalize(s: string): string {
   return s.trim().toLowerCase();
 }
@@ -103,38 +101,14 @@ export function matchesFilters(
   return true;
 }
 
-function toTime(value: string | null | undefined): number {
-  return value ? new Date(value).getTime() : 0;
-}
-
-export function sortOpportunities(rows: OpportunityRow[], sort: OpportunitySort): OpportunityRow[] {
-  const copy = [...rows];
-  switch (sort) {
-    case "score":
-      return copy.sort((a, b) => (b.bestScore ?? -1) - (a.bestScore ?? -1));
-    case "next_action":
-      // Rows with a next action come first, soonest first; rows without one go last.
-      return copy.sort((a, b) => {
-        const at = a.opportunity?.next_action_at;
-        const bt = b.opportunity?.next_action_at;
-        if (!at && !bt) return 0;
-        if (!at) return 1;
-        if (!bt) return -1;
-        return toTime(at) - toTime(bt);
-      });
-    case "company":
-      return copy.sort((a, b) => a.lead.company.localeCompare(b.lead.company, "pt-BR"));
-    case "recent":
-    default:
-      return copy.sort((a, b) => toTime(b.lastActivityAt) - toTime(a.lastActivityAt));
-  }
-}
-
-export function filterAndSortOpportunities(
+/** Só filtra. A ordenação mora em ./sortOpportunities e é aplicada uma única
+ *  vez, dentro da tabela, onde as views já foram derivadas. Duas ordenações em
+ *  lugares diferentes foi exatamente o defeito que fazia o seletor "Ordenar
+ *  por" não ter efeito nenhum. */
+export function filterOpportunities(
   rows: OpportunityRow[],
   filters: OpportunityFilters,
-  sort: OpportunitySort,
   now: number = Date.now()
 ): OpportunityRow[] {
-  return sortOpportunities(rows.filter((r) => matchesFilters(r, filters, now)), sort);
+  return rows.filter((r) => matchesFilters(r, filters, now));
 }
