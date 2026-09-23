@@ -31,6 +31,9 @@ import {
   validateProfessionalContent,
 } from "./_cgi-validation.js";
 import { deliverReportEmailForAssessment } from "./_cgi-report-email.js";
+import { dispatchCgiParticipantEmail } from "./_cgi-email-dispatch.js";
+import { buildCgiInternalLeadNotificationEmail } from "./_cgi-email-content.js";
+import { recordCommunicationSafely } from "./_cgi-communications.js";
 
 export type CgiLead = {
   name?: string;
@@ -215,9 +218,7 @@ function getAppsScriptUrl(): string {
   );
 }
 
-// Etapa 4 -- independently switchable participant emails. Internal
-// notification (sendCgiNotification_ in Apps Script) is untouched by these
-// and stays unconditionally on, exactly as it is today.
+// Etapa 4 -- independently switchable participant emails.
 export function isCgiReportEmailEnabled(): boolean {
   return process.env.CGI_REPORT_EMAIL_ENABLED === "true";
 }
@@ -228,6 +229,30 @@ export function isCgiEmailDryRun(): boolean {
 
 function getCgiEmailRelayToken(): string {
   return process.env.CGI_EMAIL_RELAY_TOKEN?.trim() || "";
+}
+
+// Etapa 5 -- alerta interno de novo lead. Historicamente isso era
+// sendCgiNotification_, direto no Apps Script, fora de qualquer flag e de
+// qualquer registro -- e foi exatamente por não deixar rastro que parou de
+// chegar (04/08 a 20/09/2026, 39 leads reais sem que ninguém percebesse)
+// sem que nada no Supabase ou nos logs do Vercel acusasse o problema. Este
+// alerta passa a usar o mesmo relay e o mesmo ledger do report-ready.
+//
+// Fail-OPEN por padrão (diferente de isCgiReportEmailEnabled/abandonment,
+// que são fail-closed): este e-mail não vai para o lead, é a única forma de
+// Denis saber que um lead existe, então um flag esquecido em "false" não
+// pode ser o motivo de outras sete semanas de silêncio. Desligar exige uma
+// escolha explícita.
+export function isCgiInternalNotificationEnabled(): boolean {
+  return process.env.CGI_INTERNAL_NOTIFICATION_ENABLED !== "false";
+}
+
+function getCgiInternalNotificationRecipient(): string {
+  return process.env.CGI_INTERNAL_NOTIFICATION_EMAIL?.trim() || "contato@caldeiragrowth.com";
+}
+
+function getCgiPipeUrl(): string {
+  return "https://www.caldeiragrowth.com/admin/crm";
 }
 
 function isReportReadyStatus(status: string): status is "report_ready" | "report_ready_with_warnings" {
@@ -2995,6 +3020,89 @@ export default async function handler(
   } catch (error) {
     console.error("[CGI Email]", {
       operation: "report_email_dispatch",
+      public_assessment_id: responsePublicAssessmentId,
+      error: error instanceof Error ? error.message : String(error || ""),
+    });
+  }
+
+  // Etapa 5 -- alerta interno de novo lead para o Denis. Mesmo gate de
+  // isReportReadyStatus/leadId do bloco acima (relatório pronto, lead real,
+  // não um retry fantasma), best-effort e isolado num try/catch próprio: uma
+  // falha aqui nunca pode derrubar a resposta ao navegador nem o e-mail do
+  // relatório. Ao contrário do bloco acima, não depende de
+  // report_email_sent_at nem de nenhum marcador -- é reenviável por natureza
+  // (não é uma comunicação com o lead), então o registro no ledger é só para
+  // auditoria/observabilidade, nunca para controlar duplicidade: cada
+  // conclusão de assessment gera sua própria dedupe_key, então um retry desta
+  // MESMA conclusão (mesmo public_assessment_id) continua deduplicando.
+  try {
+    if (isCgiInternalNotificationEnabled() && supabaseCompletion?.leadId && isReportReadyStatus(reportStatus)) {
+      const notificationStartedAt = Date.now();
+      const content = buildCgiInternalLeadNotificationEmail({
+        lead: {
+          name: payload.lead?.name,
+          email: payload.lead?.email,
+          phone: payload.lead?.phone,
+          company: payload.lead?.company,
+          companyWebsite: payload.lead?.companyWebsite,
+          role: payload.lead?.role,
+          sector: payload.lead?.sector,
+          employeeCount: payload.lead?.employeeCount,
+          annualRevenue: payload.lead?.annualRevenue,
+          currentChallenge: payload.lead?.currentChallenge,
+          growthGoal: payload.lead?.growthGoal,
+          investmentIntent: payload.lead?.investmentIntent,
+          comments: payload.lead?.comments,
+        },
+        finalScore: score.finalScore,
+        levelTitle: score.level?.title,
+        publicAssessmentId: responsePublicAssessmentId,
+        pipeUrl: getCgiPipeUrl(),
+      });
+      const recipient = getCgiInternalNotificationRecipient();
+      const dispatchResult = await dispatchCgiParticipantEmail({
+        appsScriptUrl: url,
+        relayToken: getCgiEmailRelayToken(),
+        recipient,
+        content,
+        emailKind: "internal_notification",
+        dryRun: isCgiEmailDryRun(),
+      });
+      await recordCommunicationSafely({
+        type: "internal_new_lead",
+        status: dispatchResult.status === "sent" ? "sent" : dispatchResult.status === "dry_run" ? "sent" : "failed",
+        leadId: supabaseCompletion.leadId,
+        publicAssessmentId: responsePublicAssessmentId,
+        recipient,
+        subject: content.subject,
+        provider: "apps_script_mailapp",
+        actor: "system:completion",
+        occurrenceKey: responsePublicAssessmentId,
+        errorCode:
+          dispatchResult.status === "error"
+            ? dispatchResult.error
+            : dispatchResult.status === "skipped"
+              ? dispatchResult.reason
+              : undefined,
+        metadata: { dispatchStatus: dispatchResult.status },
+      });
+      logCgiOperation({
+        correlationId,
+        publicAssessmentId: responsePublicAssessmentId,
+        operation: "internal_notification_dispatch",
+        success: dispatchResult.status === "sent" || dispatchResult.status === "dry_run",
+        errorCode:
+          dispatchResult.status === "error"
+            ? dispatchResult.error
+            : dispatchResult.status === "skipped"
+              ? dispatchResult.reason
+              : undefined,
+        durationMs: Date.now() - notificationStartedAt,
+      });
+    }
+  } catch (error) {
+    console.error("[CGI Internal Notification]", {
+      operation: "internal_notification_dispatch",
       public_assessment_id: responsePublicAssessmentId,
       error: error instanceof Error ? error.message : String(error || ""),
     });

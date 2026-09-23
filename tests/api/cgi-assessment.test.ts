@@ -200,6 +200,10 @@ describe("POST /api/cgi-assessment Supabase completion best-effort", () => {
     delete process.env.CGI_REPORT_EMAIL_ENABLED;
     delete process.env.CGI_EMAIL_DRY_RUN;
     delete process.env.CGI_EMAIL_RELAY_TOKEN;
+    // Etapa 5 defaults: enabled (fail-open) with the default recipient,
+    // reset between tests so a test that overrides them doesn't leak.
+    delete process.env.CGI_INTERNAL_NOTIFICATION_ENABLED;
+    delete process.env.CGI_INTERNAL_NOTIFICATION_EMAIL;
     supabaseMocks.getAssessmentEmailState.mockResolvedValue(null);
     supabaseMocks.markReportEmailSent.mockResolvedValue(true);
     supabaseMocks.upsertReportAccessToken.mockResolvedValue(true);
@@ -1152,6 +1156,14 @@ describe("POST /api/cgi-assessment Supabase completion best-effort", () => {
       return { fetchMock, emailCalls };
     }
 
+    // Etapa 5 (internal new-lead notification) shares the same emailCalls
+    // capture array and fires independently of the report-ready flag/gates.
+    // Tests whose intent is specifically about the report-ready email must
+    // filter to it rather than asserting on the raw array.
+    function reportReadyCalls(emailCalls: Array<Record<string, unknown>>) {
+      return emailCalls.filter((call) => call.emailKind === "report_ready");
+    }
+
     function enableEmail() {
       process.env.CGI_REPORT_EMAIL_ENABLED = "true";
       process.env.CONTACT_FORM_URL = "https://script.google.test/macros/s/fake/exec";
@@ -1198,18 +1210,19 @@ describe("POST /api/cgi-assessment Supabase completion best-effort", () => {
       await handler({ method: "POST", headers: {}, body: payload } as never, response as never);
 
       expect(response.statusCode).toBe(200);
-      expect(emailCalls).toHaveLength(1);
-      expect(emailCalls[0]).toMatchObject({
+      const reportReady = reportReadyCalls(emailCalls);
+      expect(reportReady).toHaveLength(1);
+      expect(reportReady[0]).toMatchObject({
         action: "cgi_send_email",
         token: "relay-secret",
         emailKind: "report_ready",
         recipient: payload.lead.email,
       });
-      expect(String(emailCalls[0].subject)).toContain(payload.lead.company);
-      expect(String(emailCalls[0].plainText)).toContain(
+      expect(String(reportReady[0].subject)).toContain(payload.lead.company);
+      expect(String(reportReady[0].plainText)).toContain(
         "As respostas deste executivo indicam uma organizacao com fundamentos relevantes"
       );
-      expect(String(emailCalls[0].plainText)).toMatch(/https:\/\/www\.caldeiragrowth\.com\/cgi\/relatorio#t=/);
+      expect(String(reportReady[0].plainText)).toMatch(/https:\/\/www\.caldeiragrowth\.com\/cgi\/relatorio#t=/);
       expect(supabaseMocks.markReportEmailSent).toHaveBeenCalledWith("assessment_1");
       expect(supabaseMocks.upsertReportAccessToken).toHaveBeenCalledTimes(1);
     });
@@ -1242,7 +1255,7 @@ describe("POST /api/cgi-assessment Supabase completion best-effort", () => {
       await handler({ method: "POST", headers: {}, body: createValidPayload() } as never, response as never);
 
       expect(response.statusCode).toBe(200);
-      expect(emailCalls).toHaveLength(0);
+      expect(reportReadyCalls(emailCalls)).toHaveLength(0);
       expect(supabaseMocks.upsertReportAccessToken).not.toHaveBeenCalled();
       expect(supabaseMocks.markReportEmailSent).not.toHaveBeenCalled();
     });
@@ -1262,7 +1275,7 @@ describe("POST /api/cgi-assessment Supabase completion best-effort", () => {
       await handler({ method: "POST", headers: {}, body: createValidPayload() } as never, response as never);
 
       expect(response.statusCode).toBe(200);
-      expect(emailCalls).toHaveLength(0);
+      expect(reportReadyCalls(emailCalls)).toHaveLength(0);
       expect(supabaseMocks.markReportEmailSent).not.toHaveBeenCalled();
     });
 
@@ -1361,7 +1374,7 @@ describe("POST /api/cgi-assessment Supabase completion best-effort", () => {
       await handler({ method: "POST", headers: {}, body: createValidPayload() } as never, response as never);
 
       expect(response.statusCode).toBe(200);
-      expect(emailCalls).toHaveLength(1);
+      expect(reportReadyCalls(emailCalls)).toHaveLength(1);
       expect(supabaseMocks.getLeadById).not.toHaveBeenCalled();
       expect(supabaseMocks.getReportEmailState).not.toHaveBeenCalled();
       expect(supabaseMocks.getCrmOpportunityByLeadId).not.toHaveBeenCalled();
@@ -1385,6 +1398,69 @@ describe("POST /api/cgi-assessment Supabase completion best-effort", () => {
         return body.action === "cgi_assessment";
       });
       expect(sheetsSyncCalls).toHaveLength(1);
+    });
+
+    it("dispatches the internal new-lead notification independently of the report-ready flag", async () => {
+      // Etapa 5: the alert Denis relies on must not depend on
+      // CGI_REPORT_EMAIL_ENABLED, report_email_sent_at, or token issuance --
+      // none of those gate the participant-facing email above.
+      enableEmail();
+      supabaseMocks.upsertAssessment.mockResolvedValue(realAssessment());
+      const { emailCalls } = stubFetchWithEmailCapture();
+      const payload = createValidPayload();
+      const response = createResponse();
+
+      await handler({ method: "POST", headers: {}, body: payload } as never, response as never);
+
+      expect(response.statusCode).toBe(200);
+      const internalCalls = emailCalls.filter((call) => call.emailKind === "internal_notification");
+      expect(internalCalls).toHaveLength(1);
+      expect(internalCalls[0]).toMatchObject({
+        action: "cgi_send_email",
+        emailKind: "internal_notification",
+        recipient: "contato@caldeiragrowth.com",
+      });
+      expect(String(internalCalls[0].subject)).toContain(payload.lead.company);
+    });
+
+    it("respects a custom recipient and skips the internal notification when explicitly disabled", async () => {
+      enableEmail();
+      process.env.CGI_INTERNAL_NOTIFICATION_EMAIL = "vendas@caldeiragrowth.com";
+      supabaseMocks.upsertAssessment.mockResolvedValue(realAssessment());
+      const { emailCalls } = stubFetchWithEmailCapture();
+      const response = createResponse();
+
+      await handler({ method: "POST", headers: {}, body: createValidPayload() } as never, response as never);
+
+      expect(response.statusCode).toBe(200);
+      const internalCalls = emailCalls.filter((call) => call.emailKind === "internal_notification");
+      expect(internalCalls).toHaveLength(1);
+      expect(internalCalls[0]).toMatchObject({ recipient: "vendas@caldeiragrowth.com" });
+    });
+
+    it("never sends the internal notification when CGI_INTERNAL_NOTIFICATION_ENABLED is explicitly false", async () => {
+      enableEmail();
+      process.env.CGI_INTERNAL_NOTIFICATION_ENABLED = "false";
+      supabaseMocks.upsertAssessment.mockResolvedValue(realAssessment());
+      const { emailCalls } = stubFetchWithEmailCapture();
+      const response = createResponse();
+
+      await handler({ method: "POST", headers: {}, body: createValidPayload() } as never, response as never);
+
+      expect(response.statusCode).toBe(200);
+      expect(emailCalls.filter((call) => call.emailKind === "internal_notification")).toHaveLength(0);
+    });
+
+    it("never sends the internal notification for an assessment with no pre-existing lead_id", async () => {
+      enableEmail();
+      supabaseMocks.upsertAssessment.mockResolvedValue(realAssessment({ lead_id: null }));
+      const { emailCalls } = stubFetchWithEmailCapture();
+      const response = createResponse();
+
+      await handler({ method: "POST", headers: {}, body: createValidPayload() } as never, response as never);
+
+      expect(response.statusCode).toBe(200);
+      expect(emailCalls.filter((call) => call.emailKind === "internal_notification")).toHaveLength(0);
     });
   });
 });

@@ -35,6 +35,7 @@ export const COMMUNICATION_TYPES = [
   "report_followup_d5",
   "abandon_lead_d1",
   "abandon_progress_d1",
+  "internal_new_lead",
   "insight_d2",
   "howto_d7",
   "strategic_d21",
@@ -77,6 +78,11 @@ export const COMMUNICATION_CLASS_BY_TYPE: Record<CommunicationType, Communicatio
   report_followup_d5: "transactional",
   abandon_lead_d1: "transactional",
   abandon_progress_d1: "transactional",
+  // Alerta interno para o Denis, não comunicação com o lead -- mas mora no
+  // mesmo enum e usa a mesma classe "transactional" (não depende de
+  // consent_marketing) porque nao e a pessoa quem concede ou nega esse
+  // consentimento, e a classificacao decide apenas essa dependencia.
+  internal_new_lead: "transactional",
   insight_d2: "nurturing",
   howto_d7: "nurturing",
   strategic_d21: "nurturing",

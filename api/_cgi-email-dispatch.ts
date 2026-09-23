@@ -19,7 +19,7 @@ export async function dispatchCgiParticipantEmail(input: {
   relayToken: string;
   recipient: string;
   content: CgiEmailContent;
-  emailKind: "report_ready" | "abandonment";
+  emailKind: "report_ready" | "abandonment" | "internal_notification";
   dryRun: boolean;
 }): Promise<CgiEmailDispatchResult> {
   if (!input.recipient) return { status: "skipped", reason: "missing_recipient" };

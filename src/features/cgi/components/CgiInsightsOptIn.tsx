@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import type { CgiUiText } from "../config";
 import { grantMarketingConsentFromReport } from "../services/marketingConsent";
 
 // Reentrada de opt-in na tela de resultado.
@@ -14,6 +15,7 @@ import { grantMarketingConsentFromReport } from "../services/marketingConsent";
 // não tem relação com abrir ou baixar o parecer.
 
 export type CgiInsightsOptInProps = {
+  t: CgiUiText;
   anonymousSessionId: string;
   publicAssessmentId: string;
   /** Estado atual. Quando true, este componente não renderiza nada. */
@@ -21,6 +23,7 @@ export type CgiInsightsOptInProps = {
 };
 
 export function CgiInsightsOptIn({
+  t,
   anonymousSessionId,
   publicAssessmentId,
   alreadyConsented,
@@ -41,15 +44,10 @@ export function CgiInsightsOptIn({
   return (
     <div className="mt-10 rounded-lg border border-border/60 bg-muted/30 p-6">
       {estado === "pronto_feito" ? (
-        <p className="text-sm text-muted-foreground">
-          Pronto. Você vai receber leituras ligadas aos pontos que o seu CGI apontou. Em qualquer
-          e-mail há um link para cancelar.
-        </p>
+        <p className="text-sm text-muted-foreground">{t.insightsOptInDone}</p>
       ) : (
         <>
-          <p className="text-sm text-muted-foreground">
-            Quer continuar recebendo leituras e insights sobre os desafios identificados no seu CGI?
-          </p>
+          <p className="text-sm text-muted-foreground">{t.insightsOptInPrompt}</p>
           <Button
             type="button"
             variant="outline"
@@ -58,7 +56,7 @@ export function CgiInsightsOptIn({
             disabled={estado === "enviando"}
             onClick={confirmar}
           >
-            {estado === "enviando" ? "Confirmando…" : "Quero receber insights personalizados"}
+            {estado === "enviando" ? t.insightsOptInConfirming : t.insightsOptInButton}
           </Button>
         </>
       )}

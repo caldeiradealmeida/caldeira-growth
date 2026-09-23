@@ -192,7 +192,7 @@ function ReadyReport({
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Seu diagnóstico CGI</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">{t.reportViewHeading}</h1>
         <p className="mt-1 text-sm text-muted-foreground">Caldeira Growth Index</p>
       </div>
 

@@ -190,6 +190,87 @@ export function buildCgiReportReadyEmail(input: {
   return { subject, plainText, htmlBody };
 }
 
+/** Alerta interno para o Denis, um por lead que concluiu o CGI -- nao para o
+ * lead. Substitui o antigo sendCgiNotification_ do Apps Script (que enviava
+ * isso direto, fora de qualquer registro), passando pelo mesmo relay
+ * cgi_send_email e pelo mesmo ledger cgi_communications que report_delivery
+ * e abandonment ja usam -- para que uma falha de envio fique visivel em vez
+ * de sumir sem deixar rastro por semanas, como aconteceu entre 04/08 e
+ * 20/09/2026. Texto plano, sem HTML rebuscado: e um alerta operacional, nao
+ * uma peca de comunicacao. */
+export function buildCgiInternalLeadNotificationEmail(input: {
+  lead: {
+    name?: string;
+    email?: string;
+    phone?: string;
+    company?: string;
+    companyWebsite?: string;
+    role?: string;
+    sector?: string;
+    employeeCount?: string;
+    annualRevenue?: string;
+    currentChallenge?: string;
+    growthGoal?: string;
+    investmentIntent?: string;
+    comments?: string;
+  };
+  finalScore?: number | null;
+  levelTitle?: string | null;
+  publicAssessmentId: string;
+  pipeUrl: string;
+}): CgiEmailContent {
+  const lead = input.lead || {};
+  const subject = `[CGI] Novo lead - ${String(lead.company || lead.name || "sem nome")}`;
+
+  const fields: Array<[string, string]> = [
+    ["Nome", String(lead.name || "")],
+    ["Email", String(lead.email || "")],
+    ["Telefone", String(lead.phone || "")],
+    ["Empresa", String(lead.company || "")],
+    ["Site da empresa", String(lead.companyWebsite || "")],
+    ["Cargo", String(lead.role || "")],
+    ["Setor", String(lead.sector || "")],
+    ["Funcionários", String(lead.employeeCount || "")],
+    ["Faturamento", String(lead.annualRevenue || "")],
+    ["Desafio atual", String(lead.currentChallenge || "")],
+    ["Meta de crescimento", String(lead.growthGoal || "")],
+    ["Intenção de investimento", String(lead.investmentIntent || "")],
+    ["Comentários", String(lead.comments || "")],
+  ];
+
+  const scoreLine =
+    input.finalScore != null
+      ? `CGI final: ${input.finalScore}${input.levelTitle ? ` (${input.levelTitle})` : ""}`
+      : "CGI final: não disponível";
+
+  const plainText = [
+    "Novo lead concluiu o CGI.",
+    "",
+    ...fields.map(([label, value]) => `${label}: ${value}`),
+    "",
+    scoreLine,
+    "",
+    `Abrir no Pipe: ${input.pipeUrl}`,
+  ].join("\n");
+
+  const htmlBody = htmlShell(`
+    <p style="margin:0 0 16px 0;">Novo lead concluiu o CGI.</p>
+    <table style="border-collapse:collapse;width:100%;font-size:14px;">
+      ${fields
+        .filter(([, value]) => value)
+        .map(
+          ([label, value]) =>
+            `<tr><td style="padding:4px 12px 4px 0;color:#666666;white-space:nowrap;">${escapeHtml(label)}</td><td style="padding:4px 0;">${escapeHtml(value)}</td></tr>`
+        )
+        .join("")}
+    </table>
+    <p style="margin:16px 0 0 0;font-size:14px;">${escapeHtml(scoreLine)}</p>
+    ${ctaButtonHtml("Abrir no Pipe", input.pipeUrl)}
+  `);
+
+  return { subject, plainText, htmlBody };
+}
+
 /** Abandonment copy for someone who left their details and never answered a
  * single question. Deliberately NOT the same message as the resume email: that
  * one says "you started" and "the link resumes from your saved progress", both

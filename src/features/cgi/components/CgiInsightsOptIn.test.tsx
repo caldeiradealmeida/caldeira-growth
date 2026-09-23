@@ -1,9 +1,11 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import { cgiUi } from "../config";
 import { CgiInsightsOptIn, type CgiInsightsOptInProps } from "./CgiInsightsOptIn";
 
 const base: CgiInsightsOptInProps = {
+  t: cgiUi.pt,
   anonymousSessionId: "sess_1",
   publicAssessmentId: "PID1",
   alreadyConsented: false,

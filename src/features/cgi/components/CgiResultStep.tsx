@@ -391,6 +391,7 @@ export function CgiResultStep({
           )}
 
           <CgiInsightsOptIn
+            t={t}
             anonymousSessionId={anonymousSessionId}
             publicAssessmentId={publicAssessmentId}
             alreadyConsented={marketingConsentGranted}

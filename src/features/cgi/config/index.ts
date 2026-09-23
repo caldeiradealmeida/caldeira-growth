@@ -193,6 +193,11 @@ export const cgiUi: Record<
     privacyPolicyHref: string;
     privacyPolicyLinkLabel: string;
     privacyReviewNote: string;
+    insightsOptInPrompt: string;
+    insightsOptInButton: string;
+    insightsOptInConfirming: string;
+    insightsOptInDone: string;
+    reportViewHeading: string;
   }
 > = {
   pt: {
@@ -430,6 +435,13 @@ export const cgiUi: Record<
     privacyPolicyHref: localizedPath("privacy", "pt"),
     privacyPolicyLinkLabel: "Política de privacidade",
     privacyReviewNote: "Texto de consentimento sujeito à revisão final antes do deploy.",
+    insightsOptInPrompt:
+      "Quer continuar recebendo leituras e insights sobre os desafios identificados no seu CGI?",
+    insightsOptInButton: "Quero receber insights personalizados",
+    insightsOptInConfirming: "Confirmando…",
+    insightsOptInDone:
+      "Pronto. Você vai receber leituras ligadas aos pontos que o seu CGI apontou. Em qualquer e-mail há um link para cancelar.",
+    reportViewHeading: "Seu diagnóstico CGI",
   },
   en: {
     metaTitle: "CGI - Caldeira Growth Index | Growth assessment",
@@ -666,6 +678,13 @@ export const cgiUi: Record<
     privacyPolicyHref: localizedPath("privacy", "en"),
     privacyPolicyLinkLabel: "Privacy policy",
     privacyReviewNote: "Consent text subject to final review before deployment.",
+    insightsOptInPrompt:
+      "Want to keep receiving insights related to the challenges identified in your CGI?",
+    insightsOptInButton: "I want personalized insights",
+    insightsOptInConfirming: "Confirming…",
+    insightsOptInDone:
+      "Done. You'll receive insights tied to what your CGI identified. Every email includes a link to unsubscribe.",
+    reportViewHeading: "Your CGI assessment",
   },
   es: {
     metaTitle: "CGI - Caldeira Growth Index | Diagnóstico de crecimiento",
@@ -902,6 +921,13 @@ export const cgiUi: Record<
     privacyPolicyHref: localizedPath("privacy", "es"),
     privacyPolicyLinkLabel: "Política de privacidad",
     privacyReviewNote: "Texto de consentimiento sujeto a revisión final antes del deploy.",
+    insightsOptInPrompt:
+      "¿Quiere seguir recibiendo lecturas e insights sobre los desafíos identificados en su CGI?",
+    insightsOptInButton: "Quiero recibir insights personalizados",
+    insightsOptInConfirming: "Confirmando…",
+    insightsOptInDone:
+      "Listo. Va a recibir lecturas relacionadas con los puntos que señaló su CGI. Todo e-mail incluye un enlace para cancelar.",
+    reportViewHeading: "Su diagnóstico CGI",
   },
 };
 
