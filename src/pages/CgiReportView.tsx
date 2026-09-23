@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import logo from "@/assets/brand/Black logo - no background.svg";
 import { cgiUi } from "@/features/cgi/config";
+import { getLanguageFromPath } from "@/lib/routing";
 import { extractReportAccessToken } from "@/features/cgi/logic/reportAccessFragment";
 import { parseReportAccessResponse, type ReportViewState } from "@/features/cgi/logic/reportAccessState";
 import {
@@ -52,6 +53,12 @@ export default function CgiReportView() {
   });
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
   const [pdfError, setPdfError] = useState(false);
+  const pageLanguage = getLanguageFromPath(typeof window === "undefined" ? "/" : window.location.pathname);
+  const statusCopy = pageLanguage === "en"
+    ? { unavailable: "This link is no longer available.", pending: "Your report is still being processed. Please try again in a few moments.", generating: "Your report is being generated. Please try again in a few moments.", failed: "We could not complete the report generation. Please try again later.", error: "We could not load the report right now. Please try again in a few moments." }
+    : pageLanguage === "es"
+      ? { unavailable: "Este enlace ya no está disponible.", pending: "Tu informe aún se está procesando. Inténtalo de nuevo en unos instantes.", generating: "Tu informe se está generando. Inténtalo de nuevo en unos instantes.", failed: "No pudimos completar la generación del informe. Inténtalo de nuevo más tarde.", error: "No pudimos cargar el informe ahora. Inténtalo de nuevo en unos instantes." }
+      : { unavailable: "Este link não está mais disponível.", pending: "Seu relatório ainda está sendo processado. Tente novamente em alguns instantes.", generating: "Seu relatório está sendo gerado. Tente novamente em alguns instantes.", failed: "Não foi possível concluir a geração do relatório. Tente novamente mais tarde.", error: "Não foi possível carregar o relatório agora. Tente novamente em alguns instantes." };
 
   useEffect(() => {
     const token = takeReportAccessToken();
@@ -97,19 +104,19 @@ export default function CgiReportView() {
         <img src={logo} alt="Caldeira Growth" className="mb-8 h-9 w-auto" />
         {viewState.kind === "loading" && <LoadingState />}
         {viewState.kind === "link_unavailable" && (
-          <MessageState title="Este link não está mais disponível." />
+          <MessageState title={statusCopy.unavailable} />
         )}
         {viewState.kind === "report_unavailable" && (
-          <MessageState title="Seu relatório ainda está sendo processado. Tente novamente em alguns instantes." />
+          <MessageState title={statusCopy.pending} />
         )}
         {viewState.kind === "report_generating" && (
-          <MessageState title="Seu relatório está sendo gerado. Tente novamente em alguns instantes." />
+          <MessageState title={statusCopy.generating} />
         )}
         {viewState.kind === "report_failed" && (
-          <MessageState title="Não foi possível concluir a geração do relatório. Tente novamente mais tarde." />
+          <MessageState title={statusCopy.failed} />
         )}
         {viewState.kind === "error" && (
-          <MessageState title="Não foi possível carregar o relatório agora. Tente novamente em alguns instantes." />
+          <MessageState title={statusCopy.error} />
         )}
         {viewState.kind === "ready" && (
           <ReadyReport
@@ -224,7 +231,7 @@ function ReadyReport({
           onClick={onOpenReport}
           className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
         >
-          Abrir relatório completo
+          {state.language === "en" ? "Open full report" : state.language === "es" ? "Abrir informe completo" : "Abrir relatório completo"}
         </button>
         <button
           type="button"

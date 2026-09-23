@@ -55,9 +55,9 @@ export function extractExecutiveSummary(aiReportJson: string): string | null {
   return normalized.length > 0 ? normalized : null;
 }
 
-function htmlShell(bodyHtml: string): string {
+function htmlShell(bodyHtml: string, language: "pt" | "en" | "es" = "pt"): string {
   return `<!doctype html>
-<html lang="pt-BR">
+<html lang="${language === "pt" ? "pt-BR" : language}">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -134,12 +134,46 @@ export function buildCgiReportReadyEmail(input: {
    * token de contato nao esta configurado -- nos dois casos a linha
    * simplesmente nao existe. */
   insightsOptInUrl?: string | null;
+  language?: "pt" | "en" | "es";
 }): CgiEmailContent {
   const name = String(input.name || "").trim();
   const company = String(input.company || "").trim();
   const summary = String(input.executiveSummary || "").trim();
   const url = input.reportAccessUrl;
   const optInUrl = String(input.insightsOptInUrl || "").trim();
+  const language = input.language === "en" || input.language === "es" ? input.language : "pt";
+
+  if (language === "en") {
+    const optInPlain = optInUrl
+      ? ["", "If you would like to receive occasional insights related to the themes identified in your CGI, you can opt in here:", optInUrl].join("\n")
+      : "";
+    const optInHtml = optInUrl
+      ? `<p style="margin:24px 0 0 0;font-size:13px;color:#666666;">If you would like to receive occasional insights related to the themes identified in your CGI, <a href="${escapeHtml(optInUrl)}" style="color:#666666;">opt in to personalised insights</a>.</p>`
+      : "";
+    const subject = `Your CGI report${company ? ` — ${company}` : ""}`;
+    const plainText = [
+      `Hello, ${name}.`, "",
+      `Based on your responses, the CGI has produced an initial reading of ${company ? `${company}'s` : "your company's"} growth system.`, "",
+      summary, "",
+      "When you open the report, I suggest not starting with the score. It summarises the current stage, but it is not the most important part of the assessment.", "",
+      "Focus instead on where the five dimensions are not progressing at the same pace, which bottlenecks may limit the next cycle, and which hypotheses need to be validated before they become decisions. Those tensions — more than the final number — are usually the most useful part of the CGI.", "",
+      "Read my CGI report:", url, "",
+      "The CGI turns principles I developed in Grow or Disappear and in my work with companies and leaders into a practical assessment. It is designed to surface strong hypotheses — not to replace context, judgement, or deep knowledge of the business.", "",
+      SIGNATURE_PLAIN,
+    ].join("\n") + optInPlain;
+    const htmlBody = htmlShell(`
+      <p style="margin:0 0 20px 0;">Hello, ${escapeHtml(name)}.</p>
+      <p style="margin:0 0 20px 0;">Based on your responses, the CGI has produced an initial reading of ${escapeHtml(company ? `${company}'s` : "your company's")} growth system.</p>
+      <p style="margin:0 0 20px 0;">${escapeHtml(summary)}</p>
+      <p style="margin:0 0 20px 0;">When you open the report, I suggest not starting with the score. It summarises the current stage, but it is not the most important part of the assessment.</p>
+      <p style="margin:0 0 20px 0;">Focus instead on where the five dimensions are not progressing at the same pace, which bottlenecks may limit the next cycle, and which hypotheses need to be validated before they become decisions. Those tensions — more than the final number — are usually the most useful part of the CGI.</p>
+      ${ctaButtonHtml("Read my CGI report", url)}
+      <p style="margin:20px 0;font-size:14px;color:#555555;">The CGI turns principles I developed in Grow or Disappear and in my work with companies and leaders into a practical assessment. It is designed to surface strong hypotheses — not to replace context, judgement, or deep knowledge of the business.</p>
+      <p style="margin:28px 0 0 0;font-size:15px;">${SIGNATURE_HTML}</p>
+      ${optInHtml}
+    `, language);
+    return { subject, plainText, htmlBody };
+  }
 
   // Uma linha, no rodape, depois da assinatura. O e-mail continua sendo a
   // entrega de um relatorio pedido; o convite e um pos-escrito, nao a mensagem.
@@ -185,7 +219,7 @@ export function buildCgiReportReadyEmail(input: {
     <p style="margin:20px 0;font-size:14px;color:#555555;">O CGI traduz para um diagnóstico prático princípios que desenvolvi em Cresça ou Desapareça e na minha atuação com empresas e lideranças. O CGI foi desenhado para levantar boas hipóteses — não para substituir contexto, julgamento ou conhecimento profundo do negócio.</p>
     <p style="margin:28px 0 0 0;font-size:15px;">${SIGNATURE_HTML}</p>
     ${optInHtml}
-  `);
+  `, language);
 
   return { subject, plainText, htmlBody };
 }
@@ -531,6 +565,7 @@ export function buildCgiUnsubscribeUrl(token: string): string {
   return `https://www.caldeiragrowth.com/cgi/descadastrar#t=${token}`;
 }
 
-export function buildCgiInsightsOptInUrl(token: string): string {
-  return `https://www.caldeiragrowth.com/cgi/insights#t=${token}`;
+export function buildCgiInsightsOptInUrl(token: string, language: "pt" | "en" | "es" = "pt"): string {
+  const path = language === "en" ? "/en/cgi/insights" : language === "es" ? "/es/cgi/insights" : "/cgi/insights";
+  return `https://www.caldeiragrowth.com${path}#t=${token}`;
 }

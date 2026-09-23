@@ -72,6 +72,12 @@ describe("buildReportAccessUrl", () => {
     expect(url).toBe("https://www.caldeiragrowth.com/cgi/relatorio#t=thetoken");
     expect(url).not.toContain("?");
   });
+
+  it("uses the English report route for English assessments", () => {
+    expect(buildReportAccessUrl("thetoken", "en")).toBe(
+      "https://www.caldeiragrowth.com/en/cgi/relatorio#t=thetoken"
+    );
+  });
 });
 
 describe("resolveReportAccessToken", () => {

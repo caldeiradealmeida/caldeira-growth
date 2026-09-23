@@ -149,6 +149,9 @@ const App = () => (
             <Route path="/en/contact" element={<Contato />} />
             <Route path="/en/privacy-policy" element={<PrivacyPolicy />} />
             <Route path="/en/cgi" element={<CGI />} />
+            <Route path="/en/cgi/relatorio" element={<Suspense fallback={<CrmLoadingFallback />}><CgiReportView /></Suspense>} />
+            <Route path="/en/cgi/descadastrar" element={<Suspense fallback={<CrmLoadingFallback />}><CgiUnsubscribe /></Suspense>} />
+            <Route path="/en/cgi/insights" element={<Suspense fallback={<CrmLoadingFallback />}><CgiInsightsOptIn /></Suspense>} />
 
             <Route path="/es" element={<Index />} />
             <Route path="/es/consultoria" element={<Consultoria />} />

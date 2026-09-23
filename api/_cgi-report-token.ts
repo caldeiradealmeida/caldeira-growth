@@ -46,8 +46,9 @@ export async function issueReportAccessToken(
   return { token: plaintext, expiresAt };
 }
 
-export function buildReportAccessUrl(token: string): string {
-  return `${CGI_REPORT_SITE_ORIGIN}/cgi/relatorio#t=${token}`;
+export function buildReportAccessUrl(token: string, language: "pt" | "en" | "es" = "pt"): string {
+  const path = language === "en" ? "/en/cgi/relatorio" : language === "es" ? "/es/cgi/relatorio" : "/cgi/relatorio";
+  return `${CGI_REPORT_SITE_ORIGIN}${path}#t=${token}`;
 }
 
 export type ReportAccessValidation =

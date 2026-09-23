@@ -137,10 +137,8 @@ export async function deliverReportEmailForAssessment(input: {
   }
 
   // 3. There must be a real, generated report to quote and link to.
-  const aiReportJson =
-    input.context?.aiReportJson ??
-    (await getReadyCgiReport({ publicAssessmentId }))?.aiReport ??
-    "";
+  const storedReport = await getReadyCgiReport({ publicAssessmentId });
+  const aiReportJson = input.context?.aiReportJson ?? storedReport?.aiReport ?? "";
   if (!aiReportJson) return result("skipped_report_not_ready");
   const summary = extractExecutiveSummary(aiReportJson);
   if (!summary) return result("skipped_missing_executive_summary");
@@ -190,8 +188,9 @@ export async function deliverReportEmailForAssessment(input: {
     name: String(lead.name || ""),
     company: String(lead.company || ""),
     executiveSummary: summary,
-    reportAccessUrl: buildReportAccessUrl(token.token),
-    insightsOptInUrl: contactToken ? buildCgiInsightsOptInUrl(contactToken) : null,
+    reportAccessUrl: buildReportAccessUrl(token.token, storedReport?.language),
+    insightsOptInUrl: contactToken ? buildCgiInsightsOptInUrl(contactToken, storedReport?.language) : null,
+    language: storedReport?.language,
   });
 
   const dispatchResult = await dispatchCgiParticipantEmail({
