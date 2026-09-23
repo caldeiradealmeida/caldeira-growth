@@ -175,6 +175,38 @@ export function buildCgiReportReadyEmail(input: {
     return { subject, plainText, htmlBody };
   }
 
+  if (language === "es") {
+    const optInPlain = optInUrl
+      ? ["", "Si deseas recibir ideas relacionadas con los temas identificados en tu CGI, puedes activarlas aquí:", optInUrl].join("\n")
+      : "";
+    const optInHtml = optInUrl
+      ? `<p style="margin:24px 0 0 0;font-size:13px;color:#666666;">Si deseas recibir ideas relacionadas con los temas identificados en tu CGI, <a href="${escapeHtml(optInUrl)}" style="color:#666666;">quiero recibir insights personalizados</a>.</p>`
+      : "";
+    const subject = `Tu informe CGI${company ? ` — ${company}` : ""}`;
+    const plainText = [
+      `Hola, ${name}.`, "",
+      `A partir de tus respuestas, el CGI ha producido una primera lectura del sistema de crecimiento de ${company || "tu empresa"}.`, "",
+      summary, "",
+      "Al abrir el informe, te sugiero no empezar por la puntuación. Resume la etapa actual, pero no es la parte más importante del diagnóstico.", "",
+      "Observa principalmente dónde las cinco dimensiones no avanzan al mismo ritmo, qué cuellos de botella pueden limitar el próximo ciclo y qué hipótesis necesitan validarse antes de convertirse en decisiones. Esas tensiones —más que el número final— suelen ser la parte más útil del CGI.", "",
+      "Leer mi informe CGI:", url, "",
+      "El CGI traduce en un diagnóstico práctico los principios que desarrollé en Crezca o Desaparezca y en mi trabajo con empresas y líderes. Está diseñado para plantear buenas hipótesis, no para sustituir el contexto, el juicio o el conocimiento profundo del negocio.", "",
+      SIGNATURE_PLAIN,
+    ].join("\n") + optInPlain;
+    const htmlBody = htmlShell(`
+      <p style="margin:0 0 20px 0;">Hola, ${escapeHtml(name)}.</p>
+      <p style="margin:0 0 20px 0;">A partir de tus respuestas, el CGI ha producido una primera lectura del sistema de crecimiento de ${escapeHtml(company || "tu empresa")}.</p>
+      <p style="margin:0 0 20px 0;">${escapeHtml(summary)}</p>
+      <p style="margin:0 0 20px 0;">Al abrir el informe, te sugiero no empezar por la puntuación. Resume la etapa actual, pero no es la parte más importante del diagnóstico.</p>
+      <p style="margin:0 0 20px 0;">Observa principalmente dónde las cinco dimensiones no avanzan al mismo ritmo, qué cuellos de botella pueden limitar el próximo ciclo y qué hipótesis necesitan validarse antes de convertirse en decisiones. Esas tensiones —más que el número final— suelen ser la parte más útil del CGI.</p>
+      ${ctaButtonHtml("Leer mi informe CGI", url)}
+      <p style="margin:20px 0;font-size:14px;color:#555555;">El CGI traduce en un diagnóstico práctico los principios que desarrollé en Crezca o Desaparezca y en mi trabajo con empresas y líderes. Está diseñado para plantear buenas hipótesis, no para sustituir el contexto, el juicio o el conocimiento profundo del negocio.</p>
+      <p style="margin:28px 0 0 0;font-size:15px;">${SIGNATURE_HTML}</p>
+      ${optInHtml}
+    `, language);
+    return { subject, plainText, htmlBody };
+  }
+
   // Uma linha, no rodape, depois da assinatura. O e-mail continua sendo a
   // entrega de um relatorio pedido; o convite e um pos-escrito, nao a mensagem.
   const optInPlain = optInUrl

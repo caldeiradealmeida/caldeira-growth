@@ -78,6 +78,12 @@ describe("buildReportAccessUrl", () => {
       "https://www.caldeiragrowth.com/en/cgi/relatorio#t=thetoken"
     );
   });
+
+  it("uses the Spanish report route for Spanish assessments", () => {
+    expect(buildReportAccessUrl("thetoken", "es")).toBe(
+      "https://www.caldeiragrowth.com/es/cgi/relatorio#t=thetoken"
+    );
+  });
 });
 
 describe("resolveReportAccessToken", () => {

@@ -66,6 +66,15 @@ describe("buildCgiReportReadyEmail", () => {
     expect(email.htmlBody).not.toContain("Seu relatório CGI");
   });
 
+  it("renders the complete report email in Spanish when the assessment was completed in Spanish", () => {
+    const email = buildCgiReportReadyEmail({ ...base, language: "es" });
+    expect(email.subject).toBe("Tu informe CGI — Empresa Teste");
+    expect(email.plainText).toContain("Hola, Marines Silva.");
+    expect(email.plainText).toContain("Leer mi informe CGI:");
+    expect(email.htmlBody).toContain('<html lang="es">');
+    expect(email.htmlBody).not.toContain("Seu relatório CGI");
+  });
+
   it("omits the dash when company is empty", () => {
     const email = buildCgiReportReadyEmail({ ...base, company: "" });
     expect(email.subject).toBe("Seu relatório CGI");

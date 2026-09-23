@@ -171,6 +171,9 @@ const App = () => (
               element={<PrivacyPolicy />}
             />
             <Route path="/es/cgi" element={<CGI />} />
+            <Route path="/es/cgi/relatorio" element={<Suspense fallback={<CrmLoadingFallback />}><CgiReportView /></Suspense>} />
+            <Route path="/es/cgi/descadastrar" element={<Suspense fallback={<CrmLoadingFallback />}><CgiUnsubscribe /></Suspense>} />
+            <Route path="/es/cgi/insights" element={<Suspense fallback={<CrmLoadingFallback />}><CgiInsightsOptIn /></Suspense>} />
 
             <Route path="*" element={<NotFound />} />
           </Routes>
