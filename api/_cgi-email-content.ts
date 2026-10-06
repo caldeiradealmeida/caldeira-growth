@@ -593,6 +593,56 @@ export function buildCgiInsightD7Email(input: {
   return { subject, plainText, htmlBody };
 }
 
+/** D+14 -- a oferta: levar o diagnostico ao time, com o livro.
+ *
+ * Duas variantes, nao cinco: o que muda entre os niveis do CGI e o TOM da
+ * leitura (ha ganho estruturado a capturar vs. o gargalo agora e de escala),
+ * nao a oferta. A dimensao mais fragil entra pelo nome, e e ela que da
+ * assunto a sessao. CTA por resposta, de proposito: a pessoa conta o tamanho
+ * do time e o Denis indica o formato -- nenhum link de checkout. */
+export function buildCgiOfferD14Email(input: {
+  name: string;
+  company: string;
+  dimensionId: CgiInsightDimensionId;
+  cgiLevel: string | null;
+  unsubscribeUrl: string;
+}): CgiEmailContent {
+  const name = String(input.name || "").trim();
+  const company = String(input.company || "").trim();
+  const dimensao = INSIGHT_D7_BY_DIMENSION[input.dimensionId].titulo;
+  const url = input.unsubscribeUrl;
+  const maduro = input.cgiLevel === "structured" || input.cgiLevel === "scalable";
+
+  const subject = company
+    ? `Seu time já viu o diagnóstico da ${company}?`
+    : "Seu time já viu o diagnóstico?";
+
+  const leitura = maduro
+    ? `A base${company ? ` da ${company}` : ""} está montada. O desafio agora é de escala — e escala depende de o time inteiro enxergar onde está o próximo gargalo: ${dimensao}.`
+    : `O diagnóstico mostrou espaço para ganhos estruturados, e ${dimensao} é o ponto de partida mais claro. Ganho estruturado depende de o time inteiro enxergar o mesmo problema.`;
+
+  const paragrafos = [
+    "Faz duas semanas que você recebeu o resultado do Caldeira Growth Index.",
+    leitura,
+    `Um jeito simples de começar é uma sessão online de 60 minutos comigo sobre ${dimensao}, com o seu time, e um exemplar autografado do meu livro, Cresça ou Desapareça, para cada pessoa. Já incluo 20 livros na sessão.`,
+    "Se o time for maior, também faço palestra e workshop no mesmo formato. E se preferir começar só pelos livros, há kits a partir de 10 exemplares.",
+    "Se fizer sentido, responda este e-mail contando quantas pessoas tem o seu time, e eu indico o melhor formato.",
+  ];
+
+  const plainText =
+    [`Olá, ${name}.`, "", ...paragrafos.flatMap((p) => [p, ""]), SIGNATURE_PLAIN].join("\n") +
+    unsubscribeFooterPlain(url);
+
+  const htmlBody = htmlShell(`
+    <p style="margin:0 0 20px 0;">${escapeHtml(`Olá, ${name}.`)}</p>
+    ${paragrafos.map((p) => `<p style="margin:0 0 20px 0;">${escapeHtml(p)}</p>`).join("\n    ")}
+    <p style="margin:28px 0 0 0;font-size:15px;">${SIGNATURE_HTML}</p>
+    ${unsubscribeFooterHtml(url)}
+  `);
+
+  return { subject, plainText, htmlBody };
+}
+
 export function buildCgiUnsubscribeUrl(token: string): string {
   return `https://www.caldeiragrowth.com/cgi/descadastrar#t=${token}`;
 }
