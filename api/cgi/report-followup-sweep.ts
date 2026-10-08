@@ -3,14 +3,26 @@ import {
   recordCommunication,
   recordCommunicationSafely,
 } from "../_cgi-communications.js";
-import { isNurtureTypeEnabled } from "../_cgi-nurture.js";
+import { OFFER_TYPE, isNurtureTypeEnabled, readOfferCutoffMs } from "../_cgi-nurture.js";
+import {
+  offerSendablesFromPlan,
+  offerSuppressionsFromPlan,
+  planOffer,
+  type OfferPlanItem,
+} from "../_cgi-offer-d14.js";
+import { ensureContactToken } from "../_cgi-contact-token.js";
 import {
   planReportFollowup,
   sendablesFromPlan,
   suppressionsFromPlan,
   type ReportFollowupPlanItem,
 } from "../_cgi-report-followup.js";
-import { buildCgiReportFollowupD2Email } from "../_cgi-email-content.js";
+import {
+  buildCgiOfferD14Email,
+  buildCgiReportFollowupD2Email,
+  buildCgiUnsubscribeUrl,
+  type CgiInsightDimensionId,
+} from "../_cgi-email-content.js";
 import { dispatchCgiParticipantEmail } from "../_cgi-email-dispatch.js";
 import { buildReportAccessUrl, issueReportAccessToken } from "../_cgi-report-token.js";
 import { updateCommunicationByDedupeKey } from "../_cgi-supabase.js";
@@ -133,6 +145,150 @@ async function sendOne(item: ReportFollowupPlanItem, dryRun: boolean): Promise<
   return { outcome: "failed", reason: String(motivo) };
 }
 
+/** Envia UMA oferta (D+14). Mesmo protocolo do D+2: reserva no ledger, monta,
+ * envia, fecha a linha. Duas diferencas:
+ *
+ * - Em dry run NAO reserva. Reservar e fechar como 'failed' ocuparia a chave
+ *   de dedupe e a pessoa nunca mais receberia de verdade. O ensaio da oferta e
+ *   o modo inspect; o dry run aqui so prova o caminho ate o provider.
+ * - Nurturing exige link de descadastro. Sem token de contato configurado, a
+ *   mensagem nao sai -- e a linha fecha como 'failed', visivel no Pipe. */
+async function sendOffer(item: OfferPlanItem, dryRun: boolean): Promise<
+  { outcome: "sent" | "failed" | "claimed_by_other" | "skipped" | "dry_run"; reason?: string }
+> {
+  const lead = item.lead;
+  if (!lead?.email) return { outcome: "skipped", reason: "sem_email" };
+  const dedupeKey = item.decision.decision === "send" ? item.decision.dedupeKey : "";
+  if (!dedupeKey) return { outcome: "skipped", reason: "sem_dedupe_key" };
+  if (dryRun) return { outcome: "dry_run" };
+
+  const reserva = await recordCommunication({
+    type: OFFER_TYPE,
+    status: "sending",
+    leadId: lead.id,
+    assessmentId: item.assessmentId,
+    publicAssessmentId: item.publicAssessmentId,
+    recipient: lead.email,
+    provider: "apps_script_mailapp",
+    actor: "system:cron",
+    consentMarketing: typeof lead.consent_marketing === "boolean" ? lead.consent_marketing : null,
+    metadata: {
+      offer: "d14_books_session",
+      days_since_delivery: item.daysSinceDelivery,
+      lowest_dimension: item.lowestDimensionId,
+      cgi_level: item.cgiLevel,
+    },
+  });
+  if (reserva.outcome === "duplicate") return { outcome: "claimed_by_other" };
+  if (reserva.outcome !== "recorded") return { outcome: "skipped", reason: reserva.outcome };
+
+  const contactToken = await ensureContactToken(lead.id, lead.contact_token_hash);
+  if (!contactToken) {
+    await updateCommunicationByDedupeKey(dedupeKey, {
+      status: "failed",
+      failed_at: new Date().toISOString(),
+      error_code: "unsubscribe_unavailable",
+    });
+    return { outcome: "failed", reason: "unsubscribe_unavailable" };
+  }
+
+  const content = buildCgiOfferD14Email({
+    name: String(lead.name || ""),
+    company: String(lead.company || ""),
+    dimensionId: item.lowestDimensionId as CgiInsightDimensionId,
+    cgiLevel: item.cgiLevel,
+    unsubscribeUrl: buildCgiUnsubscribeUrl(contactToken),
+  });
+
+  const dispatch = await dispatchCgiParticipantEmail({
+    appsScriptUrl: getAppsScriptUrl(),
+    relayToken: process.env.CGI_EMAIL_RELAY_TOKEN?.trim() || "",
+    recipient: lead.email,
+    content,
+    emailKind: "report_ready",
+    dryRun: false,
+  });
+
+  if (dispatch.status === "sent") {
+    await updateCommunicationByDedupeKey(dedupeKey, {
+      status: "sent",
+      sent_at: new Date().toISOString(),
+      subject: content.subject,
+    });
+    return { outcome: "sent" };
+  }
+  const motivo =
+    dispatch.status === "error" ? dispatch.error : dispatch.status === "skipped" ? dispatch.reason : dispatch.status;
+  await updateCommunicationByDedupeKey(dedupeKey, {
+    status: "failed",
+    failed_at: new Date().toISOString(),
+    error_code: String(motivo).slice(0, 80),
+  });
+  return { outcome: "failed", reason: String(motivo) };
+}
+
+/** Passo da oferta dentro do run. So executa com a flag ligada; o D+2 nao
+ * depende dele e nao e afetado por nada que aconteca aqui. */
+async function runOffer(now: number, dryRun: boolean) {
+  if (!isNurtureTypeEnabled(OFFER_TYPE)) {
+    return { status: "disabled", flag: "CGI_OFFER_D14_ENABLED" };
+  }
+  const plan = await planOffer({ now, limit: BATCH_LIMIT });
+
+  let suppressed = 0;
+  for (const linha of offerSuppressionsFromPlan(plan)) {
+    const item = plan.items.find((i) => i.publicAssessmentId === linha.publicAssessmentId);
+    const resultado = await recordCommunicationSafely({
+      type: linha.type,
+      status: "suppressed",
+      leadId: item?.leadId ?? null,
+      assessmentId: item?.assessmentId ?? null,
+      publicAssessmentId: linha.publicAssessmentId,
+      dedupeKey: linha.dedupeKey,
+      reason: linha.reason,
+      actor: "system:cron",
+      recipientMasked: item?.recipientMasked ?? null,
+    });
+    if (resultado?.outcome === "recorded") suppressed += 1;
+  }
+
+  let sent = 0;
+  let failed = 0;
+  const results: Array<Record<string, unknown>> = [];
+  for (const item of offerSendablesFromPlan(plan)) {
+    let resultado: Awaited<ReturnType<typeof sendOffer>>;
+    try {
+      resultado = await sendOffer(item, dryRun);
+    } catch (error) {
+      resultado = { outcome: "failed", reason: error instanceof Error ? error.message : String(error) };
+    }
+    if (resultado.outcome === "sent") sent += 1;
+    if (resultado.outcome === "failed") failed += 1;
+    results.push({
+      public_assessment_id: item.publicAssessmentId,
+      recipient_masked: item.recipientMasked,
+      outcome: resultado.outcome,
+      ...(resultado.reason ? { reason: resultado.reason } : {}),
+    });
+  }
+
+  if (plan.degraded) {
+    console.warn("[D+14] varredura degradada, nada enviado. Leituras que falharam:", plan.failedReads.join(", "));
+  }
+
+  return {
+    status: "ran",
+    degraded: plan.degraded,
+    failed_reads: plan.failedReads,
+    window: { from: plan.windowFromIso, to: plan.windowToIso },
+    candidates: plan.candidates,
+    sent,
+    failed,
+    suppressed,
+    results,
+  };
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!isAuthorized(req)) {
     // Vale para inspect tambem: olhar a fila ja e informacao comercial.
@@ -147,6 +303,38 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Somente leitura, e nao por disciplina: este ramo retorna antes de qualquer
   // coisa que escreva ou envie existir. Nao monta provider, nao emite token,
   // nao toca no ledger.
+  // Ensaio da oferta: ?mode=inspect&type=offer_d14. Somente leitura -- nao
+  // reserva, nao emite token, nao envia. Mostra para quem sairia hoje e o
+  // motivo de cada supressao.
+  if (mode === "inspect" && readParam(req, "type") === "offer_d14") {
+    const plan = await planOffer({ now, limit: BATCH_LIMIT });
+    const cutoff = readOfferCutoffMs();
+    res.status(200).json({
+      ok: true,
+      mode: "inspect",
+      type: "offer_d14",
+      ledger_type: OFFER_TYPE,
+      flag_enabled: isNurtureTypeEnabled(OFFER_TYPE),
+      delivered_since: cutoff === null ? null : new Date(cutoff).toISOString(),
+      window: { from: plan.windowFromIso, to: plan.windowToIso },
+      degraded: plan.degraded,
+      failed_reads: plan.failedReads,
+      candidates: plan.candidates,
+      would_send: offerSendablesFromPlan(plan).length,
+      would_record_suppressions: offerSuppressionsFromPlan(plan).length,
+      items: plan.items.map((item) => ({
+        public_assessment_id: item.publicAssessmentId,
+        recipient_masked: item.recipientMasked,
+        days_since_delivery: item.daysSinceDelivery,
+        lowest_dimension: item.lowestDimensionId,
+        cgi_level: item.cgiLevel,
+        decision: item.decision.decision,
+        reason: item.decision.decision === "suppress" ? item.decision.reason : null,
+      })),
+    });
+    return;
+  }
+
   if (mode === "inspect") {
     const plan = await planReportFollowup({ now, limit: BATCH_LIMIT });
     res.status(200).json({
@@ -178,7 +366,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   // --- RUN ------------------------------------------------------------------
+  const dryRun = process.env.CGI_EMAIL_DRY_RUN === "true";
+
   if (!isNurtureTypeEnabled("report_followup_d2")) {
+    // A oferta roda mesmo com o D+2 desligado: sao flags independentes.
+    let offer: Record<string, unknown> | undefined;
+    if (isNurtureTypeEnabled(OFFER_TYPE)) {
+      try {
+        offer = await runOffer(now, dryRun);
+      } catch (error) {
+        offer = { status: "error", error: error instanceof Error ? error.message : String(error) };
+      }
+    }
     res.status(200).json({
       ok: true,
       mode: "run",
@@ -188,11 +387,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       failed: 0,
       suppressed: 0,
       note: "flag desligada: nenhuma escrita, nenhuma chamada ao provider",
+      ...(offer ? { offer_d14: offer } : {}),
     });
     return;
   }
 
-  const dryRun = process.env.CGI_EMAIL_DRY_RUN === "true";
   const plan = await planReportFollowup({ now, limit: BATCH_LIMIT });
 
   // Supressoes primeiro: elas sao o que responde "por que nada saiu".
@@ -243,10 +442,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     console.warn("[D+2] varredura degradada, nada enviado. Leituras que falharam:", plan.failedReads.join(", "));
   }
 
+  // Oferta depois do D+2, isolada: uma falha inesperada aqui nao pode apagar
+  // o resultado do D+2 que ja aconteceu.
+  let offer: Record<string, unknown> | undefined;
+  if (isNurtureTypeEnabled(OFFER_TYPE)) {
+    try {
+      offer = await runOffer(now, dryRun);
+    } catch (error) {
+      offer = { status: "error", error: error instanceof Error ? error.message : String(error) };
+    }
+  }
+
   res.status(200).json({
     ok: true,
     mode: "run",
     dry_run: dryRun,
+    ...(offer ? { offer_d14: offer } : {}),
     degraded: plan.degraded,
     failed_reads: plan.failedReads,
     window: { from: plan.windowFromIso, to: plan.windowToIso },

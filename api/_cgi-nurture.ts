@@ -19,9 +19,20 @@ import {
 // a Fase 1 do lançamento é consentimento, revogação e observabilidade -- zero
 // e-mail novo.
 
-export type NurtureType = Extract<CommunicationType, "report_followup_d2" | "howto_d7">;
+export type NurtureType = Extract<
+  CommunicationType,
+  "report_followup_d2" | "howto_d7" | "strategic_d21"
+>;
 
-export const NURTURE_TYPES: readonly NurtureType[] = ["report_followup_d2", "howto_d7"];
+/** `strategic_d21` e o toque de OFERTA, que sai no D+14 (livro + sessao CGI).
+ *
+ * O nome do tipo ficou do desenho original da regua (D+21) e foi mantido de
+ * proposito: `cgi_communications.communication_type` tem CHECK constraint, e
+ * reaproveitar um valor ja permitido evita uma migration so para renomear.
+ * O dia efetivo e a janela vivem em NURTURE_WINDOWS, nao no nome. */
+export const OFFER_TYPE = "strategic_d21" as const;
+
+export const NURTURE_TYPES: readonly NurtureType[] = ["report_followup_d2", "howto_d7", OFFER_TYPE];
 
 /** Uma flag por toque. Duas flags e não uma porque os dois toques têm naturezas
  * diferentes -- um é continuação da entrega, o outro é conteúdo que nós
@@ -29,6 +40,7 @@ export const NURTURE_TYPES: readonly NurtureType[] = ["report_followup_d2", "how
 export const NURTURE_FLAG_BY_TYPE: Record<NurtureType, string> = {
   report_followup_d2: "CGI_REPORT_FOLLOWUP_D2_ENABLED",
   howto_d7: "CGI_NURTURE_D7_ENABLED",
+  strategic_d21: "CGI_OFFER_D14_ENABLED",
 };
 
 /** Fail-closed: qualquer coisa que não seja exatamente "true" mantém desligado.
@@ -73,7 +85,47 @@ export const HUMAN_CONTACT_QUIET_DAYS = 14;
 export const NURTURE_WINDOWS: Record<NurtureType, { fromDays: number; toDays: number }> = {
   report_followup_d2: { fromDays: 2, toDays: 5 },
   howto_d7: { fromDays: 7, toDays: 14 },
+  // Oferta: a partir do D+14. O fim largo (30) nao e para pegar historico --
+  // isso e trabalho do corte de lancamento abaixo -- e para que quem cair na
+  // janela de silencio de fim de ano ainda receba na volta, em vez de perder
+  // a vez para sempre.
+  strategic_d21: { fromDays: 14, toDays: 30 },
 };
+
+// ---------------------------------------------------------------------------
+// OFERTA (D+14) -- corte de lancamento e silencio de fim de ano
+// ---------------------------------------------------------------------------
+
+/** So recebe a oferta automatica quem teve o relatorio entregue a partir desta
+ * data. A base anterior recebe e-mail pessoal do Denis (decisao de 06/10/2026),
+ * e as duas coisas juntas mandariam a mesma oferta duas vezes.
+ *
+ * Fail-closed: ausente ou invalida, ninguem recebe. */
+export const OFFER_CUTOFF_ENV = "CGI_OFFER_D14_DELIVERED_SINCE";
+
+export function readOfferCutoffMs(
+  env: Record<string, string | undefined> = process.env
+): number | null {
+  const raw = String(env[OFFER_CUTOFF_ENV] || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}/.test(raw)) return null;
+  const ms = Date.parse(raw);
+  return Number.isFinite(ms) ? ms : null;
+}
+
+/** Janela de silencio: de 20/12 a 05/01, inclusive, no horario de Sao Paulo.
+ * Oferta comercial no meio das festas e ruido -- e quem cair aqui ainda recebe
+ * no dia 06/01 se continuar dentro dos 30 dias. */
+export function isOfferQuietPeriod(now: number): boolean {
+  // America/Sao_Paulo e UTC-3 o ano todo desde 2019 (sem horario de verao).
+  const local = new Date(now - 3 * 3_600_000);
+  const mes = local.getUTCMonth() + 1;
+  const dia = local.getUTCDate();
+  return (mes === 12 && dia >= 20) || (mes === 1 && dia <= 5);
+}
+
+/** A oferta e escrita em portugues e o livro e em portugues. Relatorios em
+ * ingles ou espanhol ficam fora ate existir copy propria. */
+export const OFFER_LANGUAGES: ReadonlySet<string> = new Set(["pt"]);
 
 const DIA_MS = 86_400_000;
 
@@ -98,6 +150,10 @@ export type NurtureSuppressionReason =
   | "unsubscribed"
   | "human_contact"
   | "unknown_dimension"
+  // Oferta (D+14)
+  | "before_offer_cutoff"
+  | "quiet_period"
+  | "unsupported_language"
   // Classificacao do lead. 'legitimate' e o unico valor que envia.
   | "lead_test"
   | "lead_spam"
@@ -126,6 +182,8 @@ export type NurtureCandidate = {
    *  que o banco devolveu, e a decisão não presume que seja um dos quatro
    *  valores conhecidos. Ausente, nulo ou desconhecido bloqueia. */
   leadClassification?: unknown;
+  /** cgi_reports.language ('pt' | 'en' | 'es'). So a oferta usa. */
+  reportLanguage?: string | null;
 };
 
 export type NurtureDecision =
@@ -224,6 +282,23 @@ export function decideNurture(
     // O único motivo de existir deste e-mail é "parece que não chegou". Se
     // chegou e foi aberto, ele não tem assunto.
     if (candidate.reportOpenedAtIso) return suprimir(type, "report_already_opened", candidate.publicAssessmentId);
+  } else if (type === OFFER_TYPE) {
+    // Oferta e o toque mais comercial da regua: tudo o que o D+7 exige, mais
+    // corte de lancamento, silencio de fim de ano e idioma.
+    const corte = readOfferCutoffMs(options.env ?? process.env);
+    const entregaMs = new Date(String(candidate.reportEmailSentAtIso)).getTime();
+    if (corte === null || !(entregaMs >= corte)) {
+      return suprimir(type, "before_offer_cutoff", candidate.publicAssessmentId);
+    }
+    if (candidate.consentMarketing !== true) return suprimir(type, "no_marketing_consent", candidate.publicAssessmentId);
+    if (!DIMENSOES_CONHECIDAS.has(String(candidate.lowestDimensionId || ""))) {
+      return suprimir(type, "unknown_dimension", candidate.publicAssessmentId);
+    }
+    if (!OFFER_LANGUAGES.has(String(candidate.reportLanguage || ""))) {
+      return suprimir(type, "unsupported_language", candidate.publicAssessmentId);
+    }
+    // Por ultimo, de proposito: so adia quem de fato receberia.
+    if (isOfferQuietPeriod(now)) return suprimir(type, "quiet_period", candidate.publicAssessmentId);
   } else {
     // D+7 é conteúdo que nós escolhemos mandar: exige opt-in explícito.
     if (candidate.consentMarketing !== true) return suprimir(type, "no_marketing_consent", candidate.publicAssessmentId);
@@ -280,6 +355,11 @@ const SUPPRESSION_REASONS_NOT_RECORDED: ReadonlySet<NurtureSuppressionReason> = 
   // de classificacao (lead_test, lead_spam, lead_invalid) descrevem a PESSOA e
   // viram linha, uma vez cada, pela chave namespaced.
   "lead_classification_unknown",
+  // Oferta: os dois sao fatos sobre o CALENDARIO, nao sobre a pessoa. Quem esta
+  // antes do corte nunca vai receber e a data de entrega ja diz isso; quem esta
+  // no silencio de fim de ano recebe na volta.
+  "before_offer_cutoff",
+  "quiet_period",
 ]);
 
 export function shouldRecordSuppression(reason: NurtureSuppressionReason): boolean {

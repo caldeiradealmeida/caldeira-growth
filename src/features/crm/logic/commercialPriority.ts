@@ -329,7 +329,7 @@ const SHORT_TYPE_LABELS: Record<CommunicationType, string> = {
   abandon_progress_d1: "Abandono",
   insight_d2: "Insight",
   howto_d7: "Insight",
-  strategic_d21: "Insight",
+  strategic_d21: "Oferta",
   checkin_d45: "Check-in",
   revisit_d90: "Revisitar",
   commercial_followup: "Comercial",

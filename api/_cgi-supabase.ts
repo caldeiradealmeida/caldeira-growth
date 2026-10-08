@@ -1684,6 +1684,9 @@ export type ReportFollowupCandidateRow = {
   lead_id: string | null;
   completed_at: string | null;
   report_email_sent_at: string | null;
+  /** Lidos para a oferta (D+14); o D+2 ignora os dois. */
+  lowest_dimension?: string | null;
+  cgi_level?: string | null;
 };
 
 /** Assessments cuja entrega de relatorio caiu na janela do D+2.
@@ -1702,7 +1705,7 @@ export async function getReportFollowupCandidates(input: {
     "report_email_sent_at=not.is.null",
     `report_email_sent_at=${gteFilter(input.sentFromIso)}`,
     `report_email_sent_at=lte.${encodeURIComponent(input.sentToIso)}`,
-    "select=id,public_assessment_id,lead_id,completed_at,report_email_sent_at",
+    "select=id,public_assessment_id,lead_id,completed_at,report_email_sent_at,lowest_dimension,cgi_level",
     "order=report_email_sent_at.asc",
     `limit=${Math.max(1, Math.min(input.limit, 100))}`,
   ].join("&");
@@ -1739,6 +1742,30 @@ export async function getReportAccessTimestamps(
     return { ok: false, rows: mapa };
   }
   for (const row of result.data ?? []) mapa.set(row.public_assessment_id, row.last_accessed_at);
+  return { ok: true, rows: mapa };
+}
+
+/** Idioma do relatorio entregue, por assessment. Le so relatorios prontos: e
+ * o idioma em que a pessoa de fato recebeu o diagnostico. Um assessment pode
+ * ter mais de uma versao; qualquer uma pronta serve, porque o idioma nao muda
+ * entre versoes do mesmo assessment. */
+export async function getReportLanguages(
+  publicAssessmentIds: string[]
+): Promise<SoftRead<Map<string, string | null>>> {
+  const mapa = new Map<string, string | null>();
+  if (publicAssessmentIds.length === 0) return { ok: true, rows: mapa };
+  const lista = publicAssessmentIds.map((id) => `"${id}"`).join(",");
+  const result = await supabaseRequest<Array<{ public_assessment_id: string; language: string | null }>>(
+    `cgi_reports?public_assessment_id=in.(${encodeURIComponent(lista)})&report_status=in.(report_ready,report_ready_with_warnings)&select=public_assessment_id,language`,
+    { method: "GET" }
+  );
+  if (!result.ok) {
+    logSupabaseFailure("get_report_languages", { status: result.status, error: result.error });
+    return { ok: false, rows: mapa };
+  }
+  for (const row of result.data ?? []) {
+    if (!mapa.get(row.public_assessment_id)) mapa.set(row.public_assessment_id, row.language ?? null);
+  }
   return { ok: true, rows: mapa };
 }
 

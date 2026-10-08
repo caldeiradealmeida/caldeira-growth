@@ -69,7 +69,7 @@ export const COMMUNICATION_TYPE_LABELS: Record<string, string> = {
   abandon_progress_d1: "Lembrete (diagnóstico em aberto)",
   insight_d2: "Insight (D2)",
   howto_d7: "Como aplicar (D7)",
-  strategic_d21: "Leitura estratégica (D21)",
+  strategic_d21: "Oferta livro + sessão (D14)",
   checkin_d45: "Check-in (D45)",
   revisit_d90: "Revisitar o CGI (D90)",
   commercial_followup: "Follow-up comercial",
