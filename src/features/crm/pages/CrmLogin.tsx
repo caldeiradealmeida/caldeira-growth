@@ -1,17 +1,38 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { Navigate } from "react-router-dom";
 import logo from "@/assets/brand/Black logo - no background.svg";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { crmSupabase } from "../lib/supabaseClient";
+import { useCrmSession } from "../auth/useCrmSession";
+import {
+  CRM_BASE_PATH,
+  clearAuthFragment,
+  describeAuthError,
+  parseAuthFragment,
+} from "../auth/authRedirect";
 
 type SendState = "idle" | "sending" | "sent" | "error";
 
 export function CrmLogin() {
+  const { session, loading } = useCrmSession();
   const [email, setEmail] = useState("");
   const [state, setState] = useState<SendState>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  // Erro que veio do callback (link expirado, por exemplo). Lido do fragmento
+  // uma vez e apagado da barra em seguida -- a pessoa precisa ver a mensagem,
+  // não o fragmento.
+  const [callbackError, setCallbackError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const mensagem = describeAuthError(parseAuthFragment(window.location.hash));
+    if (!mensagem) return;
+    setCallbackError(mensagem);
+    setState("error");
+    clearAuthFragment();
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -32,6 +53,9 @@ export function CrmLogin() {
     }
     setState("sent");
   }
+
+  // Quem já está autenticado não tem o que fazer aqui.
+  if (!loading && session) return <Navigate to={CRM_BASE_PATH} replace />;
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
@@ -60,9 +84,9 @@ export function CrmLogin() {
                   onChange={(e) => setEmail(e.target.value)}
                 />
               </div>
-              {state === "error" && errorMessage && (
+              {state === "error" && (callbackError || errorMessage) && (
                 <p className="text-sm text-destructive" role="alert">
-                  {errorMessage}
+                  {callbackError || errorMessage}
                 </p>
               )}
               <Button type="submit" className="w-full" disabled={state === "sending"}>

@@ -7,8 +7,8 @@ A versão 1.1 altera apenas a geração e a renderização compatível do relat�
 ## Fluxo atual auditado
 
 - `api/cgi-assessment.ts` valida lead, normaliza respostas, calcula o score, enriquece o site público quando informado, chama OpenAI Responses e salva dados no Google Apps Script e no Supabase em modo best-effort.
-- `api/cgi-core.ts` contém as 40 perguntas usadas no backend, cinco dimensões, faixas de maturidade e cálculo de score.
-- `api/cgi-report-guide.ts` fornece o guia de estilo/metodologia usado no prompt.
+- `api/_cgi-core.ts` contém as 40 perguntas usadas no backend, cinco dimensões, faixas de maturidade e cálculo de score.
+- `api/_cgi-report-guide.ts` fornece o guia de estilo/metodologia usado no prompt.
 - `src/features/cgi/services/report.ts` faz parse do JSON da IA, monta texto, HTML e PDF do relatório.
 - `src/features/cgi/components/CgiResultStep.tsx` renderiza o resultado e a prévia do relatório na tela.
 - `api/_cgi-supabase.ts` persiste leads, assessments, respostas individuais e eventos.

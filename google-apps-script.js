@@ -3,7 +3,35 @@
  * Colunas: timestamp, nome, email, empresa, cargo, tema, mensagem
  */
 var SPREADSHEET_ID = '1NivGOjutCgJTGDjXxt8ydFiCeWrKvbbIdqmkVmwSC9M';
-var SCRIPT_VERSION = '2026-07-16-cgi-v3';
+var SCRIPT_VERSION = '2026-07-16-cgi-v5';
+// Etapa 4 (CGI email automation): independent kill switches for the two
+// participant emails, checked in handleCgiSendEmailPost_ against the
+// payload's declared emailKind. Defense in depth alongside Vercel's own
+// CGI_REPORT_EMAIL_ENABLED / CGI_ABANDONMENT_EMAIL_ENABLED env flags --
+// Vercel decides whether to even ask; this decides whether Apps Script
+// will act on that ask. Both start false: flipping either to true is a
+// deliberate, manual, live-script edit, never something a deploy does by
+// itself.
+//
+// Etapa 5: the old sendCgiNotification_ (internal "new lead" alert to
+// Denis, direct MailApp.sendEmail, no flag, no ledger) is removed. It
+// silently stopped delivering sometime around 04/08/2026 -- MailApp never
+// threw, so its own try/catch never logged anything actionable, and
+// nothing outside this script could see the gap either, since it never
+// wrote a row anywhere. 39 real leads (04/08-20/09) came in without Denis
+// ever being told. The internal alert is now just a third emailKind on
+// the SAME relay as the other two (handleCgiSendEmailPost_), so it is
+// built server-side (api/_cgi-email-content.ts), goes through the same
+// MailApp.sendEmail call already proven to work for report_ready/
+// abandonment, and is recorded in cgi_communications either way -- a
+// future failure will show up as a "failed" row instead of just silence.
+// ENABLE_CGI_INTERNAL_NOTIFICATION defaults true (unlike the other two):
+// this alert doesn't go to a lead, so there's no rollout-care reason to
+// ship it off by default, and Vercel's own env flag already fails OPEN
+// for the same reason (see isCgiInternalNotificationEnabled).
+var ENABLE_CGI_REPORT_EMAIL = false;
+var ENABLE_CGI_ABANDONMENT_EMAIL = false;
+var ENABLE_CGI_INTERNAL_NOTIFICATION = true;
 var ARTICLES_SHEET_NAME = 'Artigos';
 var MEDIA_SHEET_NAME = 'Midia';
 var CGI_SHEET_NAME = 'CGI';
@@ -114,6 +142,9 @@ function doPost(e) {
     }
     if (action === 'cgi_assessment') {
       return handleCgiAssessmentPost_(payload);
+    }
+    if (action === 'cgi_send_email') {
+      return handleCgiSendEmailPost_(payload);
     }
 
     var nome = String(payload.nome || '').trim();
@@ -316,144 +347,56 @@ function handleCgiAssessmentPost_(payload) {
   };
 
   appendMappedRow_(sheet, CGI_HEADERS, row);
-  sendCgiNotification_(lead, score, attentionPoints, payload);
-  sendCgiLeadReport_(lead, score, attentionPoints, payload);
+  // Internal "new lead" notification and participant report-ready email:
+  // both superseded by the dedicated cgi_send_email action
+  // (handleCgiSendEmailPost_) as of Etapa 5 / Etapa 4. Vercel now builds
+  // the exact email content server-side (subject/plainText/htmlBody) and
+  // relays it via a separate request; this handler never templates or
+  // sends either email itself anymore, so nothing here can double-send
+  // alongside the new path.
 
   return jsonResponse_({ ok: true, type: 'cgi_assessment', version: SCRIPT_VERSION });
 }
 
-function sendCgiNotification_(lead, score, attentionPoints, payload) {
-  try {
-    var configuredEmail = String(PropertiesService.getScriptProperties().getProperty('CGI_NOTIFICATION_EMAIL') || '').trim();
-    var recipient = configuredEmail || 'contato@caldeiragrowth.com';
-    var subject = '[CGI] Novo assessment - ' + String(lead.company || lead.name || '');
-    var dimensionLines = (score.dimensionScores || [])
-      .map(function (item) {
-        return '- ' + String(item.title || item.dimensionId || '') + ': ' + String(item.score || '');
-      })
-      .join('\n');
-    var body = [
-      'Novo CGI - Caldeira Growth Index',
-      '',
-      'Lead:',
-      'Nome: ' + String(lead.name || ''),
-      'Email: ' + String(lead.email || ''),
-      'Telefone: ' + String(lead.phone || ''),
-      'Empresa: ' + String(lead.company || ''),
-      'Site da empresa: ' + String(lead.companyWebsite || ''),
-      'Cargo: ' + String(lead.role || ''),
-      'Setor: ' + String(lead.sector || ''),
-      'Funcionarios: ' + String(lead.employeeCount || ''),
-      'Faturamento: ' + String(lead.annualRevenue || ''),
-      'Desafio: ' + String(lead.currentChallenge || ''),
-      'Meta 12m: ' + String(lead.growthGoal || ''),
-      'Intencao de investimento: ' + String(lead.investmentIntent || ''),
-      'Comentarios adicionais: ' + String(lead.comments || ''),
-      'Localizacao aproximada: ' + [
-        String((payload.requestContext && payload.requestContext.city) || ''),
-        String((payload.requestContext && payload.requestContext.region) || ''),
-        String((payload.requestContext && payload.requestContext.country) || '')
-      ].filter(Boolean).join(', '),
-      '',
-      'Resultado:',
-      'CGI final: ' + String(score.finalScore || ''),
-      'Nivel: ' + String(score.level && score.level.title ? score.level.title : ''),
-      '',
-      'Scores por dimensão:',
-      dimensionLines,
-      '',
-      'Pontos de atenção:',
-      attentionPoints,
-      '',
-      'Diagnostico:',
-      String(score.diagnostic || ''),
-      '',
-      'AI status: ' + String(payload.aiStatus || ''),
-      'Enriquecimento site: ' + String((payload.websiteEnrichment && payload.websiteEnrichment.status) || ''),
-      'URL final enriquecida: ' + String((payload.websiteEnrichment && payload.websiteEnrichment.finalUrl) || ''),
-      payload.aiReportText ? '\nRelatório com IA:\n' + String(payload.aiReportText || '') : ''
-    ].join('\n');
 
-    MailApp.sendEmail(recipient, subject, body);
-  } catch (err) {
-    console.error('Erro ao enviar notificacao CGI: ' + String(err));
+// Etapa 4: generic relay for both participant emails (report-ready,
+// abandonment). Deliberately does no templating of its own -- subject,
+// plainText and htmlBody arrive already fully rendered from Vercel
+// (api/_cgi-email-content.ts), so copy changes never require touching
+// this live script. Auth is the same Script-Properties shared-token
+// pattern already used by handleArticlePost_/handleMediaPost_, scoped to
+// its own property so rotating it can never affect content publishing.
+function handleCgiSendEmailPost_(payload) {
+  var expectedToken = String(PropertiesService.getScriptProperties().getProperty('CGI_EMAIL_RELAY_TOKEN') || '').trim();
+  var token = String(payload.token || '').trim();
+  if (!expectedToken || token !== expectedToken) {
+    return jsonResponse_({ ok: false, error: 'auth' });
   }
-}
 
-function sendCgiLeadReport_(lead, score, attentionPoints, payload) {
+  var emailKind = String(payload.emailKind || '').trim();
+  var kindEnabled =
+    emailKind === 'report_ready' ? ENABLE_CGI_REPORT_EMAIL :
+    emailKind === 'abandonment' ? ENABLE_CGI_ABANDONMENT_EMAIL :
+    emailKind === 'internal_notification' ? ENABLE_CGI_INTERNAL_NOTIFICATION :
+    false;
+  if (!kindEnabled) {
+    return jsonResponse_({ ok: true, sent: false, error: 'disabled' });
+  }
+
+  var recipient = String(payload.recipient || '').trim();
+  var subject = String(payload.subject || '').trim();
+  var plainText = String(payload.plainText || '').trim();
+  var htmlBody = String(payload.htmlBody || '');
+  if (!recipient || !subject || !plainText) {
+    return jsonResponse_({ ok: false, error: 'validation' });
+  }
+
   try {
-    var email = String(lead.email || '').trim();
-    if (!email) return;
-    var language = String(payload.language || 'pt').trim();
-    var allLabels = {
-      pt: {
-        greeting: 'Olá, ',
-        intro: 'Segue o seu resultado do CGI - Caldeira Growth Index.',
-        finalScore: 'CGI final',
-        level: 'Nível',
-        diagnosis: 'Diagnóstico',
-        scoreByDimension: 'Score por dimensão',
-        attentionPoints: '3 principais pontos de atenção',
-        nextStep: 'Para aprofundar o diagnóstico, o próximo passo recomendado é solicitar uma conversa estratégica com a Caldeira Growth.',
-        subject: 'Seu CGI - Caldeira Growth Index'
-      },
-      en: {
-        greeting: 'Hello, ',
-        intro: 'Here is your CGI - Caldeira Growth Index result.',
-        finalScore: 'Final CGI',
-        level: 'Level',
-        diagnosis: 'Diagnosis',
-        scoreByDimension: 'Score by dimension',
-        attentionPoints: '3 main attention points',
-        nextStep: 'To deepen the diagnosis, the recommended next step is to request a strategic conversation with Caldeira Growth.',
-        subject: 'Your CGI - Caldeira Growth Index'
-      },
-      es: {
-        greeting: 'Hola, ',
-        intro: 'Este es su resultado del CGI - Caldeira Growth Index.',
-        finalScore: 'CGI final',
-        level: 'Nivel',
-        diagnosis: 'Diagnóstico',
-        scoreByDimension: 'Score por dimensión',
-        attentionPoints: '3 principales puntos de atención',
-        nextStep: 'Para profundizar el diagnóstico, el próximo paso recomendado es solicitar una conversación estratégica con Caldeira Growth.',
-        subject: 'Su CGI - Caldeira Growth Index'
-      }
-    };
-    var labels = allLabels[language] || allLabels.pt;
-
-    var dimensionLines = (score.dimensionScores || [])
-      .map(function (item) {
-        return '- ' + String(item.title || item.dimensionId || '') + ': ' + String(item.score || '') + '/100';
-      })
-      .join('\n');
-
-    var aiReport = String(payload.aiReportText || payload.aiReport || '').trim();
-    var body = [
-      labels.greeting + String(lead.name || '').trim() + '.',
-      '',
-      labels.intro,
-      '',
-      labels.finalScore + ': ' + String(score.finalScore || ''),
-      labels.level + ': ' + String(score.level && score.level.title ? score.level.title : ''),
-      '',
-      labels.diagnosis + ':',
-      aiReport || String(score.diagnostic || ''),
-      '',
-      labels.scoreByDimension + ':',
-      dimensionLines,
-      '',
-      labels.attentionPoints + ':',
-      attentionPoints,
-      '',
-      labels.nextStep,
-      '',
-      'Caldeira Growth'
-    ].join('\n');
-
-    MailApp.sendEmail(email, labels.subject, body);
+    MailApp.sendEmail(recipient, subject, plainText, { htmlBody: htmlBody });
+    return jsonResponse_({ ok: true, sent: true });
   } catch (err) {
-    console.error('Erro ao enviar relatório CGI ao lead: ' + String(err));
+    console.error('CGI: failed to send participant email (' + emailKind + '): ' + String(err));
+    return jsonResponse_({ ok: false, error: 'send_failed', detail: String(err) });
   }
 }
 

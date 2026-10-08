@@ -1,8 +1,10 @@
+import { groupCommunicationsByLead } from "./communications";
 import type {
   CgiAssessment,
+  CgiCommunication,
   CgiAttribution,
   CgiLead,
-  CgiReport,
+  CgiReportSummary,
   CrmOpportunity,
   CrmPersonLink,
   OpportunityRow,
@@ -21,13 +23,34 @@ export function buildOpportunities(input: {
   opportunities: CrmOpportunity[];
   assessments: CgiAssessment[];
   attribution: CgiAttribution[];
-  reports: CgiReport[];
+  reports: CgiReportSummary[];
   personLinks: CrmPersonLink[];
+  /** Opcional: o ledger de comunicações pode não ter sido lido (tabela ainda
+   * não existe, leitura falhou). Ausência é tratada como lista vazia -- nunca
+   * como erro. */
+  communications?: CgiCommunication[];
+  /** last_accessed_at por public_assessment_id. Opcional: uma leitura que
+   * falhe não pode derrubar a montagem da lista. */
+  reportAccess?: Array<{ public_assessment_id: string; last_accessed_at: string | null }>;
 }): OpportunityRow[] {
   const opportunityByLead = new Map(input.opportunities.map((o) => [o.lead_id, o]));
+  const communicationsByLead = groupCommunicationsByLead(input.communications);
+  const accessByPublicId = new Map<string, string>();
+  for (const a of input.reportAccess ?? []) {
+    if (a?.public_assessment_id && a.last_accessed_at) accessByPublicId.set(a.public_assessment_id, a.last_accessed_at);
+  }
   const personLinkByLead = new Map(input.personLinks.map((l) => [l.lead_id, l.person_id]));
   const attributionByAssessment = new Map(input.attribution.map((a) => [a.assessment_id, a]));
-  const reportByPublicAssessmentId = new Map(input.reports.map((r) => [r.public_assessment_id, r]));
+  // A public_assessment_id can now have multiple report versions (manual
+  // regeneration) -- always keep the highest version, not just whichever
+  // row happens to be last in the fetched array.
+  const reportByPublicAssessmentId = new Map<string, CgiReportSummary>();
+  for (const r of input.reports) {
+    const current = reportByPublicAssessmentId.get(r.public_assessment_id);
+    if (!current || (r.version ?? 0) > (current.version ?? 0)) {
+      reportByPublicAssessmentId.set(r.public_assessment_id, r);
+    }
+  }
 
   const assessmentsByLead = new Map<string, CgiAssessment[]>();
   for (const a of input.assessments) {
@@ -65,7 +88,7 @@ export function buildOpportunities(input: {
     // attached to an older attempt.
     const reportsForLead = leadAssessments
       .map((a) => reportByPublicAssessmentId.get(a.public_assessment_id))
-      .filter((r): r is CgiReport => Boolean(r))
+      .filter((r): r is CgiReportSummary => Boolean(r))
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
     const latestReport = reportsForLead[0] ?? null;
 
@@ -83,6 +106,15 @@ export function buildOpportunities(input: {
       lastActivityAt,
       latestReport,
       originAttribution,
+      communications: [...(communicationsByLead.get(lead.id) ?? [])].sort(
+        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      ),
+      // Mais recente entre todos os assessments do lead.
+      reportOpenedAt:
+        leadAssessments
+          .map((a) => accessByPublicId.get(a.public_assessment_id))
+          .filter((v): v is string => Boolean(v))
+          .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0] ?? null,
     });
   }
 

@@ -3,7 +3,9 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Navigate, Routes, Route, useLocation } from "react-router-dom";
+import { useEffect } from "react";
+import { BrowserRouter, Navigate, Routes, Route, useLocation, useNavigate } from "react-router-dom";
+import { resolveAuthLanding } from "@/features/crm/auth/authRedirect";
 import ScrollToTop from "@/components/layout/ScrollToTop";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import Index from "./pages/Index";
@@ -26,12 +28,37 @@ import NotFound from "./pages/NotFound";
 // Lazy: keeps @supabase/supabase-js and the whole CRM module out of the
 // public site's bundle -- only fetched when someone actually visits /admin/crm.
 const CrmApp = lazy(() => import("@/features/crm/CrmApp"));
+const CgiReportView = lazy(() => import("./pages/CgiReportView"));
+// Preferência de marketing: duas rotas, uma tela. Lazy porque nenhuma delas é
+// caminho de navegação normal -- só se chega por link de e-mail.
+const CgiUnsubscribe = lazy(() => import("./pages/CgiMarketingPreference"));
+const CgiInsightsOptIn = lazy(() =>
+  import("./pages/CgiMarketingPreference").then((m) => ({ default: m.CgiInsightsOptInPage }))
+);
 
 function CrmLoadingFallback() {
   return <div className="flex min-h-screen items-center justify-center bg-background" />;
 }
 
 const queryClient = new QueryClient();
+
+/** O magic link do CRM pode pousar fora do CRM -- ver
+ * features/crm/auth/authRedirect.ts. Quando isso acontece, o fragmento é
+ * levado para a rota certa preservado e sem entrada no histórico, e é lá que o
+ * cliente do Supabase o consome. Nenhuma rota que não seja de autenticação é
+ * afetada: fragmentos como /cgi/relatorio#t=... não casam. */
+function CrmAuthLanding() {
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const destino = resolveAuthLanding(location.pathname, location.hash);
+    if (!destino) return;
+    navigate(`${destino}${location.hash}`, { replace: true });
+  }, [location.pathname, location.hash, navigate]);
+
+  return null;
+}
 
 function RedirectWithParams({ to }: { to: string }) {
   const location = useLocation();
@@ -46,6 +73,7 @@ const App = () => (
       <BrowserRouter>
         <LanguageProvider>
           <ScrollToTop />
+          <CrmAuthLanding />
           <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/consultoria" element={<Consultoria />} />
@@ -74,6 +102,30 @@ const App = () => (
             <Route path="/amazon" element={<AmazonRedirect />} />
             <Route path="/cgi" element={<CGI />} />
             <Route
+              path="/cgi/relatorio"
+              element={
+                <Suspense fallback={<CrmLoadingFallback />}>
+                  <CgiReportView />
+                </Suspense>
+              }
+            />
+            <Route
+              path="/cgi/descadastrar"
+              element={
+                <Suspense fallback={<CrmLoadingFallback />}>
+                  <CgiUnsubscribe />
+                </Suspense>
+              }
+            />
+            <Route
+              path="/cgi/insights"
+              element={
+                <Suspense fallback={<CrmLoadingFallback />}>
+                  <CgiInsightsOptIn />
+                </Suspense>
+              }
+            />
+            <Route
               path="/admin/crm/*"
               element={
                 <Suspense fallback={<CrmLoadingFallback />}>
@@ -97,6 +149,9 @@ const App = () => (
             <Route path="/en/contact" element={<Contato />} />
             <Route path="/en/privacy-policy" element={<PrivacyPolicy />} />
             <Route path="/en/cgi" element={<CGI />} />
+            <Route path="/en/cgi/relatorio" element={<Suspense fallback={<CrmLoadingFallback />}><CgiReportView /></Suspense>} />
+            <Route path="/en/cgi/descadastrar" element={<Suspense fallback={<CrmLoadingFallback />}><CgiUnsubscribe /></Suspense>} />
+            <Route path="/en/cgi/insights" element={<Suspense fallback={<CrmLoadingFallback />}><CgiInsightsOptIn /></Suspense>} />
 
             <Route path="/es" element={<Index />} />
             <Route path="/es/consultoria" element={<Consultoria />} />
@@ -116,6 +171,9 @@ const App = () => (
               element={<PrivacyPolicy />}
             />
             <Route path="/es/cgi" element={<CGI />} />
+            <Route path="/es/cgi/relatorio" element={<Suspense fallback={<CrmLoadingFallback />}><CgiReportView /></Suspense>} />
+            <Route path="/es/cgi/descadastrar" element={<Suspense fallback={<CrmLoadingFallback />}><CgiUnsubscribe /></Suspense>} />
+            <Route path="/es/cgi/insights" element={<Suspense fallback={<CrmLoadingFallback />}><CgiInsightsOptIn /></Suspense>} />
 
             <Route path="*" element={<NotFound />} />
           </Routes>

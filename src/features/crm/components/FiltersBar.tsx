@@ -8,7 +8,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { STATUS_LABELS, STATUS_ORDER } from "../constants";
-import type { OpportunityFilters, OpportunitySort } from "../logic/filterSortOpportunities";
+import { RECENT_WINDOW_DAYS, type OpportunityFilters } from "../logic/filterSortOpportunities";
+import type { OpportunitySort } from "../logic/sortOpportunities";
 
 const SCORE_OPTIONS = [
   { value: "all", label: "Qualquer score" },
@@ -24,12 +25,25 @@ const REPORT_STATUS_OPTIONS = [
   { value: "report_failed", label: "Falhou" },
 ];
 
-const SORT_OPTIONS: { value: OpportunitySort; label: string }[] = [
-  { value: "recent", label: "Mais recente" },
-  { value: "score", label: "Maior score" },
-  { value: "next_action", label: "Próxima ação" },
-  { value: "company", label: "Empresa" },
+/** Atalhos para o mesmo estado que o clique no cabeçalho escreve. O seletor não
+ *  é uma segunda fonte de verdade -- é uma porta de entrada para a primeira. */
+const SORT_OPTIONS: { value: string; label: string; sort: OpportunitySort }[] = [
+  { value: "prioridade", label: "Prioridade", sort: { column: "prioridade", direction: "asc" } },
+  { value: "recent", label: "Mais recente", sort: { column: "ultima_interacao", direction: "desc" } },
+  { value: "entrada", label: "Entrada", sort: { column: "entrada", direction: "desc" } },
+  { value: "score", label: "Maior score", sort: { column: "cgi", direction: "desc" } },
+  { value: "next_action", label: "Próxima ação", sort: { column: "proxima_acao", direction: "asc" } },
+  { value: "company", label: "Empresa A–Z", sort: { column: "empresa", direction: "asc" } },
 ];
+
+function sortOptionValue(sort: OpportunitySort): string {
+  const igual = SORT_OPTIONS.find(
+    (o) => o.sort.column === sort.column && o.sort.direction === sort.direction
+  );
+  // Ordenação escolhida clicando num cabeçalho que não tem atalho: o seletor
+  // mostra "Personalizada" em vez de mentir sobre o estado.
+  return igual?.value ?? "custom";
+}
 
 export function FiltersBar({
   filters,
@@ -138,12 +152,63 @@ export function FiltersBar({
         />
       </div>
 
+      {/* Dois interruptores, não dois filtros de lista.
+          "Recentes" precisa combinar com a fila "A contatar", e as fichas da
+          fila são exclusivas entre si -- só uma pode estar ativa. Como
+          alternância independente, as duas coisas se somam de graça.
+          E "Recentes" é FILTRO; "Mais recente", ali do lado, continua sendo
+          ORDENAÇÃO. São perguntas diferentes: uma corta a lista, a outra
+          reordena o que sobrou. */}
+      <button
+        type="button"
+        data-testid="filter-recent-toggle"
+        aria-pressed={filters.recentDays !== null}
+        onClick={() =>
+          onFiltersChange({
+            ...filters,
+            recentDays: filters.recentDays === null ? RECENT_WINDOW_DAYS : null,
+          })
+        }
+        className={`rounded-full border px-3 py-1.5 text-sm transition ${
+          filters.recentDays !== null
+            ? "border-foreground bg-foreground text-background"
+            : "border-border text-muted-foreground hover:text-foreground"
+        }`}
+      >
+        Recentes {RECENT_WINDOW_DAYS}d
+      </button>
+
+      <button
+        type="button"
+        data-testid="filter-discarded-toggle"
+        aria-pressed={filters.showDiscarded}
+        onClick={() => onFiltersChange({ ...filters, showDiscarded: !filters.showDiscarded })}
+        className={`rounded-full border px-3 py-1.5 text-sm transition ${
+          filters.showDiscarded
+            ? "border-foreground bg-foreground text-background"
+            : "border-border text-muted-foreground hover:text-foreground"
+        }`}
+      >
+        Ver descartados
+      </button>
+
       <div className="ml-auto">
-        <Select value={sort} onValueChange={(v) => onSortChange(v as OpportunitySort)}>
+        <Select
+          value={sortOptionValue(sort)}
+          onValueChange={(v) => {
+            const opcao = SORT_OPTIONS.find((o) => o.value === v);
+            if (opcao) onSortChange(opcao.sort);
+          }}
+        >
           <SelectTrigger className="w-[170px]">
             <SelectValue placeholder="Ordenar por" />
           </SelectTrigger>
           <SelectContent>
+            {sortOptionValue(sort) === "custom" && (
+              <SelectItem value="custom" disabled>
+                Personalizada
+              </SelectItem>
+            )}
             {SORT_OPTIONS.map((o) => (
               <SelectItem key={o.value} value={o.value}>
                 {o.label}

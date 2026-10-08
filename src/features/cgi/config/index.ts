@@ -50,6 +50,7 @@ export const CGI_START_ENDPOINT = "/api/cgi/start";
 export const CGI_LEAD_ENDPOINT = "/api/cgi/lead";
 export const CGI_PROGRESS_ENDPOINT = "/api/cgi/progress";
 export const CGI_EVENT_ENDPOINT = "/api/cgi/event";
+export const CGI_CHECKPOINT_ENDPOINT = "/api/cgi/checkpoint";
 export const CGI_LAST_ASSESSMENT_KEY = "caldeira-growth:cgi:last-assessment";
 // Must comfortably exceed the backend's worst-case report generation time
 // (api/cgi-assessment.ts: one primary OpenAI attempt + one transient retry +
@@ -192,6 +193,11 @@ export const cgiUi: Record<
     privacyPolicyHref: string;
     privacyPolicyLinkLabel: string;
     privacyReviewNote: string;
+    insightsOptInPrompt: string;
+    insightsOptInButton: string;
+    insightsOptInConfirming: string;
+    insightsOptInDone: string;
+    reportViewHeading: string;
   }
 > = {
   pt: {
@@ -222,9 +228,9 @@ export const cgiUi: Record<
     assessmentTitle: "Avalie as capacidades de crescimento da empresa.",
     assessmentSubtitle:
       "Responda com base na realidade atual da organização, e não na situação ideal.",
-    phoneTitle: "Quer aprofundar seu diagnóstico?",
+    phoneTitle: "Estamos preparando sua leitura executiva",
     phoneBody:
-      "Deixe seu telefone ou WhatsApp caso queira conversar sobre os resultados e as prioridades identificadas.",
+      "Suas respostas foram registradas. Enquanto o parecer é gerado, você pode acompanhar por aqui — ele também será enviado para o seu e-mail.",
     viewResult: "Ver meu resultado",
     continue: "Continuar",
     continueToDiagnosis: "Continuar para o diagnóstico",
@@ -429,6 +435,13 @@ export const cgiUi: Record<
     privacyPolicyHref: localizedPath("privacy", "pt"),
     privacyPolicyLinkLabel: "Política de privacidade",
     privacyReviewNote: "Texto de consentimento sujeito à revisão final antes do deploy.",
+    insightsOptInPrompt:
+      "Quer continuar recebendo leituras e insights sobre os desafios identificados no seu CGI?",
+    insightsOptInButton: "Quero receber insights personalizados",
+    insightsOptInConfirming: "Confirmando…",
+    insightsOptInDone:
+      "Pronto. Você vai receber leituras ligadas aos pontos que o seu CGI apontou. Em qualquer e-mail há um link para cancelar.",
+    reportViewHeading: "Seu diagnóstico CGI",
   },
   en: {
     metaTitle: "CGI - Caldeira Growth Index | Growth assessment",
@@ -458,9 +471,9 @@ export const cgiUi: Record<
     assessmentTitle: "Assess the company's growth capabilities.",
     assessmentSubtitle:
       "Answer based on the organization's current reality, not the ideal situation.",
-    phoneTitle: "Want to deepen your diagnosis?",
+    phoneTitle: "We are preparing your executive reading",
     phoneBody:
-      "Leave your phone or WhatsApp if you want to discuss the results and identified priorities.",
+      "Your answers have been recorded. While the report is generated you can follow along here — it will also be sent to your email.",
     viewResult: "See my result",
     continue: "Continue",
     continueToDiagnosis: "Continue to the diagnosis",
@@ -665,6 +678,13 @@ export const cgiUi: Record<
     privacyPolicyHref: localizedPath("privacy", "en"),
     privacyPolicyLinkLabel: "Privacy policy",
     privacyReviewNote: "Consent text subject to final review before deployment.",
+    insightsOptInPrompt:
+      "Want to keep receiving insights related to the challenges identified in your CGI?",
+    insightsOptInButton: "I want personalized insights",
+    insightsOptInConfirming: "Confirming…",
+    insightsOptInDone:
+      "Done. You'll receive insights tied to what your CGI identified. Every email includes a link to unsubscribe.",
+    reportViewHeading: "Your CGI assessment",
   },
   es: {
     metaTitle: "CGI - Caldeira Growth Index | Diagnóstico de crecimiento",
@@ -694,9 +714,9 @@ export const cgiUi: Record<
     assessmentTitle: "Evalúe las capacidades de crecimiento de la empresa.",
     assessmentSubtitle:
       "Responda con base en la realidad actual de la organización, no en la situación ideal.",
-    phoneTitle: "¿Quiere profundizar su diagnóstico?",
+    phoneTitle: "Estamos preparando su lectura ejecutiva",
     phoneBody:
-      "Deje su teléfono o WhatsApp si quiere conversar sobre los resultados y las prioridades identificadas.",
+      "Sus respuestas fueron registradas. Mientras se genera el informe puede seguir aquí — también será enviado a su correo.",
     viewResult: "Ver mi resultado",
     continue: "Continuar",
     continueToDiagnosis: "Continuar al diagnóstico",
@@ -901,6 +921,13 @@ export const cgiUi: Record<
     privacyPolicyHref: localizedPath("privacy", "es"),
     privacyPolicyLinkLabel: "Política de privacidad",
     privacyReviewNote: "Texto de consentimiento sujeto a revisión final antes del deploy.",
+    insightsOptInPrompt:
+      "¿Quiere seguir recibiendo lecturas e insights sobre los desafíos identificados en su CGI?",
+    insightsOptInButton: "Quiero recibir insights personalizados",
+    insightsOptInConfirming: "Confirmando…",
+    insightsOptInDone:
+      "Listo. Va a recibir lecturas relacionadas con los puntos que señaló su CGI. Todo e-mail incluye un enlace para cancelar.",
+    reportViewHeading: "Su diagnóstico CGI",
   },
 };
 

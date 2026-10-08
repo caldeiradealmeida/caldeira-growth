@@ -68,3 +68,16 @@ export type SavedCgiAssessment = {
   aiStatus?: string;
   reportStatus?: CgiReportStatus;
 };
+
+/** Router-state handoff from CgiReportView (token resolved to an incomplete
+ * assessment) to CGI (renders the actual form). Lives only in React Router's
+ * in-memory location.state -- never written to any Storage API, so it
+ * naturally disappears on a hard refresh instead of needing manual cleanup.
+ * "completed" is deliberately excluded: that case is handled entirely by
+ * CgiReportView itself (state: "ready"), never reaches this handoff. */
+export type CgiResumeHandoff = {
+  publicAssessmentId: string;
+  status: "created" | "lead_captured" | "started" | "in_progress" | "abandoned";
+  answers: Record<string, number>;
+  lead: LeadPayload | null;
+};

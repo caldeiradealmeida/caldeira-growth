@@ -10,7 +10,7 @@ import {
   sanitizeReportText,
   validateGeneratedReportJson,
 } from "../../api/cgi-assessment";
-import { calculateCgiScore } from "../../api/cgi-core";
+import { calculateCgiScore } from "../../api/_cgi-core";
 
 const dimensionTranslations = {
   pt: {

@@ -1,10 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import SEO from "@/components/SEO";
 import { useToast } from "@/hooks/use-toast";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { sectionLayout } from "@/lib/sectionLayout";
+import {
+  analyticsSafeQualification,
+  analyticsSafeSector,
+} from "@/features/cgi/logic/analyticsVocabulary";
 import { CGI_QUESTIONS, getCgiConfig } from "@/data/cgiConfig";
 import {
   areCgiAnswersComplete,
@@ -19,12 +24,12 @@ import {
   dimensionOrder,
   initialLead,
 } from "@/features/cgi/config";
-import type { LeadForm, Step } from "@/features/cgi/types";
+import type { CgiResumeHandoff, LeadForm, Step } from "@/features/cgi/types";
 import type { CgiConsentState, CgiReportStatus, CgiSecondarySyncStatus } from "@/features/cgi/types";
 import {
   CGI_COMMENTS_MAX_LENGTH,
-  decidePhoneStepAction,
   isOtherOption,
+  isValidPhone,
   isValidProfessionalField,
   normalizeLeadForSubmit,
   parseAnswersJsonInput,
@@ -73,6 +78,9 @@ import {
   sendCgiProgressEvent,
 } from "@/features/cgi/services/analytics";
 import { startCgiAssessment, submitCgiLead } from "@/features/cgi/services/api";
+import { persistCgiCheckpoint } from "@/features/cgi/services/checkpoint";
+import { checkpointsToSend, CGI_CHECKPOINT_QUESTION_COUNTS } from "@/features/cgi/logic/checkpointSchedule";
+import { computeResumeHydration } from "@/features/cgi/logic/resumeHydration";
 
 declare global {
   interface Window {
@@ -98,6 +106,8 @@ function createLocalAttemptId(prefix: string) {
 
 export default function CGI() {
   const { toast } = useToast();
+  const location = useLocation();
+  const navigate = useNavigate();
   const { lang } = useLanguage();
   const config = getCgiConfig(lang);
   const t = cgiUi[lang];
@@ -141,6 +151,15 @@ export default function CGI() {
     Boolean(readAssessmentState()?.sent_events.cgi_assessment_started)
   );
   const progressSentRef = useRef(new Set(readAssessmentState()?.sent_progress || []));
+  // In-memory only, not persisted to assessmentStorage -- a reload may
+  // re-send an already-persisted checkpoint, which is harmless (upsertAnswers
+  // is idempotent) rather than worth extra state to avoid.
+  const checkpointSentRef = useRef(new Set<number>());
+  // Guards the cross-device resume handoff (Etapa 3) from being reapplied on
+  // a re-render -- router location.state otherwise persists across
+  // in-session navigations, and this must run its one-time hydration only
+  // once per handoff.
+  const resumeHandledRef = useRef(false);
 
   const currentDimension = config.dimensions[dimensionIndex];
   const currentQuestions = useMemo(
@@ -213,7 +232,62 @@ export default function CGI() {
     }
   }, [lang]);
 
+  // Cross-device resume (Etapa 3): CgiReportView already resolved the
+  // report-access token server-side and handed off the result via router
+  // state -- this never reads a token itself, never calls the API. The
+  // server is treated as the sole source of truth: local storage is
+  // overwritten outright (no merge with whatever, if anything, was already
+  // on this browser), matching the same pattern restoreReadyReport already
+  // uses for report_ready hydration.
   useEffect(() => {
+    const handoff = (location.state as { cgiResumeHandoff?: CgiResumeHandoff } | null)
+      ?.cgiResumeHandoff;
+    if (!handoff || resumeHandledRef.current) return;
+    resumeHandledRef.current = true;
+
+    const hydration = computeResumeHydration(handoff, initialLead, dimensionOrder);
+
+    setPublicAssessmentId(hydration.publicAssessmentId);
+    setAnswers(hydration.answers);
+    checkpointSentRef.current = new Set(
+      CGI_CHECKPOINT_QUESTION_COUNTS.filter((count) => hydration.answeredCount >= count)
+    );
+    // Already started on the original device -- avoid re-sending the
+    // one-time cgi_assessment_started event on this one.
+    assessmentStartedSentRef.current = true;
+
+    if (hydration.lead) setLead(hydration.lead);
+    setStep(hydration.step);
+    if (hydration.dimensionIndex !== null) setDimensionIndex(hydration.dimensionIndex);
+
+    patchAssessmentState({
+      public_assessment_id: hydration.publicAssessmentId,
+      status: handoff.status,
+      current_question: hydration.answeredCount,
+      answers: hydration.answers,
+      lead: hydration.lead,
+      sent_events: {},
+      sent_progress: [],
+    });
+
+    // Drop the handoff from history so an in-SPA back/forward navigation
+    // back to this URL can never reapply it.
+    navigate(location.pathname, { replace: true, state: null });
+
+    void sendCgiClientEvent({
+      eventName: "cgi_assessment_resumed",
+      anonymousSessionId,
+      publicAssessmentId: handoff.publicAssessmentId,
+      metadata: {
+        progress_percent: Math.min(99, Math.round((hydration.answeredCount / CGI_QUESTIONS.length) * 100)),
+      },
+    });
+
+    scrollToAssessment();
+  }, [anonymousSessionId, location, navigate]);
+
+  useEffect(() => {
+    if (resumeHandledRef.current) return;
     const savedState = readAssessmentState();
     if (!savedState || savedState.status === "completed") return;
     if (savedState.public_assessment_id) {
@@ -582,10 +656,26 @@ export default function CGI() {
   };
 
   const validateIdentification = (): boolean => {
-    if (!validateRequiredFields(["name", "email", "company", "role"])) {
+    // Telefone entra aqui, junto da identificação, e é obrigatório.
+    // Razão comercial: quem começa o CGI e abandona no meio deixa de ser
+    // alcançável por qualquer canal que não seja e-mail. Capturado na Etapa 1,
+    // o contato sobrevive ao abandono -- que é justamente o caso em que ele
+    // mais importa.
+    if (!validateRequiredFields(["name", "email", "phone", "company", "role"])) {
       return false;
     }
     if (!validateProfessionalFields(["name", "company", "role"])) {
+      return false;
+    }
+    // Formato validado depois da obrigatoriedade, para que campo vazio receba
+    // "campo obrigatório" e campo preenchido receba "número inválido".
+    if (!isValidPhone(lead.phone)) {
+      trackInternalError("cgi_validation_error", "invalid_phone");
+      toast({
+        title: t.invalidRequiredTitle,
+        description: t.invalidPhoneBody,
+        variant: "destructive",
+      });
       return false;
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(lead.email)) {
@@ -698,9 +788,12 @@ export default function CGI() {
         event_id: response.event_id || eventId,
         anonymous_session_id: anonymousSessionId,
         public_assessment_id: assessmentId,
-        company_size: normalizedLead.employeeCount || null,
-        industry: normalizedLead.sector || null,
-        investment_intent: normalizedLead.investmentIntent || null,
+        // Allowlist, nao denylist: so sai o que veio da lista do formulario.
+        // `sector` carrega o texto livre do campo "Outro" depois da
+        // normalizacao, e ele nao pode chegar ao GA4.
+        company_size: analyticsSafeQualification("employeeCount", normalizedLead.employeeCount),
+        industry: analyticsSafeSector(normalizedLead.sector),
+        investment_intent: analyticsSafeQualification("investmentIntent", normalizedLead.investmentIntent),
       });
     }
 
@@ -848,6 +941,20 @@ export default function CGI() {
           });
         }
       });
+
+      // Dimension-boundary checkpoint (Etapa 2): distinct from the 25/50/75%
+      // progress milestones above -- fires at the end of each of the 5
+      // dimensions (8/16/24/32/40 answered) and persists the full cumulative
+      // answer set so far to the server, not just analytics metadata.
+      const crossedCheckpoints = checkpointsToSend(nextAnsweredCount, checkpointSentRef.current);
+      if (publicAssessmentId && crossedCheckpoints.length > 0) {
+        crossedCheckpoints.forEach((count) => checkpointSentRef.current.add(count));
+        void persistCgiCheckpoint({
+          anonymousSessionId,
+          publicAssessmentId,
+          answers: normalized,
+        });
+      }
 
       return next;
     });
@@ -1111,36 +1218,9 @@ export default function CGI() {
   // generation/polling; ensurePublicAssessment (inside persistLead) only
   // reuses/creates the anonymous lead-tracking id, the same one every
   // earlier step already relies on.
-  const viewResult = async () => {
-    const decision = decidePhoneStepAction(lead.phone);
-    if (decision.kind === "block_invalid_phone") {
-      trackInternalError("cgi_validation_error", "invalid_phone");
-      toast({
-        title: t.invalidRequiredTitle,
-        description: t.invalidPhoneBody,
-        variant: "destructive",
-      });
-      return;
-    }
-    if (decision.kind === "save_and_advance") {
-      setIsLeadSubmitting(true);
-      const normalizedLead = normalizeLeadForSubmit(lead);
-      try {
-        await persistLead({
-          normalizedLead,
-          eventName: "cgi_phone_submitted",
-          commercialInterest: true,
-        });
-      } catch (error) {
-        if (import.meta.env.DEV) {
-          console.error("[CGI] phone submit error", error);
-        }
-        trackInternalError("cgi_system_error", "phone_submit_failed");
-      } finally {
-        setIsLeadSubmitting(false);
-        setLead(normalizedLead);
-      }
-    }
+  const viewResult = () => {
+    // A etapa final deixou de capturar telefone: ele agora é obrigatório na
+    // identificação. O que sobra aqui é a espera enquanto o parecer é gerado.
     setStep("result");
     scrollToAssessment();
   };
@@ -1264,10 +1344,8 @@ export default function CGI() {
           {step === "phone" && result && (
             <CgiPhoneStep
               t={t}
-              lead={lead}
               isSubmitting={isSubmitting}
               isLeadSubmitting={isLeadSubmitting}
-              updateLead={updateLead}
               viewResult={viewResult}
             />
           )}
@@ -1291,6 +1369,9 @@ export default function CGI() {
               retryReport={retryReport}
               regenerateSavedAssessment={regenerateSavedAssessment}
               onCtaClick={trackCtaClick}
+              anonymousSessionId={anonymousSessionId}
+              publicAssessmentId={publicAssessmentId}
+              marketingConsentGranted={consent.marketing}
             />
           )}
         </div>

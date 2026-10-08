@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import SEO from "@/components/SEO";
+import MediaAuthorityCarousel from "@/components/home/MediaAuthorityCarousel";
 import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { sectionLayout } from "@/lib/sectionLayout";
@@ -26,12 +27,10 @@ function TextSection({
       }`}
     >
       <div className={sectionLayout.container}>
-        <div className={sectionLayout.prose}>
-          <div className={sectionLayout.headerToContent}>
-            <h2 className={sectionLayout.title}>{title}</h2>
-          </div>
-          {children}
+        <div className={sectionLayout.headerToContent}>
+          <h2 className={sectionLayout.title}>{title}</h2>
         </div>
+        {children}
       </div>
     </section>
   );
@@ -66,7 +65,7 @@ export default function Index() {
           />
         </div>
 
-        <div className={`${sectionLayout.container} py-10 md:py-14 relative z-10`}>
+        <div className={`${sectionLayout.container} w-full py-10 md:py-14 relative z-10`}>
           <div className="max-w-2xl">
             <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold leading-[1.08] tracking-tight text-white mb-6">
               {h.heroTitle}
@@ -97,7 +96,7 @@ export default function Index() {
 
       <TextSection title={h.painsTitle}>
         <p className={sectionLayout.subtitle}>{h.painsIntro}</p>
-        <div className="mt-12 grid sm:grid-cols-2 gap-x-8 gap-y-5">
+        <div className="mt-12 grid sm:grid-cols-2 gap-x-8 md:gap-x-16 gap-y-5">
           {h.pains.map((pain) => (
             <p
               key={pain}
@@ -107,20 +106,15 @@ export default function Index() {
             </p>
           ))}
         </div>
+        <p
+          id="abordagem"
+          className="mt-12 scroll-mt-28 border-t border-border/60 pt-8 text-lg md:text-xl font-medium leading-snug tracking-tight text-foreground"
+        >
+          {h.painsClosing}
+        </p>
       </TextSection>
 
-      <TextSection title={h.thesisTitle} muted>
-        <div id="abordagem" className="space-y-6">
-          {h.thesisParagraphs.map((paragraph) => (
-            <p
-              key={paragraph}
-              className="text-base md:text-[17px] leading-[1.75] text-foreground/88"
-            >
-              {paragraph}
-            </p>
-          ))}
-        </div>
-      </TextSection>
+      <MediaAuthorityCarousel />
 
       <section className={`${sectionLayout.sectionY} bg-background`}>
         <div className={sectionLayout.container}>
@@ -203,15 +197,25 @@ export default function Index() {
         </div>
       </section>
 
-      <TextSection title={h.differenceTitle}>
-        <div className="space-y-6">
-          {h.differenceParagraphs.map((paragraph) => (
-            <p key={paragraph} className="text-base md:text-[17px] leading-[1.75] text-foreground/88">
-              {paragraph}
-            </p>
-          ))}
+      <section className={`${sectionLayout.sectionY} bg-background`}>
+        <div className={sectionLayout.container}>
+          <div className="grid gap-10 md:grid-cols-[0.95fr_1.05fr] md:items-start">
+            <div>
+              <h2 className={sectionLayout.title}>{h.differenceTitle}</h2>
+            </div>
+            <div className="space-y-6">
+              {h.differenceParagraphs.map((paragraph) => (
+                <p
+                  key={paragraph}
+                  className="text-base md:text-[17px] leading-[1.75] text-foreground/88"
+                >
+                  {paragraph}
+                </p>
+              ))}
+            </div>
+          </div>
         </div>
-      </TextSection>
+      </section>
 
       <section className={`${sectionLayout.sectionY} bg-background border-y border-border/50`}>
         <div className={sectionLayout.container}>

@@ -7,17 +7,19 @@ import {
   calculateCgiScore,
   normalizeCgiAnswers,
   type CgiScoreResult,
-} from "./cgi-core.js";
-import { buildCgiReportPromptContext } from "./cgi-report-guide.js";
+} from "./_cgi-core.js";
+import { buildCgiReportPromptContext } from "./_cgi-report-guide.js";
 import {
   createEventId,
   getCgiReportState,
   getReadyCgiReport,
   insertFunnelEvent,
+  findLeadIdByAnonymousSession,
   markCgiReportFailed,
   saveCompletedCgiReport,
   tryCreateCgiReportGenerationLock,
   updateCgiReportSecondarySyncStatus,
+  updateLeadComments,
   upsertAnswers,
   upsertAssessment,
   type StoredCgiReport,
@@ -28,8 +30,12 @@ import {
   normalizePublicAssessmentId,
   validateProfessionalContent,
 } from "./_cgi-validation.js";
+import { deliverReportEmailForAssessment } from "./_cgi-report-email.js";
+import { dispatchCgiParticipantEmail } from "./_cgi-email-dispatch.js";
+import { buildCgiInternalLeadNotificationEmail } from "./_cgi-email-content.js";
+import { recordCommunicationSafely } from "./_cgi-communications.js";
 
-type CgiLead = {
+export type CgiLead = {
   name?: string;
   email?: string;
   phone?: string;
@@ -66,7 +72,7 @@ type CgiPayload = {
   attribution?: Record<string, unknown>;
 };
 
-type AiResult = {
+export type AiResult = {
   status: "generated" | "not_configured" | "error";
   text: string;
   plainText: string;
@@ -87,7 +93,7 @@ type OpenAiResponseMeta = {
   isTruncated: boolean;
 };
 
-type WebsiteEnrichment = {
+export type WebsiteEnrichment = {
   status: "not_provided" | "ok" | "error";
   requestedUrl: string;
   finalUrl: string;
@@ -98,7 +104,7 @@ type WebsiteEnrichment = {
   error?: string;
 };
 
-type RequestContext = {
+export type RequestContext = {
   ip: string;
   country: string;
   region: string;
@@ -212,7 +218,48 @@ function getAppsScriptUrl(): string {
   );
 }
 
-function getConfiguredOpenAiModel(): string {
+// Etapa 4 -- independently switchable participant emails.
+export function isCgiReportEmailEnabled(): boolean {
+  return process.env.CGI_REPORT_EMAIL_ENABLED === "true";
+}
+
+export function isCgiEmailDryRun(): boolean {
+  return process.env.CGI_EMAIL_DRY_RUN === "true";
+}
+
+function getCgiEmailRelayToken(): string {
+  return process.env.CGI_EMAIL_RELAY_TOKEN?.trim() || "";
+}
+
+// Etapa 5 -- alerta interno de novo lead. Historicamente isso era
+// sendCgiNotification_, direto no Apps Script, fora de qualquer flag e de
+// qualquer registro -- e foi exatamente por não deixar rastro que parou de
+// chegar (04/08 a 20/09/2026, 39 leads reais sem que ninguém percebesse)
+// sem que nada no Supabase ou nos logs do Vercel acusasse o problema. Este
+// alerta passa a usar o mesmo relay e o mesmo ledger do report-ready.
+//
+// Fail-OPEN por padrão (diferente de isCgiReportEmailEnabled/abandonment,
+// que são fail-closed): este e-mail não vai para o lead, é a única forma de
+// Denis saber que um lead existe, então um flag esquecido em "false" não
+// pode ser o motivo de outras sete semanas de silêncio. Desligar exige uma
+// escolha explícita.
+export function isCgiInternalNotificationEnabled(): boolean {
+  return process.env.CGI_INTERNAL_NOTIFICATION_ENABLED !== "false";
+}
+
+function getCgiInternalNotificationRecipient(): string {
+  return process.env.CGI_INTERNAL_NOTIFICATION_EMAIL?.trim() || "contato@caldeiragrowth.com";
+}
+
+function getCgiPipeUrl(): string {
+  return "https://www.caldeiragrowth.com/admin/crm";
+}
+
+function isReportReadyStatus(status: string): status is "report_ready" | "report_ready_with_warnings" {
+  return status === "report_ready" || status === "report_ready_with_warnings";
+}
+
+export function getConfiguredOpenAiModel(): string {
   return process.env[CGI_OPENAI_MODEL_ENV]?.trim() || "";
 }
 
@@ -289,10 +336,8 @@ function respondWithStoredReport(
       plainText: report.aiReportText,
     },
     ai_generation_status: report.aiGenerationStatus,
-    lead: report.lead,
     answers: report.answers,
     websiteEnrichment: report.websiteEnrichment,
-    requestContext: report.requestContext,
     reused: true,
   });
 }
@@ -538,7 +583,7 @@ function extractWebsiteContent(html: string): Pick<
   return { title, description, headings, observedText };
 }
 
-async function enrichCompanyWebsite(rawUrl: string | undefined): Promise<WebsiteEnrichment> {
+export async function enrichCompanyWebsite(rawUrl: string | undefined): Promise<WebsiteEnrichment> {
   const requestedUrl = String(rawUrl || "").trim();
   if (!requestedUrl) {
     return {
@@ -1969,7 +2014,7 @@ function logCgiAiAttempt(input: {
   );
 }
 
-async function generateAiDiagnostic({
+export async function generateAiDiagnostic({
   lead,
   answers,
   score,
@@ -2330,7 +2375,7 @@ async function persistCompletedAssessmentBestEffort({
   payload: CgiPayload;
   answers: Record<string, number>;
   score: CgiScoreResult;
-}): Promise<{ publicAssessmentId: string; completionEventId: string } | null> {
+}): Promise<{ publicAssessmentId: string; completionEventId: string; leadId: string | null } | null> {
   const publicAssessmentId = normalizePublicAssessmentId(payload.public_assessment_id);
   const anonymousSessionId = normalizeAnonymousSessionId(payload.anonymous_session_id);
   if (!publicAssessmentId || !anonymousSessionId) return null;
@@ -2367,6 +2412,41 @@ async function persistCompletedAssessmentBestEffort({
     await upsertAnswers(assessment.id, answers);
   }
 
+  // Recuperação do vínculo com o lead.
+  //
+  // Uma retentativa depois de uma falha de geração chega com um
+  // public_assessment_id novo, criado no cliente, que nunca passou por
+  // /api/cgi/lead -- então esta linha nasce sem lead_id. Sem isso, a guarda
+  // anti-phantom recusa o e-mail e a pessoa nunca recebe o relatório que ela
+  // acabou de ver na tela. O anonymous_session_id é o que sobrevive à
+  // retentativa, e é por ele que o vínculo é recuperado.
+  //
+  // Só recupera quando a sessão tem exatamente um lead; qualquer ambiguidade
+  // mantém lead_id nulo e, portanto, mantém o comportamento atual de não
+  // enviar. Nunca sobrescreve um lead_id já existente.
+  let leadId = assessment?.lead_id ?? null;
+  if (assessment?.id && !leadId) {
+    const inherited = await findLeadIdByAnonymousSession(anonymousSessionId);
+    if (inherited) {
+      const relinked = await upsertAssessment({
+        publicAssessmentId,
+        anonymousSessionId,
+        status: "completed",
+        leadId: inherited,
+      });
+      leadId = relinked?.lead_id ?? inherited;
+      console.info("[CGI Flow]", {
+        operation: "assessment_lead_relinked",
+        public_assessment_id: publicAssessmentId,
+        reason: "retry_after_report_failure",
+      });
+    }
+  }
+
+  if (leadId) {
+    await updateLeadComments(leadId, payload.lead?.comments);
+  }
+
   const completionEventId = String(payload.completion_event_id || createEventId());
   await insertFunnelEvent({
     eventId: completionEventId,
@@ -2389,7 +2469,7 @@ async function persistCompletedAssessmentBestEffort({
     },
   });
 
-  return { publicAssessmentId, completionEventId };
+  return { publicAssessmentId, completionEventId, leadId };
 }
 
 export default async function handler(
@@ -2598,6 +2678,58 @@ export default async function handler(
     return;
   }
 
+  // PERSISTÊNCIA DA CONCLUSÃO -- antes da geração do relatório, de propósito.
+  //
+  // Concluir o diagnóstico e ter um parecer gerado são dois fatos diferentes.
+  // A pessoa respondeu as 40 perguntas: isso aconteceu, e é verdade
+  // independentemente de o modelo responder ou não. Enquanto esta escrita
+  // ficou depois da geração, atrás do early return de falha da IA, uma falha
+  // de provider congelava o assessment em `in_progress` para sempre --
+  // completed_at nulo, scores nulos -- mesmo com as 40 respostas gravadas.
+  //
+  // O efeito colateral era pior que a métrica errada: o Pipe não via a
+  // conclusão, e a varredura de abandono passava a considerar essa pessoa
+  // elegível a um lembrete de "seu diagnóstico ficou em aberto" -- para quem
+  // tinha acabado de terminar. Caso real observado em produção (21/08).
+  //
+  // Nada aqui depende do relatório: o e-mail continua exigindo
+  // isReportReadyStatus mais abaixo, e a varredura de recovery encontra um
+  // assessment concluído sem relatório pronto e devolve
+  // skipped_report_not_ready. Persistir cedo só torna verdadeiro o que já era
+  // verdade.
+  let supabaseCompletion: Awaited<ReturnType<typeof persistCompletedAssessmentBestEffort>> = null;
+  try {
+    const persistenceStartedAt = Date.now();
+    supabaseCompletion = await persistCompletedAssessmentBestEffort({
+      payload,
+      answers,
+      score,
+    });
+    logCgiOperation({
+      correlationId,
+      publicAssessmentId: normalizedPublicAssessmentId,
+      operation: "assessment_persistence",
+      success: Boolean(supabaseCompletion),
+      errorCode: supabaseCompletion ? undefined : "assessment_persistence_unavailable",
+      durationMs: Date.now() - persistenceStartedAt,
+    });
+  } catch (error) {
+    console.error("[CGI Supabase]", {
+      operation: "persist_completed_assessment",
+      status: 0,
+      public_assessment_id: normalizePublicAssessmentId(payload.public_assessment_id),
+      error: error instanceof Error ? error.message : String(error || ""),
+    });
+    logCgiOperation({
+      correlationId,
+      publicAssessmentId: normalizedPublicAssessmentId,
+      operation: "assessment_persistence",
+      success: false,
+      errorCode: "assessment_persistence_exception",
+      durationMs: Date.now() - handlerStartedAt,
+    });
+  }
+
   const requestContext = getRequestContext(req);
   const websiteEnrichment = await enrichCompanyWebsite(payload.lead?.companyWebsite);
   const aiModel = getConfiguredOpenAiModel();
@@ -2691,38 +2823,6 @@ export default async function handler(
       ai_generation_status: ai.status,
     });
     return;
-  }
-  let supabaseCompletion: Awaited<ReturnType<typeof persistCompletedAssessmentBestEffort>> = null;
-  try {
-    const persistenceStartedAt = Date.now();
-    supabaseCompletion = await persistCompletedAssessmentBestEffort({
-      payload,
-      answers,
-      score,
-    });
-    logCgiOperation({
-      correlationId,
-      publicAssessmentId: normalizedPublicAssessmentId,
-      operation: "assessment_persistence",
-      success: Boolean(supabaseCompletion),
-      errorCode: supabaseCompletion ? undefined : "assessment_persistence_unavailable",
-      durationMs: Date.now() - persistenceStartedAt,
-    });
-  } catch (error) {
-    console.error("[CGI Supabase]", {
-      operation: "persist_completed_assessment",
-      status: 0,
-      public_assessment_id: normalizePublicAssessmentId(payload.public_assessment_id),
-      error: error instanceof Error ? error.message : String(error || ""),
-    });
-    logCgiOperation({
-      correlationId,
-      publicAssessmentId: normalizedPublicAssessmentId,
-      operation: "assessment_persistence",
-      success: false,
-      errorCode: "assessment_persistence_exception",
-      durationMs: Date.now() - handlerStartedAt,
-    });
   }
 
   const responsePublicAssessmentId =
@@ -2842,6 +2942,170 @@ export default async function handler(
       durationMs: Date.now() - handlerStartedAt,
     });
     return;
+  }
+
+  // Etapa 4 -- report-ready participant email. Deliberately its own
+  // best-effort step, independent of the sheets_sync outcome above: never
+  // throws, never affects the response the client receives, never retried
+  // automatically by anything in this handler. Gated on:
+  //  - the feature flag (off entirely today, no live Apps Script change);
+  //  - reportStatus already being one of the two "ready" values reached by
+  //    this point in the handler (report_generating/report_failed already
+  //    returned earlier -- see the `!reportSaved` branch above);
+  //  - supabaseCompletion.leadId being set, i.e. this assessment already
+  //    existed (identification done) before this completion request --
+  //    a forceNewAttempt/regenerate retry posts a brand-new, disconnected
+  //    public_assessment_id with no prior lead_id, and must never trigger a
+  //    fresh participant email;
+  //  - report_email_sent_at still being null (fetched fresh here, not
+  //    reused from an earlier point in the request).
+  // A token is only issued -- rotating whatever token, if any, already
+  // exists for this assessment -- immediately before actually attempting
+  // the send, and report_email_sent_at is only set after Apps Script
+  // confirms the send succeeded. A send that never happens (flag off,
+  // missing summary, dry run, dispatch error) never rotates anything on a
+  // token that might already be sitting in a previously-delivered email.
+  // Consent: /api/cgi/lead (the identification step) already rejects
+  // (400) any submission without consent_privacy === true before a
+  // cgi_leads row -- and therefore a lead_id on the assessment -- can ever
+  // exist. supabaseCompletion.leadId being set is consequently already a
+  // structural guarantee of privacy consent, not just an anti-phantom-
+  // -assessment check; no separate consent read is needed here. This is
+  // operational delivery of a report the person explicitly requested, not
+  // marketing, so consent_marketing is deliberately not checked.
+  try {
+    if (isCgiReportEmailEnabled() && supabaseCompletion?.leadId && isReportReadyStatus(reportStatus)) {
+      // The send itself lives in api/_cgi-report-email.ts and is shared, byte
+      // for byte, with the recovery and backfill paths -- there is exactly one
+      // implementation of "issue a token, render, relay, mark sent". What stays
+      // here is only the gating that is specific to *this* moment: the feature
+      // flag, the anti-phantom lead_id check, and report readiness.
+      // The already-sent recheck, the token issuance and the marker write all
+      // happen inside the executor.
+      const emailStartedAt = Date.now();
+      const delivery = await deliverReportEmailForAssessment({
+        publicAssessmentId: responsePublicAssessmentId,
+        reason: "completion",
+        appsScriptUrl: url,
+        relayToken: getCgiEmailRelayToken(),
+        dryRun: isCgiEmailDryRun(),
+        context: {
+          // Already in memory from this very request -- no second read, and no
+          // dependency on the best-effort assessment write having landed.
+          aiReportJson: ai.text,
+          // Só para o registro no ledger conseguir amarrar a linha ao lead;
+          // nenhuma decisão de envio depende disso.
+          leadId: supabaseCompletion.leadId,
+          lead: {
+            name: String(payload.lead?.name || ""),
+            company: String(payload.lead?.company || ""),
+            email: String(payload.lead?.email || ""),
+          },
+        },
+      });
+      logCgiOperation({
+        correlationId,
+        publicAssessmentId: responsePublicAssessmentId,
+        operation: "report_email_dispatch",
+        // "already sent" is a healthy outcome (a retry that correctly did
+        // nothing), not a failure -- same as before this was extracted.
+        success:
+          delivery.outcome === "sent" ||
+          delivery.outcome === "dry_run" ||
+          delivery.outcome === "skipped_already_sent",
+        errorCode: delivery.outcome === "sent" ? undefined : delivery.detail || delivery.outcome,
+        durationMs: Date.now() - emailStartedAt,
+      });
+    }
+  } catch (error) {
+    console.error("[CGI Email]", {
+      operation: "report_email_dispatch",
+      public_assessment_id: responsePublicAssessmentId,
+      error: error instanceof Error ? error.message : String(error || ""),
+    });
+  }
+
+  // Etapa 5 -- alerta interno de novo lead para o Denis. Mesmo gate de
+  // isReportReadyStatus/leadId do bloco acima (relatório pronto, lead real,
+  // não um retry fantasma), best-effort e isolado num try/catch próprio: uma
+  // falha aqui nunca pode derrubar a resposta ao navegador nem o e-mail do
+  // relatório. Ao contrário do bloco acima, não depende de
+  // report_email_sent_at nem de nenhum marcador -- é reenviável por natureza
+  // (não é uma comunicação com o lead), então o registro no ledger é só para
+  // auditoria/observabilidade, nunca para controlar duplicidade: cada
+  // conclusão de assessment gera sua própria dedupe_key, então um retry desta
+  // MESMA conclusão (mesmo public_assessment_id) continua deduplicando.
+  try {
+    if (isCgiInternalNotificationEnabled() && supabaseCompletion?.leadId && isReportReadyStatus(reportStatus)) {
+      const notificationStartedAt = Date.now();
+      const content = buildCgiInternalLeadNotificationEmail({
+        lead: {
+          name: payload.lead?.name,
+          email: payload.lead?.email,
+          phone: payload.lead?.phone,
+          company: payload.lead?.company,
+          companyWebsite: payload.lead?.companyWebsite,
+          role: payload.lead?.role,
+          sector: payload.lead?.sector,
+          employeeCount: payload.lead?.employeeCount,
+          annualRevenue: payload.lead?.annualRevenue,
+          currentChallenge: payload.lead?.currentChallenge,
+          growthGoal: payload.lead?.growthGoal,
+          investmentIntent: payload.lead?.investmentIntent,
+          comments: payload.lead?.comments,
+        },
+        finalScore: score.finalScore,
+        levelTitle: score.level?.title,
+        publicAssessmentId: responsePublicAssessmentId,
+        pipeUrl: getCgiPipeUrl(),
+      });
+      const recipient = getCgiInternalNotificationRecipient();
+      const dispatchResult = await dispatchCgiParticipantEmail({
+        appsScriptUrl: url,
+        relayToken: getCgiEmailRelayToken(),
+        recipient,
+        content,
+        emailKind: "internal_notification",
+        dryRun: isCgiEmailDryRun(),
+      });
+      await recordCommunicationSafely({
+        type: "internal_new_lead",
+        status: dispatchResult.status === "sent" ? "sent" : dispatchResult.status === "dry_run" ? "sent" : "failed",
+        leadId: supabaseCompletion.leadId,
+        publicAssessmentId: responsePublicAssessmentId,
+        recipient,
+        subject: content.subject,
+        provider: "apps_script_mailapp",
+        actor: "system:completion",
+        occurrenceKey: responsePublicAssessmentId,
+        errorCode:
+          dispatchResult.status === "error"
+            ? dispatchResult.error
+            : dispatchResult.status === "skipped"
+              ? dispatchResult.reason
+              : undefined,
+        metadata: { dispatchStatus: dispatchResult.status },
+      });
+      logCgiOperation({
+        correlationId,
+        publicAssessmentId: responsePublicAssessmentId,
+        operation: "internal_notification_dispatch",
+        success: dispatchResult.status === "sent" || dispatchResult.status === "dry_run",
+        errorCode:
+          dispatchResult.status === "error"
+            ? dispatchResult.error
+            : dispatchResult.status === "skipped"
+              ? dispatchResult.reason
+              : undefined,
+        durationMs: Date.now() - notificationStartedAt,
+      });
+    }
+  } catch (error) {
+    console.error("[CGI Internal Notification]", {
+      operation: "internal_notification_dispatch",
+      public_assessment_id: responsePublicAssessmentId,
+      error: error instanceof Error ? error.message : String(error || ""),
+    });
   }
 
   if (!upstream.ok || (data as { ok?: boolean }).ok !== true) {

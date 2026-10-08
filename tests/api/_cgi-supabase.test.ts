@@ -1,7 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  countCompletedAssessmentsForLead,
+  findLeadIdByAnonymousSession,
   getActiveAssessmentByAnonymousSession,
+  getMaxCgiReportVersion,
+  getReportAccessTokenByHash,
+  insertRegeneratedCgiReport,
   isReusableStartAssessment,
+  revokeReportAccessToken,
+  touchReportAccessToken,
+  updateLeadComments,
+  upsertReportAccessToken,
 } from "../../api/_cgi-supabase";
 
 const originalEnv = { ...process.env };
@@ -69,5 +78,358 @@ describe("CGI Supabase start idempotency helpers", () => {
     expect(row?.public_assessment_id).toBe("assessment_1");
     expect(fetchMock.mock.calls[0][0]).toContain("anonymous_session_id=eq.session_1");
     expect(fetchMock.mock.calls[0][0]).toContain("status=in.(created,lead_captured,in_progress)");
+  });
+});
+
+describe("updateLeadComments", () => {
+  beforeEach(() => {
+    process.env.SUPABASE_URL = "https://example.supabase.co";
+    process.env.SUPABASE_SERVICE_ROLE_KEY = "test-service-role";
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    process.env = { ...originalEnv };
+  });
+
+  it("does not call Supabase when the comment is empty", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await updateLeadComments("lead_1", "   ");
+
+    expect(result).toBe(false);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("does not call Supabase when there is no leadId", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await updateLeadComments("", "Um comentário real.");
+
+    expect(result).toBe(false);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("PATCHes the trimmed comment for the given lead when present", async () => {
+    const fetchMock = vi.fn(async () => new Response(null, { status: 204 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await updateLeadComments("lead_1", "  Um comentário real.  ");
+
+    expect(result).toBe(true);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(String(url)).toContain("cgi_leads?id=eq.lead_1");
+    expect(JSON.parse(String(init.body))).toEqual({ comments: "Um comentário real." });
+  });
+});
+
+describe("cgi_reports versioning helpers", () => {
+  beforeEach(() => {
+    process.env.SUPABASE_URL = "https://example.supabase.co";
+    process.env.SUPABASE_SERVICE_ROLE_KEY = "test-service-role";
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    process.env = { ...originalEnv };
+  });
+
+  it("returns 0 when no report row exists yet for the assessment", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify([]), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const version = await getMaxCgiReportVersion("pub_1");
+
+    expect(version).toBe(0);
+    expect(fetchMock.mock.calls[0][0]).toContain("order=version.desc");
+  });
+
+  it("returns the highest existing version", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify([{ version: 3 }]), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const version = await getMaxCgiReportVersion("pub_1");
+
+    expect(version).toBe(3);
+  });
+
+  it("inserts a regenerated report as a plain INSERT (no on_conflict/upsert)", async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response(
+        JSON.stringify([
+          {
+            id: "report_2",
+            version: 2,
+            ai_report_text: "Texto do novo relatório.",
+            report_json: { report_title: "Novo" },
+            model: "gpt-5.1",
+            language: "pt",
+            generation_completed_at: "2026-08-06T12:00:00.000Z",
+          },
+        ]),
+        { status: 201 }
+      )
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const saved = await insertRegeneratedCgiReport({
+      publicAssessmentId: "pub_1",
+      version: 2,
+      aiReport: JSON.stringify({ report_title: "Novo" }),
+      aiReportText: "Texto do novo relatório.",
+      model: "gpt-5.1",
+      lead: { name: "Lead" },
+      answers: { q1: 4 },
+      score: { finalScore: 84 },
+      websiteEnrichment: { status: "not_provided" },
+      requestContext: {},
+      language: "pt",
+    });
+
+    expect(saved.ok).toBe(true);
+    if (saved.ok) {
+      expect(saved.report.version).toBe(2);
+      expect(saved.report.id).toBe("report_2");
+    }
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(String(url)).not.toContain("on_conflict");
+    expect(init.method).toBe("POST");
+    const body = JSON.parse(String(init.body));
+    expect(body.version).toBe(2);
+    expect(body.public_assessment_id).toBe("pub_1");
+  });
+
+  it("refuses to insert version 0", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const saved = await insertRegeneratedCgiReport({
+      publicAssessmentId: "pub_1",
+      version: 0,
+      aiReport: "{}",
+      aiReportText: "",
+      model: null,
+      lead: {},
+      answers: {},
+      score: {},
+      websiteEnrichment: {},
+      requestContext: {},
+      language: "pt",
+    });
+
+    expect(saved).toEqual({ ok: false, reason: "invalid_version" });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("reports a clean 'conflict' reason -- not a generic failure -- when the legacy single-row constraint blocks a second version (Phase 3 migration not applied yet)", async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          message:
+            'duplicate key value violates unique constraint "cgi_reports_public_assessment_id_key"',
+        }),
+        { status: 409 }
+      )
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    const saved = await insertRegeneratedCgiReport({
+      publicAssessmentId: "pub_1",
+      version: 2,
+      aiReport: "{}",
+      aiReportText: "",
+      model: null,
+      lead: {},
+      answers: {},
+      score: {},
+      websiteEnrichment: {},
+      requestContext: {},
+      language: "pt",
+    });
+
+    expect(saved).toEqual({ ok: false, reason: "conflict" });
+  });
+});
+
+describe("cgi_report_access helpers", () => {
+  beforeEach(() => {
+    process.env.SUPABASE_URL = "https://example.supabase.co";
+    process.env.SUPABASE_SERVICE_ROLE_KEY = "test-service-role";
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    process.env = { ...originalEnv };
+  });
+
+  it("upsertReportAccessToken sends an upsert (on_conflict), never a plain insert, keyed on public_assessment_id", async () => {
+    const fetchMock = vi.fn(async () => new Response(null, { status: 201 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const ok = await upsertReportAccessToken({
+      publicAssessmentId: "pub_1",
+      tokenHash: "hash123",
+      expiresAt: "2026-11-01T00:00:00.000Z",
+    });
+
+    expect(ok).toBe(true);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(String(url)).toContain("cgi_report_access?on_conflict=public_assessment_id");
+    const body = JSON.parse(String(init.body));
+    expect(body.public_assessment_id).toBe("pub_1");
+    expect(body.token_hash).toBe("hash123");
+    expect(body.revoked_at).toBeNull();
+  });
+
+  it("revokeReportAccessToken PATCHes revoked_at for the given assessment", async () => {
+    const fetchMock = vi.fn(async () => new Response(null, { status: 204 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const ok = await revokeReportAccessToken("pub_1");
+
+    expect(ok).toBe(true);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(String(url)).toContain("cgi_report_access?public_assessment_id=eq.pub_1");
+    expect(init.method).toBe("PATCH");
+    const body = JSON.parse(String(init.body));
+    expect(typeof body.revoked_at).toBe("string");
+  });
+
+  it("getReportAccessTokenByHash looks up by token_hash, not by the raw token", async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response(
+        JSON.stringify([
+          { id: "row_1", public_assessment_id: "pub_1", token_hash: "hash123", expires_at: "2026-11-01T00:00:00.000Z", revoked_at: null },
+        ]),
+        { status: 200 }
+      )
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const row = await getReportAccessTokenByHash("hash123");
+
+    expect(row?.public_assessment_id).toBe("pub_1");
+    expect(fetchMock.mock.calls[0][0]).toContain("token_hash=eq.hash123");
+  });
+
+  it("getReportAccessTokenByHash returns null when nothing matches", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify([]), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const row = await getReportAccessTokenByHash("nomatch");
+
+    expect(row).toBeNull();
+  });
+
+  it("touchReportAccessToken never throws even if the request fails", async () => {
+    const fetchMock = vi.fn(async () => {
+      throw new Error("network down");
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(touchReportAccessToken("row_1")).resolves.toBeUndefined();
+  });
+});
+
+// --- Recuperacao de vinculo e conclusoes por pessoa -------------------------
+// Duas leituras cuja unica funcao e responder "e a mesma pessoa?" e "ela ja
+// terminou?". Ambas so podem errar para o lado de nao enviar.
+
+describe("findLeadIdByAnonymousSession", () => {
+  beforeEach(() => {
+    process.env.SUPABASE_URL = "https://example.supabase.co";
+    process.env.SUPABASE_SERVICE_ROLE_KEY = "test-service-role";
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    process.env = { ...originalEnv };
+  });
+
+  function stubRows(rows: Array<{ lead_id: string | null }>, status = 200) {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify(rows), { status }));
+    vi.stubGlobal("fetch", fetchMock);
+    return fetchMock;
+  }
+
+  it("devolve o lead quando a sessao resolve para um unico lead", async () => {
+    stubRows([{ lead_id: "lead_1" }, { lead_id: "lead_1" }]);
+    expect(await findLeadIdByAnonymousSession("session_1")).toBe("lead_1");
+  });
+
+  it("devolve null quando a sessao e ambigua", async () => {
+    stubRows([{ lead_id: "lead_1" }, { lead_id: "lead_2" }]);
+    expect(await findLeadIdByAnonymousSession("session_1")).toBeNull();
+  });
+
+  it("a janela de leitura e grande o bastante para a ambiguidade aparecer", async () => {
+    // Regressao do limit=5: cinco linhas do lead A seguidas de uma do lead B
+    // pareciam inequivocas quando a consulta so trazia cinco. O corte nao pode
+    // ser menor do que qualquer sessao real.
+    const fetchMock = stubRows([]);
+    await findLeadIdByAnonymousSession("session_1");
+    const url = String(fetchMock.mock.calls[0][0]);
+    const limite = Number(/limit=(\d+)/.exec(url)?.[1]);
+    expect(limite).toBeGreaterThanOrEqual(100);
+  });
+
+  it("uma leitura que falha nao vira 'nenhum lead' silencioso -- devolve null", async () => {
+    stubRows([], 500);
+    expect(await findLeadIdByAnonymousSession("session_1")).toBeNull();
+  });
+
+  it("sessao vazia nao chega ao banco", async () => {
+    const fetchMock = stubRows([{ lead_id: "lead_1" }]);
+    expect(await findLeadIdByAnonymousSession("   ")).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("countCompletedAssessmentsForLead", () => {
+  beforeEach(() => {
+    process.env.SUPABASE_URL = "https://example.supabase.co";
+    process.env.SUPABASE_SERVICE_ROLE_KEY = "test-service-role";
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    process.env = { ...originalEnv };
+  });
+
+  it("conta as conclusoes da pessoa em outras linhas", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify([{ public_assessment_id: "cgi_retry_1" }]), { status: 200 })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const r = await countCompletedAssessmentsForLead({
+      leadId: "lead_1",
+      excludePublicAssessmentId: "Y4TFaDzmxA55aazU",
+    });
+    expect(r).toEqual({ ok: true, rows: 1 });
+    const url = String(fetchMock.mock.calls[0][0]);
+    expect(url).toContain("lead_id=eq.lead_1");
+    expect(url).toContain("completed_at=not.is.null");
+    // Nunca conta a si mesma: senao toda linha concluida se auto-suprimiria e a
+    // guarda nao diria nada de novo.
+    expect(url).toContain("public_assessment_id=neq.Y4TFaDzmxA55aazU");
+  });
+
+  it("uma leitura que falha devolve ok:false, e nao zero", async () => {
+    // Zero e o unico valor que PERMITE o envio. Uma falha nunca pode virar zero.
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("{}", { status: 500 })));
+    expect(await countCompletedAssessmentsForLead({ leadId: "lead_1" })).toEqual({ ok: false, rows: 0 });
+  });
+
+  it("lead vazio nao chega ao banco", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    expect(await countCompletedAssessmentsForLead({ leadId: "" })).toEqual({ ok: true, rows: 0 });
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

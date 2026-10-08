@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { sectionLayout } from "@/lib/sectionLayout";
 import { ArrowRight, Clock, Sparkles } from "lucide-react";
 import type { CgiUiText } from "../config";
+import { sanitizePhoneInput } from "../utils/form";
 import type { CgiConsentState, LeadForm } from "../types";
 
 type CgiLeadStepProps = {
@@ -124,6 +125,24 @@ export function CgiLeadStep({
                   autoComplete="email"
                   value={lead.email}
                   onChange={(event) => updateLead("email", event.target.value)}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="phone">{t.labels.phone} *</Label>
+                <Input
+                  id="phone"
+                  type="tel"
+                  inputMode="tel"
+                  autoComplete="tel"
+                  value={lead.phone}
+                  onChange={(event) =>
+                    updateLead("phone", sanitizePhoneInput(event.target.value))
+                  }
+                  onBlur={(event) =>
+                    updateLead("phone", sanitizePhoneInput(event.target.value))
+                  }
+                  placeholder="(11) 99999-9999"
                   required
                 />
               </div>

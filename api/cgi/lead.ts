@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import {
   createEventId,
+  grantMarketingConsentFromReport,
   insertFunnelEvent,
   persistLeadForAssessment,
 } from "../_cgi-supabase.js";
@@ -41,6 +42,39 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     payload = readPayload(req);
   } catch {
     res.status(400).json({ ok: false, error: "invalid_payload" });
+    return;
+  }
+
+  // Reentrada de opt-in vinda da tela de resultado.
+  //
+  // Branch propria, e a primeira coisa depois de ler o payload, para que ela
+  // nao encoste em nada do caminho de captura de lead -- que e o caminho mais
+  // critico do sistema. Nao valida lead, nao grava lead, nao muda assessment:
+  // so liga o consentimento de quem clicou.
+  //
+  // A exigencia de consent_marketing === true e literal: um payload sem o
+  // campo, ou com qualquer outro valor, e recusado. Consentimento nao se
+  // infere de um POST ter chegado.
+  if (payload.event_name === "cgi_marketing_consent_granted") {
+    const sessionId = normalizeAnonymousSessionId(payload.anonymous_session_id);
+    const assessmentId = normalizePublicAssessmentId(payload.public_assessment_id);
+    if (!sessionId || !assessmentId) {
+      res.status(400).json({ ok: false, error: "invalid_payload" });
+      return;
+    }
+    if (payload.consent_marketing !== true) {
+      res.status(400).json({ ok: false, error: "explicit_consent_required" });
+      return;
+    }
+    const granted = await grantMarketingConsentFromReport({
+      publicAssessmentId: assessmentId,
+      anonymousSessionId: sessionId,
+    });
+    if (!granted.ok) {
+      res.status(404).json({ ok: false, error: "assessment_not_found" });
+      return;
+    }
+    res.status(200).json({ ok: true, consent_marketing: true, source: "cgi_report" });
     return;
   }
 

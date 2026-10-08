@@ -18,6 +18,15 @@ export type CgiLead = {
   investment_intent: string;
   comments: string | null;
   created_at: string;
+  /** Classificação canônica de qualidade -- ver a migration
+   *  20260904120000_cgi_lead_classification. Opcional no tipo para que uma
+   *  Preview cujo banco ainda não recebeu a migration continue carregando o
+   *  Pipe; a decisão de exibir trata ausente como legítimo, porque esconder
+   *  todo mundo por falta de coluna seria pior que mostrar. */
+  classification?: string | null;
+  classified_at?: string | null;
+  classified_by?: string | null;
+  classification_note?: string | null;
 };
 
 export type CgiAssessment = {
@@ -26,6 +35,7 @@ export type CgiAssessment = {
   lead_id: string | null;
   status: "created" | "lead_captured" | "started" | "in_progress" | "completed" | "abandoned";
   progress_percent: number;
+  current_question: number | null;
   started_at: string | null;
   last_activity_at: string | null;
   completed_at: string | null;
@@ -38,6 +48,10 @@ export type CgiAssessment = {
   cgi_level: "reactive" | "intentional" | "structured" | "scalable" | null;
   lowest_dimension: CgiDimension | null;
   highest_dimension: CgiDimension | null;
+  /** Marcadores legados de e-mail, anteriores ao Communication Engine. São a
+   * única prova de comunicações enviadas antes do ledger existir. */
+  report_email_sent_at: string | null;
+  abandonment_email_sent_at: string | null;
   created_at: string;
 };
 
@@ -60,13 +74,27 @@ export type CgiAttribution = {
 };
 
 export type CgiReport = {
+  id: string;
   public_assessment_id: string;
   report_status: "report_generating" | "report_ready" | "report_failed";
   language: "pt" | "en" | "es" | null;
   ai_report_text: string | null;
   report_json: unknown;
+  lead_json: unknown;
+  score_json: unknown;
+  model: string | null;
+  version: number;
+  generation_completed_at: string | null;
   created_at: string;
 };
+
+/** Lean projection used by the opportunities list (CrmList), which only ever
+ * renders report_status -- avoids pulling lead_json/score_json/answers_json
+ * for every row in the list. */
+export type CgiReportSummary = Pick<
+  CgiReport,
+  "id" | "public_assessment_id" | "report_status" | "language" | "ai_report_text" | "report_json" | "version" | "created_at"
+>;
 
 export type CrmOpportunityStatus =
   | "novo"
@@ -74,6 +102,7 @@ export type CrmOpportunityStatus =
   | "contato_pendente"
   | "contato_realizado"
   | "reuniao_agendada"
+  | "enviar_proposta"
   | "proposta_enviada"
   | "convertido"
   | "sem_interesse"
@@ -91,6 +120,53 @@ export type CrmOpportunity = {
   is_test_excluded: boolean;
   created_at: string;
   updated_at: string;
+};
+
+export type CommunicationType =
+  | "report_delivery"
+  | "report_followup_d2"
+  | "report_followup_d5"
+  | "abandon_lead_d1"
+  | "abandon_progress_d1"
+  | "insight_d2"
+  | "howto_d7"
+  | "strategic_d21"
+  | "checkin_d45"
+  | "revisit_d90"
+  | "commercial_followup"
+  | "manual_email";
+
+export type CommunicationClass = "transactional" | "nurturing" | "commercial";
+
+export type CommunicationStatus =
+  | "scheduled"
+  | "sending"
+  | "sent"
+  | "failed"
+  | "cancelled"
+  | "suppressed";
+
+/** Uma linha do ledger cgi_communications. Leitura apenas: o Pipe nunca
+ * escreve aqui -- quem grava é api/ com service role. */
+export type CgiCommunication = {
+  id: string;
+  lead_id: string | null;
+  assessment_id: string | null;
+  public_assessment_id: string | null;
+  communication_type: CommunicationType;
+  communication_class: CommunicationClass;
+  channel: "email" | "whatsapp" | "manual";
+  status: CommunicationStatus;
+  scheduled_at: string | null;
+  sent_at: string | null;
+  failed_at: string | null;
+  cancelled_at: string | null;
+  recipient_masked: string | null;
+  subject: string | null;
+  error_code: string | null;
+  reason: string | null;
+  actor: string | null;
+  created_at: string;
 };
 
 export type CrmPerson = {
@@ -120,6 +196,14 @@ export type OpportunityRow = {
   latestAssessment: CgiAssessment | null;
   bestScore: number | null;
   lastActivityAt: string | null;
-  latestReport: CgiReport | null;
+  latestReport: CgiReportSummary | null;
   originAttribution: CgiAttribution | null;
+  /** Ledger de comunicações do lead, mais recente primeiro. Vazio enquanto o
+   * motor de comunicação não estiver ligado -- e vazio também se a leitura
+   * falhar, porque ela é deliberadamente fail-soft (ver api/opportunities.ts). */
+  communications: CgiCommunication[];
+  /** Quando a pessoa abriu o link do relatório, se abriu. Vem de
+   * cgi_report_access.last_accessed_at -- sinal de engajamento real, não de
+   * entrega. */
+  reportOpenedAt: string | null;
 };

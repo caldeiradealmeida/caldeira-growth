@@ -1,5 +1,11 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { createEventId, insertFunnelEvent, upsertAssessment } from "../_cgi-supabase.js";
+import {
+  createEventId,
+  getAssessmentByPublicId,
+  insertFunnelEvent,
+  isFinalizedCgiAssessmentStatus,
+  upsertAssessment,
+} from "../_cgi-supabase.js";
 import {
   normalizeAnonymousSessionId,
   normalizePublicAssessmentId,
@@ -37,6 +43,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     !Number.isFinite(currentQuestion)
   ) {
     res.status(400).json({ ok: false, error: "invalid_payload" });
+    return;
+  }
+
+  // Late/out-of-order milestone beacons must never reopen a finished
+  // assessment. Without this guard a 25/50/75% beacon that lands after the
+  // person already completed the CGI rewrites status back to "in_progress" --
+  // which, besides corrupting the record, makes the assessment eligible for
+  // the abandonment sweep and can send "seu diagnostico ficou em aberto" to
+  // someone who finished. Mirrors the guard api/cgi/checkpoint.ts already has.
+  // A missing row is left to the upsert below exactly as before, so a beacon
+  // that races ahead of /api/cgi/start still behaves the way it does today.
+  const existing = await getAssessmentByPublicId(publicAssessmentId);
+  if (existing && isFinalizedCgiAssessmentStatus(existing.status)) {
+    res.status(409).json({ ok: false, error: "assessment_already_finalized" });
     return;
   }
 
