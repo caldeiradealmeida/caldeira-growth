@@ -656,26 +656,16 @@ export default function CGI() {
   };
 
   const validateIdentification = (): boolean => {
-    // Telefone entra aqui, junto da identificação, e é obrigatório.
-    // Razão comercial: quem começa o CGI e abandona no meio deixa de ser
-    // alcançável por qualquer canal que não seja e-mail. Capturado na Etapa 1,
-    // o contato sobrevive ao abandono -- que é justamente o caso em que ele
-    // mais importa.
-    if (!validateRequiredFields(["name", "email", "phone", "company", "role"])) {
+    // Etapa 1 pede só o mínimo -- nome e e-mail -- para reduzir o atrito do
+    // primeiro toque. Telefone, empresa e cargo são obrigatórios na Etapa 2
+    // (validateCompanyContext), não aqui. Isso significa que `lead_captured`
+    // passa a representar "deu nome e e-mail", não mais "deu os 5 campos" --
+    // quem lê esse status rio abaixo (régua de nutrição, Pipe) deve esperar
+    // telefone/empresa/cargo vazios até a Etapa 2 ser concluída.
+    if (!validateRequiredFields(["name", "email"])) {
       return false;
     }
-    if (!validateProfessionalFields(["name", "company", "role"])) {
-      return false;
-    }
-    // Formato validado depois da obrigatoriedade, para que campo vazio receba
-    // "campo obrigatório" e campo preenchido receba "número inválido".
-    if (!isValidPhone(lead.phone)) {
-      trackInternalError("cgi_validation_error", "invalid_phone");
-      toast({
-        title: t.invalidRequiredTitle,
-        description: t.invalidPhoneBody,
-        variant: "destructive",
-      });
+    if (!validateProfessionalFields(["name"])) {
       return false;
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(lead.email)) {
@@ -702,6 +692,9 @@ export default function CGI() {
   const validateCompanyContext = (): boolean => {
     if (
       !validateRequiredFields([
+        "phone",
+        "company",
+        "role",
         "sector",
         "commercialRelationshipModel",
         "employeeCount",
@@ -711,6 +704,17 @@ export default function CGI() {
         "investmentIntent",
       ])
     ) {
+      return false;
+    }
+    // Formato validado depois da obrigatoriedade, para que campo vazio
+    // receba "campo obrigatório" e campo preenchido receba "número inválido".
+    if (!isValidPhone(lead.phone)) {
+      trackInternalError("cgi_validation_error", "invalid_phone");
+      toast({
+        title: t.invalidRequiredTitle,
+        description: t.invalidPhoneBody,
+        variant: "destructive",
+      });
       return false;
     }
     if (isOtherOption(lead.sector) && !lead.sectorOther.trim()) {
@@ -736,6 +740,8 @@ export default function CGI() {
     }
     if (
       !validateProfessionalFields([
+        "company",
+        "role",
         "sectorOther",
         "commercialRelationshipOther",
         "currentChallenge",
