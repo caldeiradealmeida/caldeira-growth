@@ -226,12 +226,12 @@ export function validateNormalizedLead(lead: NormalizedCgiLead | null): string |
 
 export function validateNormalizedLeadIdentity(lead: NormalizedCgiLead | null): string | null {
   if (!lead) return "lead_required";
-  const required: Array<keyof NormalizedCgiLead> = [
-    "name",
-    "email",
-    "company",
-    "role",
-  ];
+  // A Etapa 1 (CgiLeadStep) só coleta nome e e-mail -- exigir company/role
+  // aqui faz todo submit da Etapa 1 falhar com "missing_company" no servidor,
+  // mesmo com o formulário do cliente validando e permitindo o envio.
+  // Telefone, empresa e cargo são exigidos na Etapa 2
+  // (validateNormalizedLeadContext), não aqui.
+  const required: Array<keyof NormalizedCgiLead> = ["name", "email"];
   const missing = required.find((key) => !String(lead[key] ?? "").trim());
   if (missing) return `missing_${String(missing)}`;
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(lead.email)) return "invalid_email";

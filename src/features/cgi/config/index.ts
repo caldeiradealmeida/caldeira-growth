@@ -100,6 +100,7 @@ export const cgiUi: Record<
     methodIntroBody: string[];
     leadTimeEstimate: string;
     leadDeliverables: string[];
+    leadTrustNote: string;
     labels: Record<keyof LeadForm, string>;
     sectorHelp: string;
     sectorOptions: string[];
@@ -209,7 +210,7 @@ export const cgiUi: Record<
     heroText:
       "O Caldeira Growth Index avalia cinco dimensões da sua organização, identifica os principais gargalos de crescimento e aponta as prioridades estratégicas em uma leitura executiva objetiva.",
     start: "Iniciar diagnóstico",
-    stats: [["5", "dimensões críticas"], ["40", "perguntas executivas"], ["0-100", "score de maturidade"]],
+    stats: [["5", "dimensões críticas"], ["~12 min", "de diagnóstico guiado"], ["0-100", "score de maturidade"]],
     trust: [
       { title: "Consultivo", body: "Perguntas orientadas a decisões de crescimento, não um quiz genérico." },
       { title: "Estruturado", body: "Score calculado por dimensão, preservando o modelo proprietário da Caldeira Growth." },
@@ -245,6 +246,7 @@ export const cgiUi: Record<
       "O CGI avalia cinco dimensões organizacionais e transforma suas respostas em uma leitura personalizada de forças, gargalos e prioridades estratégicas.",
     ],
     leadTimeEstimate: "Tempo estimado: cerca de 12 minutos",
+    leadTrustNote: "Não ligamos sem sua autorização. Seus dados não são compartilhados com terceiros.",
     leadDeliverables: [
       "Score de 0 a 100",
       "Leitura das 5 dimensões",
@@ -452,7 +454,7 @@ export const cgiUi: Record<
     heroText:
       "The Caldeira Growth Index analyzes five dimensions that sustain growth and produces an executive reading of bottlenecks, priorities and organizational capabilities.",
     start: "Start assessment",
-    stats: [["5", "critical dimensions"], ["40", "executive questions"], ["0-100", "maturity score"]],
+    stats: [["5", "critical dimensions"], ["~12 min", "guided assessment"], ["0-100", "maturity score"]],
     trust: [
       { title: "Consultative", body: "Questions oriented to growth decisions, not a generic quiz." },
       { title: "Structured", body: "Score calculated by dimension, preserving Caldeira Growth's proprietary model." },
@@ -488,6 +490,7 @@ export const cgiUi: Record<
       "CGI evaluates five organizational dimensions and turns your answers into a personalized reading of strengths, bottlenecks and strategic priorities.",
     ],
     leadTimeEstimate: "Estimated time: about 12 minutes",
+    leadTrustNote: "We won't call you without your permission. Your data is never shared with third parties.",
     leadDeliverables: [
       "0-100 score",
       "Reading across 5 dimensions",
@@ -695,7 +698,7 @@ export const cgiUi: Record<
     heroText:
       "El Caldeira Growth Index analiza cinco dimensiones que sostienen el crecimiento y produce una lectura ejecutiva sobre cuellos de botella, prioridades y capacidades organizacionales.",
     start: "Iniciar diagnóstico",
-    stats: [["5", "dimensiones críticas"], ["40", "preguntas ejecutivas"], ["0-100", "score de madurez"]],
+    stats: [["5", "dimensiones críticas"], ["~12 min", "de diagnóstico guiado"], ["0-100", "score de madurez"]],
     trust: [
       { title: "Consultivo", body: "Preguntas orientadas a decisiones de crecimiento, no un quiz genérico." },
       { title: "Estructurado", body: "Score calculado por dimensión, preservando el modelo propietario de Caldeira Growth." },
@@ -731,6 +734,7 @@ export const cgiUi: Record<
       "El CGI evalúa cinco dimensiones organizacionales y transforma sus respuestas en una lectura personalizada de fortalezas, cuellos de botella y prioridades estratégicas.",
     ],
     leadTimeEstimate: "Tiempo estimado: unos 12 minutos",
+    leadTrustNote: "No lo llamaremos sin su autorización. Sus datos no se comparten con terceros.",
     leadDeliverables: [
       "Score de 0 a 100",
       "Lectura de las 5 dimensiones",

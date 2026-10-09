@@ -7,9 +7,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { sectionLayout } from "@/lib/sectionLayout";
-import { ArrowRight, Clock, Sparkles } from "lucide-react";
+import { ArrowRight, Clock, ShieldCheck, Sparkles } from "lucide-react";
 import type { CgiUiText } from "../config";
-import { sanitizePhoneInput } from "../utils/form";
 import type { CgiConsentState, LeadForm } from "../types";
 
 type CgiLeadStepProps = {
@@ -128,45 +127,13 @@ export function CgiLeadStep({
                   required
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="phone">{t.labels.phone} *</Label>
-                <Input
-                  id="phone"
-                  type="tel"
-                  inputMode="tel"
-                  autoComplete="tel"
-                  value={lead.phone}
-                  onChange={(event) =>
-                    updateLead("phone", sanitizePhoneInput(event.target.value))
-                  }
-                  onBlur={(event) =>
-                    updateLead("phone", sanitizePhoneInput(event.target.value))
-                  }
-                  placeholder="(11) 99999-9999"
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="company">{t.labels.company} *</Label>
-                <Input
-                  id="company"
-                  autoComplete="organization"
-                  value={lead.company}
-                  onChange={(event) => updateLead("company", event.target.value)}
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="role">{t.labels.role} *</Label>
-                <Input
-                  id="role"
-                  autoComplete="organization-title"
-                  value={lead.role}
-                  onChange={(event) => updateLead("role", event.target.value)}
-                  required
-                />
-              </div>
             </div>
+            {/* Telefone, empresa e cargo foram movidos para a Etapa 2
+                (CgiContextStep) de propósito: a primeira tela pede só o
+                mínimo (nome + e-mail) para reduzir o atrito do primeiro
+                toque. O objeto `lead` completo continua sendo reenviado a
+                cada etapa (ver persistLead em CGI.tsx), então nada muda no
+                backend -- só a ordem em que os campos são pedidos. */}
 
             <div className="hidden" aria-hidden="true">
               <Label htmlFor="website">Website</Label>
@@ -263,6 +230,10 @@ export function CgiLeadStep({
               {t.continue}
               <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
+            <p className="flex items-start gap-1.5 text-xs leading-relaxed text-muted-foreground">
+              <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              {t.leadTrustNote}
+            </p>
             {import.meta.env.DEV && hasSavedAssessment && (
               <Button
                 type="button"

@@ -37,7 +37,27 @@ describe("CGI event validation", () => {
     expect(hasForbiddenMetadataKeys({ email: "lead@example.com" })).toBe(true);
   });
 
-  it("accepts the low-friction identity step without phone or company context", () => {
+  it("accepts the low-friction identity step with just name and email", () => {
+    // Etapa 1 real: nenhum campo de empresa/cargo/telefone chega no payload.
+    const lead = normalizeLead({
+      name: "Lead Exemplo",
+      email: "lead@example.com",
+    });
+
+    expect(validateNormalizedLeadIdentity(lead)).toBeNull();
+    expect(validateNormalizedLeadContext(lead)).toBe("missing_company");
+  });
+
+  it("rejects the identity step when name or email is missing", () => {
+    expect(validateNormalizedLeadIdentity(normalizeLead({ email: "lead@example.com" }))).toBe(
+      "missing_name"
+    );
+    expect(validateNormalizedLeadIdentity(normalizeLead({ name: "Lead Exemplo" }))).toBe(
+      "missing_email"
+    );
+  });
+
+  it("accepts the identity step even without company or role -- those belong to context", () => {
     const lead = normalizeLead({
       name: "Lead Exemplo",
       email: "lead@example.com",

@@ -16,7 +16,7 @@ import type { getCgiConfig } from "@/data/cgiConfig";
 import { ArrowLeft, ArrowRight } from "lucide-react";
 import type { CgiUiText } from "../config";
 import type { LeadForm } from "../types";
-import { isOtherOption, normalizeWebsiteInput } from "../utils/form";
+import { isOtherOption, normalizeWebsiteInput, sanitizePhoneInput } from "../utils/form";
 
 type CgiContextStepProps = {
   t: CgiUiText;
@@ -53,6 +53,44 @@ export function CgiContextStep({
         <CardContent className="p-6 md:p-8">
           <form onSubmit={submitCompanyContext} className="space-y-6">
             <div className="grid gap-5 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="phone">{t.labels.phone} *</Label>
+                <Input
+                  id="phone"
+                  type="tel"
+                  inputMode="tel"
+                  autoComplete="tel"
+                  value={lead.phone}
+                  onChange={(event) =>
+                    updateLead("phone", sanitizePhoneInput(event.target.value))
+                  }
+                  onBlur={(event) =>
+                    updateLead("phone", sanitizePhoneInput(event.target.value))
+                  }
+                  placeholder="(11) 99999-9999"
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="company">{t.labels.company} *</Label>
+                <Input
+                  id="company"
+                  autoComplete="organization"
+                  value={lead.company}
+                  onChange={(event) => updateLead("company", event.target.value)}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="role">{t.labels.role} *</Label>
+                <Input
+                  id="role"
+                  autoComplete="organization-title"
+                  value={lead.role}
+                  onChange={(event) => updateLead("role", event.target.value)}
+                  required
+                />
+              </div>
               <div className="space-y-2">
                 <Label htmlFor="companyWebsite">{t.labels.companyWebsite}</Label>
                 <Input
