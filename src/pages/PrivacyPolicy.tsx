@@ -8,6 +8,33 @@ import type { PrivacySection } from "@/data/content";
 
 const CONTACT_EMAIL = "contato@caldeiragrowth.com";
 
+const MASTERCLASS_HREF =
+  "/jornada?utm_source=politica_privacidade&utm_medium=site&utm_campaign=masterclass6x1";
+
+function MasterclassCallout({ className = "" }: { className?: string }) {
+  return (
+    <aside
+      className={`rounded-xl border border-primary/30 bg-primary/5 p-5 md:p-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4 ${className}`}
+    >
+      <div>
+        <p className="text-sm font-semibold uppercase tracking-wide text-primary">
+          Masterclass · 29/10, 19h
+        </p>
+        <p className="mt-1 text-base md:text-lg text-foreground font-medium">
+          Veio pela masterclass sobre o fim da escala 6x1? O programa e a
+          inscrição estão aqui.
+        </p>
+      </div>
+      <a
+        href={MASTERCLASS_HREF}
+        className="inline-flex shrink-0 items-center justify-center rounded-md bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground hover:bg-primary/90 transition-colors"
+      >
+        Ver a masterclass →
+      </a>
+    </aside>
+  );
+}
+
 function BodyWithEmail({ body }: { body: string }) {
   if (!body.includes(CONTACT_EMAIL)) {
     return <>{body}</>;
@@ -88,6 +115,7 @@ export default function PrivacyPolicy() {
       />
       <article className="pt-28 md:pt-32 pb-20 md:pb-28 px-4">
         <div className="container mx-auto max-w-3xl">
+          {lang === "pt" && <MasterclassCallout className="mb-10 md:mb-12" />}
           <header className="mb-12 md:mb-14">
             <h1 className="text-3xl md:text-4xl font-bold text-foreground tracking-tight mb-4">
               {p.title}
@@ -131,6 +159,7 @@ export default function PrivacyPolicy() {
               )
             )}
           </footer>
+          {lang === "pt" && <MasterclassCallout className="mt-12" />}
         </div>
       </article>
       <Footer />
