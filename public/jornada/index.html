@@ -98,6 +98,8 @@
   .lote{margin-top:14px;padding:12px 14px;border-left:3px solid var(--gold-ink);background:rgba(160,120,40,.08);border-radius:8px;font-size:15px;color:var(--ink);display:flex;gap:14px;align-items:center}
   .lote img{width:56px;height:auto;flex:0 0 auto;border-radius:3px;box-shadow:0 2px 6px rgba(0,0,0,.25)}
   .hero-lote{margin:0 0 18px;font-size:16px;color:var(--on-navy);max-width:640px}
+  .authority-band{max-width:640px;margin:0 0 18px;padding:10px 12px;border-left:2px solid var(--gold);background:rgba(255,255,255,.08);font-size:14px;line-height:1.45;color:var(--on-navy)}
+  .authority-band a{color:var(--on-navy);font-weight:700;white-space:nowrap}
   .hero-lote .tag{display:inline-block;font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--navy);background:var(--gold);border-radius:999px;padding:3px 10px;margin-right:8px;vertical-align:1px}
   .hero-lote s{color:var(--on-navy-3)}
   .hero-lote strong{color:var(--gold)}
@@ -157,6 +159,7 @@
     <h1>Fim da escala 6x1: o plano de 60 dias <em>do empregador.</em></h1>
     <p class="lead">A emenda foi promulgada. Até meados de dezembro, sua empresa precisa operar em 5x2, com no máximo 42 horas semanais e sem reduzir salários. Em duas horas, uma advogada trabalhista, um perito em cálculos trabalhistas e um especialista em engenharia econômica mostram o que a lei exige, quanto custa na sua folha e qual decisão preserva sua rentabilidade.</p>
     <p class="hero-lote js-lote"><span class="tag">Lote de abertura</span>De <s>R$ 197</s> por <strong>R$ 147</strong> até 23/10 ou até as 20 primeiras inscrições. Os 20 primeiros ganham o livro <em>Cresça ou Desapareça</em> autografado, com frete grátis.</p>
+    <p class="authority-band">Publicado no Migalhas: ‘Desafios da Emenda Constitucional 141/26’, por Larissa Fortes, que dá a aula de 29/10. <a class="js-migalhas-band" href="https://www.migalhas.com.br/depeso/466751/desafios-da-emenda-constitucional-141-26" target="_blank" rel="noopener">Ler o artigo →</a></p>
     <a class="cta js-checkout" href="#inscricao" data-cta="hero">Garantir minha vaga — <span class="js-price">R$ 147</span></a>
     <div class="micro">Ingresso individual · gravação por 30 dias · material da aula · garantia de 7 dias</div>
   </div>
@@ -392,6 +395,11 @@ var GTM_ID = "GTM-NRJ366QC";     // ID do Google Tag Manager (GA4 + Pixel config
     document.querySelectorAll(".js-was").forEach(function(e){ e.textContent = "à vista ou parcelado"; });
     document.querySelectorAll(".js-lote").forEach(function(e){ e.hidden = true; });
   }
+  var larissaSocial = document.querySelector('.js-social[data-who="larissa"]');
+  if(larissaSocial){ larissaSocial.parentElement.insertAdjacentHTML("beforeend", '<a class="js-social" href="https://www.migalhas.com.br/depeso/466751/desafios-da-emenda-constitucional-141-26" target="_blank" rel="noopener" data-net="migalhas" data-who="larissa" aria-label="Artigo no Migalhas de Larissa Fortes"><span>Artigo no Migalhas</span></a>'); }
+  document.querySelectorAll(".js-migalhas-band").forEach(function(a){
+    a.addEventListener("click", function(){ window.dataLayer.push({event:"migalhas_click", local:"faixa"}); });
+  });
   document.querySelectorAll(".js-checkout").forEach(function(a){
     if(url){ a.href = withUtm(url); }
     a.addEventListener("click", function(){
