@@ -118,13 +118,6 @@
   footer{background:var(--navy);color:var(--on-navy-3);font-size:13.5px;padding-block:40px 96px}
   footer .brands{display:flex;gap:28px;flex-wrap:wrap;color:var(--on-navy);font-weight:600;margin-bottom:14px}
   footer p{margin:6px 0;max-width:760px}
-  .consent{position:fixed;left:0;right:0;bottom:0;background:var(--card);color:var(--ink);border-top:1px solid var(--line);box-shadow:0 -6px 20px rgba(0,0,0,.08);z-index:20;padding-bottom:env(safe-area-inset-bottom, 0px)}
-  .consent .wrap{display:flex;gap:16px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding-block:14px;font-size:14px}
-  .consent p{margin:0;max-width:640px;color:var(--ink-2)}
-  .consent .btns{display:flex;gap:10px}
-  .consent button{font:inherit;font-weight:600;border-radius:8px;padding:9px 16px;cursor:pointer}
-  .btn-yes{background:var(--navy);color:var(--on-navy);border:1px solid var(--navy)}
-  .btn-no{background:transparent;color:var(--ink);border:1px solid var(--line)}
   @media (max-width:860px){
     .facts .grid{grid-template-columns:1fr 1fr}
     .fact:nth-child(2){border-right:0}
@@ -159,6 +152,7 @@
     <h1>Fim da escala 6x1: o plano de 60 dias <em>do empregador.</em></h1>
     <p class="lead">A emenda foi promulgada. Até meados de dezembro, sua empresa precisa operar em 5x2, com no máximo 42 horas semanais e sem reduzir salários. Em duas horas, uma advogada trabalhista, um perito em cálculos trabalhistas e um especialista em engenharia econômica mostram o que a lei exige, quanto custa na sua folha e qual decisão preserva sua rentabilidade.</p>
     <p class="authority-band">Publicado no Migalhas: ‘Desafios da Emenda Constitucional 141/26’, por Larissa Fortes, que dá a aula de 29/10. <a class="js-migalhas-band" href="https://www.migalhas.com.br/depeso/466751/desafios-da-emenda-constitucional-141-26" target="_blank" rel="noopener">Ler o artigo →</a></p>
+    <p class="hero-lote"><span class="tag">Bônus</span>Os 20 primeiros inscritos ganham o livro <em>Cresça ou Desapareça</em> autografado, com frete grátis. Restam 12.</p>
     <a class="cta js-checkout" href="#inscricao" data-cta="hero">Garantir minha vaga — <span class="js-price">R$ 197</span></a>
     <div class="micro">Ingresso individual · gravação por 30 dias · material da aula · garantia de 7 dias</div>
   </div>
@@ -320,6 +314,7 @@
         <li>Bônus: diagnóstico CGI da sua empresa</li>
         <li>Gravação por 30 dias</li>
         <li>Sua pergunta respondida na aula</li>
+        <li>Bônus para os 20 primeiros: livro <em>Cresça ou Desapareça</em> autografado, com frete grátis</li>
       </ul>
     </div>
     <div class="emp">
@@ -342,6 +337,7 @@
     <details><summary>Vocês vão analisar o caso da minha empresa na aula?</summary><p>A aula é educacional e trata de situações típicas. Para uma análise individual, cada especialista atende separadamente, na sua área.</p></details>
     <details><summary>Posso inscrever mais pessoas da empresa?</summary><p>Sim. O ingresso empresa dá acesso a até 3 pessoas por R$ 397. Depois da compra, pedimos o nome e o e-mail dos outros dois participantes e liberamos o acesso de cada um.</p></details>
     <details><summary>O roteiro substitui a análise jurídica da minha empresa?</summary><p>Não. O roteiro responde à pergunta econômica: qual caminho custa menos e preserva sua margem. A adequação jurídica (acordo de compensação, convenção coletiva, documentos e prazos) depende de análise de advogado. Na aula, a Larissa mostra os pontos de atenção; o checklist jurídico completo e a revisão do seu caso são contratados à parte com o escritório dela.</p></details>
+    <details><summary>Como funciona o livro grátis?</summary><p>Os 20 primeiros inscritos ganham um exemplar físico de <em>Cresça ou Desapareça</em>, autografado por Denis Caldeira, com frete grátis. Depois da aula, pedimos o endereço de entrega por e-mail.</p></details>
     <details><summary>Emitem nota fiscal?</summary><p>Sim, a nota é emitida após a confirmação do pagamento.</p></details>
   </div>
 </section>
@@ -351,16 +347,10 @@
     <div class="brands"><span>Larissa Fortes · Advocacia Estratégica</span><span>Caldeira Growth</span></div>
     <p>Conteúdo de caráter educacional. Não substitui consultoria jurídica ou contábil individual.</p>
     <p>Ao se inscrever, você concorda em receber comunicações sobre esta masterclass e temas relacionados de Larissa Fortes Advocacia Estratégica e Caldeira Growth, conforme a política de privacidade. Você pode cancelar a qualquer momento.</p>
+    <p>Usamos cookies de medição (Google Analytics e Meta) para entender de onde vêm as visitas, conforme a política de privacidade.</p>
     <p>larissafortes.com · caldeiragrowth.com</p>
   </div>
 </footer>
-
-<div class="consent" id="consent" hidden>
-  <div class="wrap">
-    <p>Usamos cookies de medição (Google Analytics e Meta) para entender de onde vêm as visitas. Você escolhe.</p>
-    <div class="btns"><button type="button" class="btn-no" id="consent-no">Recusar</button><button type="button" class="btn-yes" id="consent-yes">Aceitar</button></div>
-  </div>
-</div>
 
 <script>
 /* ===== CONFIGURAÇÃO — preencha antes de publicar nos sites ===== */
@@ -414,11 +404,7 @@ var GTM_ID = "GTM-NRJ366QC";     // ID do Google Tag Manager (GA4 + Pixel config
       window.dataLayer.push({event:"social_click", network: a.getAttribute("data-net"), speaker: a.getAttribute("data-who")});
     });
   });
-  // Consentimento (LGPD): só carrega medição depois do aceite
-  var c = document.getElementById("consent"), choice = store("consent_6x1");
-  if(choice === "yes"){ loadGTM(); } else if(choice !== "no"){ c.hidden = false; }
-  document.getElementById("consent-yes").addEventListener("click", function(){ store("consent_6x1","yes"); c.hidden = true; loadGTM(); });
-  document.getElementById("consent-no").addEventListener("click", function(){ store("consent_6x1","no"); c.hidden = true; });
+  loadGTM();
 })();
 </script>
 
