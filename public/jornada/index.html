@@ -315,13 +315,6 @@
         <li>30 dias de acesso, a partir da compra</li>
       </ul>
     </div>
-    <div class="emp">
-      <div>
-        <h3>Vai levar o RH ou o sócio?</h3>
-        <p>Acesso empresa para até 3 pessoas: <strong>R$ 397</strong>. Depois da compra, pedimos por e-mail o nome e o e-mail das outras duas pessoas, e o acesso de cada uma chega por e-mail.</p>
-      </div>
-      <a class="cta js-checkout-emp" href="#inscricao" data-cta="empresa">Liberar para minha equipe</a>
-    </div>
   </div>
 </section>
 
@@ -333,7 +326,6 @@
     <details><summary>Serve para microempresa e empresa do Simples Nacional?</summary><p>Sim. O cálculo do custo da hora, dos encargos e da cobertura de turnos vale para qualquer regime, inclusive o Simples, e o roteiro de decisão econômica se aplica a qualquer tamanho de equipe.</p></details>
     <details><summary>A gravação responde dúvidas dos participantes?</summary><p>Sim. O Bloco 4 traz as perguntas enviadas pelos participantes da aula ao vivo, respondidas pelos três especialistas.</p></details>
     <details><summary>Vocês analisam o caso da minha empresa?</summary><p>A aula é educacional e trata de situações típicas. Para uma análise individual, cada especialista atende separadamente, na sua área.</p></details>
-    <details><summary>Posso liberar para mais pessoas da empresa?</summary><p>Sim. O acesso empresa vale para até 3 pessoas por R$ 397. Depois da compra, pedimos o nome e o e-mail das outras duas pessoas e liberamos o acesso de cada uma.</p></details>
     <details><summary>O roteiro substitui a análise jurídica da minha empresa?</summary><p>Não. O roteiro responde à pergunta econômica: qual caminho custa menos e preserva sua margem. A adequação jurídica (acordo de compensação, convenção coletiva, documentos e prazos) depende de análise de advogado. Na aula, a Larissa mostra os pontos de atenção; o checklist jurídico completo e a revisão do seu caso são contratados à parte com o escritório dela.</p></details>
     <details><summary>Emitem nota fiscal?</summary><p>Sim, a nota é emitida após a confirmação do pagamento.</p></details>
   </div>
@@ -354,7 +346,6 @@
 var CHECKOUT_URL = "https://pay.kiwify.com.br/Vcqd0bC";          // gravação individual (preço definido na Kiwify)
 var PRECO = 147, PRECO_DEPOIS = 197;
 var VIRADA = "2026-11-15T00:00:00-03:00";                        // a partir desta data a página mostra R$ 197 (subir também na Kiwify)
-var EMPRESA_URL = "https://pay.kiwify.com.br/4lG3g4Z";           // acesso empresa (até 3 pessoas), R$ 397
 var GTM_ID = "GTM-NRJ366QC";     // ID do Google Tag Manager (GA4 + Pixel configurados dentro dele)
 /* =============================================================== */
 (function(){
@@ -389,12 +380,6 @@ var GTM_ID = "GTM-NRJ366QC";     // ID do Google Tag Manager (GA4 + Pixel config
     a.addEventListener("click", function(){
       window.dataLayer.push({event:"begin_checkout", cta: a.getAttribute("data-cta"), value:valor, currency:"BRL"});
       if(!url && soon){ soon.hidden = false; }
-    });
-  });
-  document.querySelectorAll(".js-checkout-emp").forEach(function(a){
-    if(EMPRESA_URL){ a.href = withUtm(EMPRESA_URL); }
-    a.addEventListener("click", function(){
-      window.dataLayer.push({event:"begin_checkout", cta: "empresa", value:397, currency:"BRL"});
     });
   });
   document.querySelectorAll(".js-social").forEach(function(a){
