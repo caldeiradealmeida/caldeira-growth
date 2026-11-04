@@ -13,43 +13,10 @@ import type { CompanyMarkId } from "@/components/home/companyMarks";
 
 type Localized<T> = Record<Language, T>;
 
-export const homeClients: Localized<{ label: string; names: string[] }> = {
-  pt: {
-    label: "Empresas que trabalharam com a Caldeira Growth",
-    names: [
-      "Maschinenfabrik Reinhausen",
-      "99",
-      "Seguros Sura",
-      "Cescon Barrieu",
-      "Fabio Kadi Advogados",
-      "Roda Conveniência",
-      "Bom Sabor",
-    ],
-  },
-  en: {
-    label: "Organizations that have worked with Caldeira Growth",
-    names: [
-      "Maschinenfabrik Reinhausen",
-      "99",
-      "Seguros Sura",
-      "Cescon Barrieu",
-      "Fabio Kadi Advogados",
-      "Roda Conveniência",
-      "Bom Sabor",
-    ],
-  },
-  es: {
-    label: "Organizaciones que han trabajado con Caldeira Growth",
-    names: [
-      "Maschinenfabrik Reinhausen",
-      "99",
-      "Seguros Sura",
-      "Cescon Barrieu",
-      "Fabio Kadi Advogados",
-      "Roda Conveniência",
-      "Bom Sabor",
-    ],
-  },
+export const homeClients: Localized<{ label: string }> = {
+  pt: { label: "Empresas que trabalharam com a Caldeira Growth" },
+  en: { label: "Organizations that have worked with Caldeira Growth" },
+  es: { label: "Organizaciones que han trabajado con Caldeira Growth" },
 };
 
 export type Bottleneck = {
@@ -309,7 +276,7 @@ export const homeFounder: Localized<{
   title: string;
   intro: string;
   rolesTitle: string;
-  roles: Array<{ company: string; role: string; mark?: CompanyMarkId }>;
+  roles: Array<{ company: string; role: string; mark?: CompanyMarkId; logo?: "quintoandar" | "addi" }>;
   credentials: string[];
   bookTitle: string;
   bookBody: string;
@@ -325,8 +292,8 @@ export const homeFounder: Localized<{
     roles: [
       { company: "Meta", mark: "meta", role: "Diretor de negócios para PMEs na América Latina, com cerca de R$ 10 bilhões em receita" },
       { company: "Google", mark: "google", role: "Sete anos em posições de liderança" },
-      { company: "QuintoAndar", role: "VP de Vendas e Clientes" },
-      { company: "Addi", role: "VP de Vendas e Operações para a América Latina" },
+      { company: "QuintoAndar", logo: "quintoandar", role: "VP de Vendas e Clientes" },
+      { company: "Addi", logo: "addi", role: "VP de Vendas e Operações para a América Latina" },
       { company: "Telefónica Vivo", mark: "telefonica", role: "Início de carreira, em diversas posições" },
     ],
     credentials: [
@@ -348,8 +315,8 @@ export const homeFounder: Localized<{
     roles: [
       { company: "Meta", mark: "meta", role: "Director of SMBs for Latin America, with roughly R$10 billion in revenue" },
       { company: "Google", mark: "google", role: "Seven years in leadership roles" },
-      { company: "QuintoAndar", role: "VP of Sales and Customers" },
-      { company: "Addi", role: "VP of Sales and Operations for Latin America" },
+      { company: "QuintoAndar", logo: "quintoandar", role: "VP of Sales and Customers" },
+      { company: "Addi", logo: "addi", role: "VP of Sales and Operations for Latin America" },
       { company: "Telefónica Vivo", mark: "telefonica", role: "Early career, across several roles" },
     ],
     credentials: [
@@ -370,8 +337,8 @@ export const homeFounder: Localized<{
     roles: [
       { company: "Meta", mark: "meta", role: "Director de negocios para pymes en América Latina, con cerca de R$ 10 mil millones en ingresos" },
       { company: "Google", mark: "google", role: "Siete años en posiciones de liderazgo" },
-      { company: "QuintoAndar", role: "VP de Ventas y Clientes" },
-      { company: "Addi", role: "VP de Ventas y Operaciones para América Latina" },
+      { company: "QuintoAndar", logo: "quintoandar", role: "VP de Ventas y Clientes" },
+      { company: "Addi", logo: "addi", role: "VP de Ventas y Operaciones para América Latina" },
       { company: "Telefónica Vivo", mark: "telefonica", role: "Inicio de carrera, en diversas posiciones" },
     ],
     credentials: [

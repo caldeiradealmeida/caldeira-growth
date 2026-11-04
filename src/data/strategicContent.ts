@@ -84,7 +84,7 @@ export const testimonials = [
   {
     quote:
       "Denis traz clareza ao analisar cenários complexos e traduz isso em direcionamento prático.",
-    attribution: "Fabio Kadi, Sócio Diretor, Kadi Advogados",
+    attribution: "Fabio Kadi, Sócio Diretor, Fabio Kadi Advogados",
     target: "Homepage e Consultoria",
     proof: "clareza estratégica e direcionamento prático",
   },

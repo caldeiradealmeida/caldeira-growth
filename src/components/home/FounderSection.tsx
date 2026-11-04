@@ -5,6 +5,10 @@ import { homeFounder } from "@/data/homeProof";
 import portrait from "@/assets/denis/denis-portrait.webp";
 import bookCover from "@/assets/book/cresca-ou-desapareca-3d.webp";
 import { COMPANY_MARKS, type CompanyMarkId } from "./companyMarks";
+import quintoandarLogo from "@/assets/logos/companies/quintoandar.svg";
+import addiLogo from "@/assets/logos/companies/addi.svg";
+
+const COMPANY_LOGOS = { quintoandar: { src: quintoandarLogo, height: 17 }, addi: { src: addiLogo, height: 20 } } as const;
 
 function CompanyMark({ id }: { id?: CompanyMarkId }) {
   if (!id) return <span className="h-5 w-5 shrink-0" aria-hidden />;
@@ -45,8 +49,20 @@ export default function FounderSection({ lang }: { lang: Language }) {
               {f.roles.map((item) => (
                 <div key={item.company} className="grid gap-1 py-3.5 sm:grid-cols-[11rem_1fr] sm:gap-6">
                   <dt className="flex items-center gap-2.5 font-semibold text-foreground">
-                    <CompanyMark id={item.mark} />
-                    {item.company}
+                    {item.logo ? (
+                      <img
+                        src={COMPANY_LOGOS[item.logo].src}
+                        alt={item.company}
+                        loading="lazy"
+                        style={{ height: COMPANY_LOGOS[item.logo].height }}
+                        className="w-auto opacity-55 [filter:brightness(0)]"
+                      />
+                    ) : (
+                      <>
+                        <CompanyMark id={item.mark} />
+                        {item.company}
+                      </>
+                    )}
                   </dt>
                   <dd className="text-[15px] leading-relaxed text-foreground/75">{item.role}</dd>
                 </div>

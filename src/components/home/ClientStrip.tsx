@@ -1,11 +1,9 @@
 import type { Language } from "@/lib/routing";
 import { sectionLayout } from "@/lib/sectionLayout";
 import { homeClients } from "@/data/homeProof";
+import { CLIENT_LOGOS } from "./clientLogos";
 
-/**
- * Client names right below the hero. Set as typography for now; swap each name
- * for its logo once the client has approved the use of its brand.
- */
+/** Client logos right below the hero, all rendered in the same gray. */
 export default function ClientStrip({ lang }: { lang: Language }) {
   const c = homeClients[lang];
   return (
@@ -17,13 +15,18 @@ export default function ClientStrip({ lang }: { lang: Language }) {
         >
           {c.label}
         </p>
-        <ul className="mt-6 flex flex-wrap items-center justify-center gap-x-8 gap-y-3 md:gap-x-12">
-          {c.names.map((name) => (
-            <li
-              key={name}
-              className="text-base md:text-lg font-semibold tracking-tight text-foreground/55"
-            >
-              {name}
+        <ul className="mt-8 flex flex-wrap items-center justify-center gap-x-10 gap-y-7 md:gap-x-14">
+          {CLIENT_LOGOS.map((logo) => (
+            <li key={logo.name} className="flex items-center">
+              <img
+                src={logo.src}
+                alt={logo.name}
+                title={logo.name}
+                loading="lazy"
+                decoding="async"
+                style={{ height: logo.height }}
+                className="w-auto max-w-[9.5rem] object-contain opacity-55 [filter:brightness(0)] transition-opacity hover:opacity-80"
+              />
             </li>
           ))}
         </ul>

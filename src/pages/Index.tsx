@@ -38,7 +38,7 @@ export default function Index() {
 
       <section className="relative min-h-[88vh] flex items-center overflow-hidden pt-20">
         <div className="absolute inset-0 bg-[#0a121a]" aria-hidden />
-        <div className="absolute top-16 md:top-20 left-0 right-0 bottom-0 overflow-hidden">
+        <div className="absolute top-16 md:top-20 left-0 right-0 bottom-0 lg:left-[32%] overflow-hidden">
           <HeroVideo
             lang={lang}
             mediaClassName="absolute inset-0 w-full h-full object-cover object-[50%_40%] [filter:brightness(0.72)_contrast(1.1)_saturate(0.9)]"
@@ -49,7 +49,7 @@ export default function Index() {
             className="absolute inset-0"
             style={{
               background:
-                "linear-gradient(to right, rgba(10,18,30,0.92) 0%, rgba(10,18,30,0.75) 30%, rgba(10,18,30,0.3) 55%, rgba(10,18,30,0.05) 80%)",
+                "linear-gradient(to right, rgba(10,18,30,0.9) 0%, rgba(10,18,30,0.55) 28%, rgba(10,18,30,0.18) 58%, transparent 78%)",
             }}
             aria-hidden
           />
@@ -57,7 +57,7 @@ export default function Index() {
 
         <div className={`${sectionLayout.container} w-full py-10 md:py-14 relative z-10`}>
           <div className="max-w-2xl">
-            <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold leading-[1.08] tracking-tight text-white mb-6">
+            <h1 className="text-4xl md:text-5xl lg:text-[3.5rem] font-bold leading-[1.06] tracking-tight text-white mb-6">
               <HeroTitle text={h.heroTitle} />
             </h1>
             <p className="text-lg md:text-xl text-white font-light leading-relaxed mb-7 max-w-xl">
