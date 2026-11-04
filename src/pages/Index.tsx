@@ -7,6 +7,7 @@ import ClientStrip from "@/components/home/ClientStrip";
 import BottlenecksSection from "@/components/home/BottlenecksSection";
 import DiagnosticsSection from "@/components/home/DiagnosticsSection";
 import FounderSection from "@/components/home/FounderSection";
+import CaseSection from "@/components/home/CaseSection";
 import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { sectionLayout } from "@/lib/sectionLayout";
@@ -89,6 +90,8 @@ export default function Index() {
       <BottlenecksSection lang={lang} />
 
       <DiagnosticsSection lang={lang} />
+
+      <CaseSection lang={lang} />
 
       <section className={`${sectionLayout.sectionY} bg-background`}>
         <div className={sectionLayout.container}>

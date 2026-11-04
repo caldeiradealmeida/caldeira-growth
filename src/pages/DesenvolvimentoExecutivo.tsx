@@ -8,6 +8,19 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { executiveContent } from "@/data/strategicContent";
 import { localizedPath } from "@/lib/routing";
 import { sectionLayout } from "@/lib/sectionLayout";
+import TestimonialVideo from "@/components/TestimonialVideo";
+import type { Language } from "@/lib/routing";
+
+const VIDEO_LABEL: Record<Language, string> = {
+  pt: "Assistir aos depoimentos completos dos participantes do programa da MR",
+  en: "Watch the full testimonials from participants in the MR program",
+  es: "Ver los testimonios completos de los participantes del programa de MR",
+};
+const VIDEO_DURATION: Record<Language, string> = {
+  pt: "Depoimentos · 3 min",
+  en: "Testimonials · 3 min",
+  es: "Testimonios · 3 min",
+};
 
 export default function DesenvolvimentoExecutivo() {
   const { lang } = useLanguage();
@@ -100,7 +113,7 @@ export default function DesenvolvimentoExecutivo() {
       </section>
 
       <section className={`${sectionLayout.sectionY} bg-muted/[0.28] border-y border-border/60`}>
-        <div className={sectionLayout.container}>
+        <div className={`${sectionLayout.container} grid gap-12 lg:grid-cols-[1fr_20rem] lg:gap-16`}>
           <div className={sectionLayout.prose}>
             <div className={sectionLayout.headerToContent}>
               <h2 className={sectionLayout.title}>{p.caseTitle}</h2>
@@ -131,6 +144,15 @@ export default function DesenvolvimentoExecutivo() {
                 </figure>
               ))}
             </div>
+          </div>
+          <div className="mx-auto w-full max-w-[20rem] lg:sticky lg:top-28 lg:self-start">
+            <TestimonialVideo
+              lang={lang}
+              base="/videos/mr-edp-completo"
+              poster="/videos/mr-edp-poster.webp"
+              label={VIDEO_LABEL[lang]}
+              durationLabel={VIDEO_DURATION[lang]}
+            />
           </div>
         </div>
       </section>

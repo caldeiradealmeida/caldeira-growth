@@ -104,10 +104,9 @@ export const testimonials = [
     proof: "desenvolvimento executivo conectado ao negócio",
   },
   {
-    // Translated from his English testimonial (MR EDP video, 19/06/2026).
     quote:
-      "Eu tinha uma visão muito centrada na minha função e no meu time. Depois do programa, entendo como as decisões estratégicas são tomadas no nível corporativo.",
-    attribution: "Francisco, Maschinenfabrik Reinhausen, Estados Unidos",
+      "O programa ampliou minha visão para além da minha função e do meu time. Passei a compreender melhor como decisões estratégicas são tomadas no nível corporativo.",
+    attribution: "Francisco Jung, US Sales Manager, Maschinenfabrik Reinhausen",
     target: "Homepage e Desenvolvimento Executivo",
     proof: "visão estratégica corporativa",
   },

@@ -352,3 +352,58 @@ export const homeFounder: Localized<{
     bookAlt: "Portada del libro Cresça ou Desapareça",
   },
 };
+
+export const homeCase: Localized<{
+  eyebrow: string;
+  title: string;
+  paragraphs: string[];
+  facts: string[];
+  quote: string;
+  quoteBy: string;
+  cta: string;
+  videoLabel: string;
+  duration: string;
+}> = {
+  pt: {
+    eyebrow: "Caso · Maschinenfabrik Reinhausen",
+    title: "Lideranças de várias subsidiárias, um mesmo jeito de decidir",
+    paragraphs: [
+      "Na MR, grupo alemão de tecnologia em energia, desenhamos e conduzimos o Programa de Desenvolvimento Executivo para lideranças de diferentes subsidiárias.",
+      "Estratégia, finanças, growth, riscos, cultura e alocação de capital trabalhados como um só sistema, com casos aplicados ao negócio de cada participante.",
+    ],
+    facts: ["Três módulos", "Lideranças de várias subsidiárias", "Casos aplicados ao negócio de cada um"],
+    quote: "O programa desenvolveu uma visão muito mais estratégica sobre o meu trabalho. As ferramentas financeiras, a análise de riscos e a governança passaram a apoiar decisões mais conscientes.",
+    quoteBy: "E. Ruben Maldonado B., Area Sales Manager",
+    cta: "Conhecer o Desenvolvimento Executivo",
+    videoLabel: "Assistir aos depoimentos dos participantes do programa da MR",
+    duration: "Depoimentos · 1 min 26 s",
+  },
+  en: {
+    eyebrow: "Case · Maschinenfabrik Reinhausen",
+    title: "Leaders from several subsidiaries, one way of making decisions",
+    paragraphs: [
+      "At MR, the German energy-technology group, we designed and ran the Executive Development Program for leaders from different subsidiaries.",
+      "Strategy, finance, growth, risk, culture and capital allocation treated as one system, with cases applied to each participant's business.",
+    ],
+    facts: ["Three modules", "Leaders from several subsidiaries", "Cases applied to each participant's business"],
+    quote: "The program gave me a much more strategic view of my work. Financial tools, risk analysis and governance now support more informed decisions.",
+    quoteBy: "E. Ruben Maldonado B., Area Sales Manager",
+    cta: "Explore Executive Development",
+    videoLabel: "Watch testimonials from participants in the MR program",
+    duration: "Testimonials · 1 min 26 s",
+  },
+  es: {
+    eyebrow: "Caso · Maschinenfabrik Reinhausen",
+    title: "Líderes de varias subsidiarias, una misma forma de decidir",
+    paragraphs: [
+      "En MR, grupo alemán de tecnología en energía, diseñamos y condujimos el Programa de Desarrollo Ejecutivo para líderes de distintas subsidiarias.",
+      "Estrategia, finanzas, growth, riesgos, cultura y asignación de capital trabajados como un solo sistema, con casos aplicados al negocio de cada participante.",
+    ],
+    facts: ["Tres módulos", "Líderes de varias subsidiarias", "Casos aplicados al negocio de cada uno"],
+    quote: "El programa me dio una visión mucho más estratégica de mi trabajo. Las herramientas financieras, el análisis de riesgos y la gobernanza ahora apoyan decisiones más conscientes.",
+    quoteBy: "E. Ruben Maldonado B., Area Sales Manager",
+    cta: "Conocer el Desarrollo Ejecutivo",
+    videoLabel: "Ver los testimonios de los participantes del programa de MR",
+    duration: "Testimonios · 1 min 26 s",
+  },
+};
