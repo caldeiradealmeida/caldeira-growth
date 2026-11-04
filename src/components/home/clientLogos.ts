@@ -5,6 +5,7 @@ import cesconBarrieu from "@/assets/logos/clients/cescon-barrieu.svg";
 import fabioKadi from "@/assets/logos/clients/fabio-kadi.svg";
 import roda from "@/assets/logos/clients/roda.png";
 import bomSabor from "@/assets/logos/clients/bom-sabor.png";
+import darwinStartups from "@/assets/logos/clients/darwin-startups.png";
 
 /**
  * Client logos, taken from each company's official website (04/11/2026) and
@@ -19,4 +20,5 @@ export const CLIENT_LOGOS: Array<{ name: string; src: string; height: number }> 
   { name: "Fabio Kadi Advogados", src: fabioKadi, height: 34 },
   { name: "Roda Conveniência", src: roda, height: 28 },
   { name: "Bom Sabor", src: bomSabor, height: 42 },
+  { name: "Darwin Startups", src: darwinStartups, height: 28 },
 ];
