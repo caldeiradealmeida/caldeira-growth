@@ -14,6 +14,7 @@ const spanishIndexableKeys = new Set([
   "speaking",
   "about",
   "contact",
+  "relay",
   "privacy",
 ]);
 
@@ -211,6 +212,27 @@ const pages = [
         title: "En los medios | Caldeira Growth",
         description:
           "Artículos, entrevistas y reflexiones sobre estrategia, crecimiento y toma de decisiones.",
+      },
+    },
+  },
+  {
+    key: "relay",
+    paths: { pt: "/relay", en: "/en/relay", es: "/es/relay" },
+    meta: {
+      pt: {
+        title: "Caldeira Relay | Diagnóstico de integração entre áreas",
+        description:
+          "Toda a organização responde em 5 minutos. O painel mostra onde o trabalho quebra entre uma área e outra antes que o cliente sinta, e mede de novo para provar que mudou.",
+      },
+      en: {
+        title: "Caldeira Relay | Cross-department integration diagnostic",
+        description:
+          "The whole organization answers in 5 minutes. The dashboard shows where work breaks between departments before the client feels it, and measures again to prove it changed.",
+      },
+      es: {
+        title: "Caldeira Relay | Diagnóstico de integración entre áreas",
+        description:
+          "Toda la organización responde en 5 minutos. El panel muestra dónde se rompe el trabajo entre un área y otra antes de que el cliente lo sienta, y vuelve a medir para demostrar que cambió.",
       },
     },
   },

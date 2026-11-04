@@ -253,6 +253,7 @@ export const content: ContentByLang = {
       },
       topicOptions: [
         { value: "growth", label: "Crescimento e estratégia" },
+        { value: "relay", label: "Caldeira Relay" },
         {
           value: "path-to-grow",
           label: "Programa de Desenvolvimento de Executivos - Path to Grow",
@@ -557,6 +558,7 @@ export const content: ContentByLang = {
       },
       topicOptions: [
         { value: "growth", label: "Growth and strategy" },
+        { value: "relay", label: "Caldeira Relay" },
         {
           value: "path-to-grow",
           label: "Executive Development Program - Path to Grow",
@@ -814,6 +816,7 @@ content.es = {
     },
     topicOptions: [
       { value: "growth", label: "Crecimiento y estrategia" },
+      { value: "relay", label: "Caldeira Relay" },
       {
         value: "path-to-grow",
         label: "Programa de Desarrollo Ejecutivo",

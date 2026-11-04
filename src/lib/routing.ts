@@ -7,6 +7,7 @@ export type RouteKey =
   | "speaking"
   | "content"
   | "cgi"
+  | "relay"
   | "about"
   | "contact"
   | "articles"
@@ -29,6 +30,7 @@ const SPANISH_INDEXABLE_ROUTES = new Set<RouteKey>([
   "about",
   "contact",
   "cgi",
+  "relay",
   "privacy",
 ]);
 
@@ -64,6 +66,11 @@ export const routePaths: Record<RouteKey, Record<Language, string>> = {
     pt: "/cgi",
     en: "/en/cgi",
     es: "/es/cgi",
+  },
+  relay: {
+    pt: "/relay",
+    en: "/en/relay",
+    es: "/es/relay",
   },
   about: {
     pt: "/sobre",

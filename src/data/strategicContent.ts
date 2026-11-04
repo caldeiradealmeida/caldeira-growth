@@ -131,9 +131,9 @@ export const homeContent: Localized<{
   finalCta: string;
 }> = {
   pt: {
-    heroTitle: "Arquitetura de Crescimento para Negócios e Lideranças",
+    heroTitle: "Sua estratégia é ambiciosa. Sua organização consegue executá-la?",
     heroText:
-      "Projetamos sistemas de crescimento que alinham estratégia, cultura, liderança e execução.",
+      "Ajudamos CEOs, sócios e equipes executivas a identificar onde o crescimento trava, alinhar decisões e construir a capacidade de execução do próximo ciclo.",
     primaryCta: "Solicitar uma conversa",
     secondaryCta: "Faça seu diagnóstico de crescimento",
     painsTitle:
@@ -234,9 +234,9 @@ export const homeContent: Localized<{
     finalCta: "Solicitar uma conversa",
   },
   en: {
-    heroTitle: "Growth Architecture for Businesses and Leaders",
+    heroTitle: "Your strategy is ambitious. Can your organization execute it?",
     heroText:
-      "We design growth systems that align strategy, culture, leadership and execution.",
+      "We help CEOs, partners and executive teams find where growth stalls, align decisions and build the execution capacity for the next cycle.",
     primaryCta: "Request a conversation",
     secondaryCta: "Assess your growth capability",
     painsTitle: "Growth challenges rarely sit within a single function",
@@ -278,9 +278,9 @@ export const homeContent: Localized<{
     finalCta: "Request a conversation",
   },
   es: {
-    heroTitle: "Arquitectura de Crecimiento para Negocios y Líderes",
+    heroTitle: "Su estrategia es ambiciosa. ¿Su organización puede ejecutarla?",
     heroText:
-      "Diseñamos sistemas de crecimiento que integran estrategia, cultura, liderazgo y ejecución.",
+      "Ayudamos a CEOs, socios y equipos ejecutivos a identificar dónde se traba el crecimiento, alinear decisiones y construir la capacidad de ejecución del próximo ciclo.",
     primaryCta: "Solicitar una conversación",
     secondaryCta: "Evalúe su capacidad de crecimiento",
     painsTitle:
