@@ -6,8 +6,17 @@ import type { Language } from "@/lib/routing";
  * and do not claim outcomes before the first real application.
  */
 
+export type RelayPanelImage =
+  | "placar"
+  | "mapa"
+  | "cadeia"
+  | "matriz"
+  | "organizacao"
+  | "dimensoes-por-area"
+  | "evolucao"
+  | "acordos";
+
 export type RelayDimension = { letter: string; name: string; statement: string };
-export type RelayQuadrant = { name: string; body: string };
 
 export type RelayContent = {
   meta: { title: string; description: string };
@@ -26,9 +35,8 @@ export type RelayContent = {
   scale: Array<{ range: string; label: string }>;
   panelTitle: string;
   panelIntro: string;
-  quadrantAxes: { x: string; y: string };
-  quadrants: RelayQuadrant[];
-  panelItems: Array<{ title: string; body: string }>;
+  panelNote: string;
+  panelItems: Array<{ image: RelayPanelImage; title: string; body: string }>;
   whiteLabelTitle: string;
   whiteLabelBody: string;
   rigorTitle: string;
@@ -83,20 +91,16 @@ export const relayContent: Record<Language, RelayContent> = {
     panelTitle: "O que o painel mostra",
     panelIntro:
       "Cada dimensão vai de 0 a 100, e o índice de integração é a média das seis. Mas o valor está em ver onde, entre quem e por quê.",
-    quadrantAxes: { x: "Visão ponta a ponta e ownership", y: "Clareza de papéis e protagonismo" },
-    quadrants: [
-      { name: "Silo organizado", body: "Cada um sabe o que é seu, mas olha só para a própria etapa. Retrabalho que ninguém assume." },
-      { name: "Uma só empresa", body: "Papéis claros e foco no cliente final. É onde se quer chegar." },
-      { name: "Ilhas", body: "Nem clareza nem visão do todo. A área entrega e não sabe para quem." },
-      { name: "Bombeiros", body: "Muito empenho pelo cliente, pouca clareza de quem faz o quê. Resolvem no heroísmo." },
-    ],
+    panelNote: "Exemplo com dados fictícios: 224 pessoas, 9 áreas, 182 respostas.",
     panelItems: [
-      { title: "Placar de abertura", body: "Adesão, índice de integração, a passagem mais frágil e a dimensão mais frágil. Em quatro números, onde começar a conversa." },
-      { title: "Cadeia de passagens", body: "Quem recebe dá a nota: o trabalho chegou completo e na hora certa? A cadeia aceita fluxos paralelos." },
-      { title: "Matriz de passagens", body: "Todas as combinações entre áreas. Aparecem as dependências que ninguém desenhou." },
-      { title: "Dimensões por área", body: "Mostra se o problema é de clareza, de ownership ou de confiança, e onde." },
-      { title: "Evolução", body: "Linha de base, pulsos de 30 e 60 dias e reaplicação no dia 90, sempre na mesma escala." },
-      { title: "Placar de acordos", body: "Cada acordo entre duas áreas vira uma métrica compartilhada, com meta, dono e revisão mensal. Accountability com número." },
+      { image: "placar", title: "Placar de abertura", body: "Adesão, índice de integração, a passagem mais frágil e a dimensão mais frágil. Em quatro números, onde começar a conversa." },
+      { image: "mapa", title: "Mapa de quadrantes", body: "Cada ponto é uma área, do tamanho do seu número de respostas. Mostra quem já funciona como uma só empresa e quem está em silo, em ilha ou apagando incêndio." },
+      { image: "organizacao", title: "A organização como um todo", body: "As seis dimensões na média geral. No exemplo, ownership é ponto forte (64) e clareza de papéis é a mais frágil (48)." },
+      { image: "cadeia", title: "Cadeia de passagens", body: "Quem recebe dá a nota: o trabalho chegou completo e na hora certa? No exemplo, Vendas → Processamento (33) e Documentação → Operação (39) são as passagens a atacar." },
+      { image: "matriz", title: "Matriz de passagens", body: "Todas as combinações entre áreas: a linha entrega, a coluna recebe e dá a nota. Aparecem as dependências que ninguém desenhou." },
+      { image: "dimensoes-por-area", title: "Dimensões por área", body: "As mesmas seis dimensões em cada área. Mostra se o problema é de clareza, de ownership ou de confiança, e onde." },
+      { image: "evolucao", title: "Evolução em 90 dias", body: "Linha de base, pulsos de 30 e 60 dias e reaplicação no dia 90. No exemplo, a passagem Vendas → Processamento vai de 33 a 63 depois do acordo firmado no workshop." },
+      { image: "acordos", title: "Placar de acordos", body: "Cada acordo entre duas áreas vira uma métrica compartilhada, com meta, dono e revisão mensal. Os números vêm da operação, não do questionário." },
     ],
     whiteLabelTitle: "Com a marca da sua empresa",
     whiteLabelBody:
@@ -161,20 +165,16 @@ export const relayContent: Record<Language, RelayContent> = {
     panelTitle: "What the dashboard shows",
     panelIntro:
       "Each dimension runs from 0 to 100, and the integration index is the average of the six. The value is in seeing where, between whom and why.",
-    quadrantAxes: { x: "End-to-end view and ownership", y: "Role clarity and initiative" },
-    quadrants: [
-      { name: "Organized silo", body: "Everyone knows what is theirs, but only looks at their own step. Rework nobody owns." },
-      { name: "One company", body: "Clear roles and focus on the end client. This is where you want to be." },
-      { name: "Islands", body: "Neither clarity nor a view of the whole. The team delivers without knowing to whom." },
-      { name: "Firefighters", body: "Strong commitment to the client, little clarity on who does what. They solve it through heroics." },
-    ],
+    panelNote: "Example with fictitious data: 224 people, 9 departments, 182 responses. Dashboard shown in Portuguese.",
     panelItems: [
-      { title: "Opening scoreboard", body: "Participation, integration index, the weakest handoff and the weakest dimension. Four numbers that tell you where to start." },
-      { title: "Handoff chain", body: "The receiving team gives the score: did the work arrive complete and on time? Parallel flows are supported." },
-      { title: "Handoff matrix", body: "Every combination between departments. It surfaces the dependencies nobody mapped." },
-      { title: "Dimensions by department", body: "Shows whether the problem is clarity, ownership or trust, and where." },
-      { title: "Progress", body: "Baseline, 30- and 60-day pulses and a re-run on day 90, always on the same scale." },
-      { title: "Agreements scoreboard", body: "Each agreement between two departments becomes a shared metric with a target, an owner and a monthly review. Accountability with numbers." },
+      { image: "placar", title: "Opening scoreboard", body: "Participation, integration index, the weakest handoff and the weakest dimension. Four numbers that tell you where to start." },
+      { image: "mapa", title: "Quadrant map", body: "Each dot is a department, sized by its number of responses. It shows who already works as one company and who is in a silo, on an island or firefighting." },
+      { image: "organizacao", title: "The organization as a whole", body: "The six dimensions on the overall average. In the example, ownership is a strength (64) and role clarity is the weakest (48)." },
+      { image: "cadeia", title: "Handoff chain", body: "The receiving team gives the score: did the work arrive complete and on time? In the example, Sales → Processing (33) and Documentation → Operations (39) are the handoffs to tackle." },
+      { image: "matriz", title: "Handoff matrix", body: "Every combination between departments: the row delivers, the column receives and scores. It surfaces the dependencies nobody mapped." },
+      { image: "dimensoes-por-area", title: "Dimensions by department", body: "The same six dimensions for each department. It shows whether the problem is clarity, ownership or trust, and where." },
+      { image: "evolucao", title: "Progress over 90 days", body: "Baseline, 30- and 60-day pulses and a re-run on day 90. In the example, Sales → Processing goes from 33 to 63 after the agreement made in the workshop." },
+      { image: "acordos", title: "Agreements scoreboard", body: "Each agreement between two departments becomes a shared metric with a target, an owner and a monthly review. The numbers come from operations, not from the questionnaire." },
     ],
     whiteLabelTitle: "Under your company's brand",
     whiteLabelBody:
@@ -239,20 +239,16 @@ export const relayContent: Record<Language, RelayContent> = {
     panelTitle: "Qué muestra el panel",
     panelIntro:
       "Cada dimensión va de 0 a 100, y el índice de integración es el promedio de las seis. Pero el valor está en ver dónde, entre quiénes y por qué.",
-    quadrantAxes: { x: "Visión de punta a punta y ownership", y: "Claridad de roles y protagonismo" },
-    quadrants: [
-      { name: "Silo organizado", body: "Cada uno sabe qué es suyo, pero mira solo su propia etapa. Retrabajo que nadie asume." },
-      { name: "Una sola empresa", body: "Roles claros y foco en el cliente final. Es adonde se quiere llegar." },
-      { name: "Islas", body: "Ni claridad ni visión del todo. El área entrega y no sabe para quién." },
-      { name: "Bomberos", body: "Mucho compromiso con el cliente, poca claridad sobre quién hace qué. Resuelven con heroísmo." },
-    ],
+    panelNote: "Ejemplo con datos ficticios: 224 personas, 9 áreas, 182 respuestas. Panel en portugués.",
     panelItems: [
-      { title: "Marcador inicial", body: "Participación, índice de integración, el traspaso más frágil y la dimensión más frágil. Cuatro números para saber por dónde empezar." },
-      { title: "Cadena de traspasos", body: "La nota la da quien recibe: ¿el trabajo llegó completo y a tiempo? La cadena admite flujos paralelos." },
-      { title: "Matriz de traspasos", body: "Todas las combinaciones entre áreas. Aparecen las dependencias que nadie dibujó." },
-      { title: "Dimensiones por área", body: "Muestra si el problema es de claridad, de ownership o de confianza, y dónde." },
-      { title: "Evolución", body: "Línea de base, pulsos a los 30 y 60 días y nueva aplicación el día 90, siempre en la misma escala." },
-      { title: "Marcador de acuerdos", body: "Cada acuerdo entre dos áreas se convierte en una métrica compartida, con meta, responsable y revisión mensual. Accountability con números." },
+      { image: "placar", title: "Marcador inicial", body: "Participación, índice de integración, el traspaso más frágil y la dimensión más frágil. Cuatro números para saber por dónde empezar." },
+      { image: "mapa", title: "Mapa de cuadrantes", body: "Cada punto es un área, del tamaño de su número de respuestas. Muestra quién ya funciona como una sola empresa y quién está en un silo, en una isla o apagando incendios." },
+      { image: "organizacao", title: "La organización en su conjunto", body: "Las seis dimensiones en el promedio general. En el ejemplo, ownership es fortaleza (64) y claridad de roles es la más frágil (48)." },
+      { image: "cadeia", title: "Cadena de traspasos", body: "La nota la da quien recibe: ¿el trabajo llegó completo y a tiempo? En el ejemplo, Ventas → Procesamiento (33) y Documentación → Operación (39) son los traspasos a atacar." },
+      { image: "matriz", title: "Matriz de traspasos", body: "Todas las combinaciones entre áreas: la fila entrega, la columna recibe y da la nota. Aparecen las dependencias que nadie dibujó." },
+      { image: "dimensoes-por-area", title: "Dimensiones por área", body: "Las mismas seis dimensiones en cada área. Muestra si el problema es de claridad, de ownership o de confianza, y dónde." },
+      { image: "evolucao", title: "Evolución en 90 días", body: "Línea de base, pulsos a los 30 y 60 días y nueva aplicación el día 90. En el ejemplo, Ventas → Procesamiento pasa de 33 a 63 tras el acuerdo firmado en el workshop." },
+      { image: "acordos", title: "Marcador de acuerdos", body: "Cada acuerdo entre dos áreas se convierte en una métrica compartida, con meta, responsable y revisión mensual. Los números vienen de la operación, no del cuestionario." },
     ],
     whiteLabelTitle: "Con la marca de su empresa",
     whiteLabelBody:

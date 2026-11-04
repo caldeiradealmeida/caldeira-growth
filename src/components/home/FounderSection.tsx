@@ -4,6 +4,16 @@ import { sectionLayout } from "@/lib/sectionLayout";
 import { homeFounder } from "@/data/homeProof";
 import portrait from "@/assets/denis/denis-portrait.webp";
 import bookCover from "@/assets/book/cresca-ou-desapareca-3d.webp";
+import { COMPANY_MARKS, type CompanyMarkId } from "./companyMarks";
+
+function CompanyMark({ id }: { id?: CompanyMarkId }) {
+  if (!id) return <span className="h-5 w-5 shrink-0" aria-hidden />;
+  return (
+    <svg viewBox="0 0 24 24" className="h-5 w-5 shrink-0 fill-foreground/55" aria-hidden>
+      <path d={COMPANY_MARKS[id]} />
+    </svg>
+  );
+}
 
 export default function FounderSection({ lang }: { lang: Language }) {
   const f = homeFounder[lang];
@@ -33,8 +43,11 @@ export default function FounderSection({ lang }: { lang: Language }) {
             </h3>
             <dl className="mt-4 divide-y divide-border/60 border-y border-border/60">
               {f.roles.map((item) => (
-                <div key={item.company} className="grid gap-1 py-3.5 sm:grid-cols-[9.5rem_1fr] sm:gap-6">
-                  <dt className="font-semibold text-foreground">{item.company}</dt>
+                <div key={item.company} className="grid gap-1 py-3.5 sm:grid-cols-[11rem_1fr] sm:gap-6">
+                  <dt className="flex items-center gap-2.5 font-semibold text-foreground">
+                    <CompanyMark id={item.mark} />
+                    {item.company}
+                  </dt>
                   <dd className="text-[15px] leading-relaxed text-foreground/75">{item.role}</dd>
                 </div>
               ))}

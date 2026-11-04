@@ -1,4 +1,5 @@
 import type { Language } from "@/lib/routing";
+import type { CompanyMarkId } from "@/components/home/companyMarks";
 
 /**
  * Proof-oriented home sections: clients, recurring bottlenecks from the CGI,
@@ -308,7 +309,7 @@ export const homeFounder: Localized<{
   title: string;
   intro: string;
   rolesTitle: string;
-  roles: Array<{ company: string; role: string }>;
+  roles: Array<{ company: string; role: string; mark?: CompanyMarkId }>;
   credentials: string[];
   bookTitle: string;
   bookBody: string;
@@ -322,11 +323,11 @@ export const homeFounder: Localized<{
       "A Caldeira Growth é liderada por Denis Caldeira, com mais de 26 anos em tecnologia e negócios. Antes de aconselhar empresas, ele liderou crescimento dentro delas.",
     rolesTitle: "Trajetória executiva",
     roles: [
-      { company: "Meta", role: "Diretor de negócios para PMEs na América Latina, com cerca de R$ 10 bilhões em receita" },
-      { company: "Google", role: "Sete anos em posições de liderança" },
+      { company: "Meta", mark: "meta", role: "Diretor de negócios para PMEs na América Latina, com cerca de R$ 10 bilhões em receita" },
+      { company: "Google", mark: "google", role: "Sete anos em posições de liderança" },
       { company: "QuintoAndar", role: "VP de Vendas e Clientes" },
       { company: "Addi", role: "VP de Vendas e Operações para a América Latina" },
-      { company: "Telefónica Vivo", role: "Início de carreira, em diversas posições" },
+      { company: "Telefónica Vivo", mark: "telefonica", role: "Início de carreira, em diversas posições" },
     ],
     credentials: [
       "Conselhos: CIMED, Seguros Sura, Cruzeiro SAF, MASP e Generation Brasil",
@@ -345,11 +346,11 @@ export const homeFounder: Localized<{
       "Caldeira Growth is led by Denis Caldeira, with 26+ years in technology and business. Before advising companies, he led growth inside them.",
     rolesTitle: "Executive track record",
     roles: [
-      { company: "Meta", role: "Director of SMBs for Latin America, with roughly R$10 billion in revenue" },
-      { company: "Google", role: "Seven years in leadership roles" },
+      { company: "Meta", mark: "meta", role: "Director of SMBs for Latin America, with roughly R$10 billion in revenue" },
+      { company: "Google", mark: "google", role: "Seven years in leadership roles" },
       { company: "QuintoAndar", role: "VP of Sales and Customers" },
       { company: "Addi", role: "VP of Sales and Operations for Latin America" },
-      { company: "Telefónica Vivo", role: "Early career, across several roles" },
+      { company: "Telefónica Vivo", mark: "telefonica", role: "Early career, across several roles" },
     ],
     credentials: [
       "Boards: CIMED, Seguros Sura, Cruzeiro SAF, MASP and Generation Brazil",
@@ -367,11 +368,11 @@ export const homeFounder: Localized<{
       "Caldeira Growth está liderada por Denis Caldeira, con más de 26 años en tecnología y negocios. Antes de asesorar empresas, lideró el crecimiento dentro de ellas.",
     rolesTitle: "Trayectoria ejecutiva",
     roles: [
-      { company: "Meta", role: "Director de negocios para pymes en América Latina, con cerca de R$ 10 mil millones en ingresos" },
-      { company: "Google", role: "Siete años en posiciones de liderazgo" },
+      { company: "Meta", mark: "meta", role: "Director de negocios para pymes en América Latina, con cerca de R$ 10 mil millones en ingresos" },
+      { company: "Google", mark: "google", role: "Siete años en posiciones de liderazgo" },
       { company: "QuintoAndar", role: "VP de Ventas y Clientes" },
       { company: "Addi", role: "VP de Ventas y Operaciones para América Latina" },
-      { company: "Telefónica Vivo", role: "Inicio de carrera, en diversas posiciones" },
+      { company: "Telefónica Vivo", mark: "telefonica", role: "Inicio de carrera, en diversas posiciones" },
     ],
     credentials: [
       "Consejos: CIMED, Seguros Sura, Cruzeiro SAF, MASP y Generation Brasil",

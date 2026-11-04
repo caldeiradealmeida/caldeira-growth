@@ -7,6 +7,27 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { relayContent } from "@/data/relayContent";
 import { localizedPath } from "@/lib/routing";
 import { sectionLayout } from "@/lib/sectionLayout";
+import type { RelayPanelImage } from "@/data/relayContent";
+import placar from "@/assets/relay/placar.webp";
+import mapa from "@/assets/relay/mapa.webp";
+import cadeia from "@/assets/relay/cadeia.webp";
+import matriz from "@/assets/relay/matriz.webp";
+import organizacao from "@/assets/relay/organizacao.webp";
+import dimensoesPorArea from "@/assets/relay/dimensoes-por-area.webp";
+import evolucao from "@/assets/relay/evolucao.webp";
+import acordos from "@/assets/relay/acordos.webp";
+
+/** Dashboard screens from the Relay prospectus (fictitious demo data). */
+const PANEL_IMAGES: Record<RelayPanelImage, { src: string; width: number; height: number; wide?: boolean }> = {
+  placar: { src: placar, width: 1600, height: 170, wide: true },
+  mapa: { src: mapa, width: 1126, height: 1316 },
+  cadeia: { src: cadeia, width: 1600, height: 285, wide: true },
+  matriz: { src: matriz, width: 1600, height: 618, wide: true },
+  organizacao: { src: organizacao, width: 1126, height: 894 },
+  "dimensoes-por-area": { src: dimensoesPorArea, width: 1126, height: 894 },
+  evolucao: { src: evolucao, width: 1126, height: 620 },
+  acordos: { src: acordos, width: 1600, height: 668, wide: true },
+};
 
 export default function Relay() {
   const { lang } = useLanguage();
@@ -127,41 +148,37 @@ export default function Relay() {
           <div className="max-w-2xl">
             <h2 className="text-3xl font-semibold tracking-tight md:text-4xl">{r.panelTitle}</h2>
             <p className="mt-4 text-base leading-relaxed text-white/75 md:text-lg">{r.panelIntro}</p>
+            <p className="mt-4 text-xs uppercase tracking-[0.16em] text-accent">{r.panelNote}</p>
           </div>
 
-          <div className="mt-12 grid gap-10 lg:grid-cols-[0.95fr_1.05fr] lg:items-start">
-            <figure>
-              <p className="mb-3 text-[11px] uppercase tracking-[0.16em] text-white/50">↑ {r.quadrantAxes.y}</p>
-              <div>
-                <div className="grid grid-cols-2 gap-2">
-                  {r.quadrants.map((q, i) => (
-                    <div
-                      key={q.name}
-                      className={`min-h-[9.5rem] rounded-xl p-4 ${
-                        i === 1 ? "bg-accent text-accent-foreground" : "border border-white/10 bg-white/[0.05]"
-                      }`}
-                    >
-                      <p className="font-semibold">{q.name}</p>
-                      <p className={`mt-2 text-[13px] leading-snug ${i === 1 ? "text-accent-foreground/85" : "text-white/70"}`}>
-                        {q.body}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-                <p className="mt-3 text-right text-[11px] uppercase tracking-[0.16em] text-white/50">
-                  {r.quadrantAxes.x} →
-                </p>
-              </div>
-            </figure>
-
-            <ul className="grid gap-6 sm:grid-cols-2">
-              {r.panelItems.map((item) => (
-                <li key={item.title} className="border-t border-white/15 pt-4">
-                  <h3 className="font-semibold">{item.title}</h3>
-                  <p className="mt-2 text-sm leading-relaxed text-white/70">{item.body}</p>
-                </li>
-              ))}
-            </ul>
+          <div className="mt-12 grid gap-6 md:grid-cols-2 md:gap-8">
+            {r.panelItems.map((item) => {
+              const image = PANEL_IMAGES[item.image];
+              return (
+                <figure
+                  key={item.image}
+                  className={`flex flex-col overflow-hidden rounded-2xl bg-white/[0.04] ring-1 ring-white/10 ${
+                    image.wide ? "md:col-span-2" : ""
+                  }`}
+                >
+                  <div className="bg-[#f7f4ee] p-3 md:p-4">
+                    <img
+                      src={image.src}
+                      alt={item.title}
+                      width={image.width}
+                      height={image.height}
+                      loading="lazy"
+                      decoding="async"
+                      className="h-auto w-full rounded-md"
+                    />
+                  </div>
+                  <figcaption className="p-5 md:p-6">
+                    <p className="font-semibold">{item.title}</p>
+                    <p className="mt-2 text-sm leading-relaxed text-white/70">{item.body}</p>
+                  </figcaption>
+                </figure>
+              );
+            })}
           </div>
         </div>
       </section>
