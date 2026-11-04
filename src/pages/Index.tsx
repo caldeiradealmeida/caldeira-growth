@@ -1,38 +1,28 @@
 import { Link } from "react-router-dom";
-import type { ReactNode } from "react";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import SEO from "@/components/SEO";
 import MediaAuthorityCarousel from "@/components/home/MediaAuthorityCarousel";
+import ClientStrip from "@/components/home/ClientStrip";
+import BottlenecksSection from "@/components/home/BottlenecksSection";
+import DiagnosticsSection from "@/components/home/DiagnosticsSection";
+import FounderSection from "@/components/home/FounderSection";
 import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { sectionLayout } from "@/lib/sectionLayout";
 import { localizedPath } from "@/lib/routing";
 import { homeContent, siteMeta, testimonials } from "@/data/strategicContent";
-import denisSpeaking from "@/assets/denis/speaking-denis.png";
+import HeroVideo from "@/components/home/HeroVideo";
 
-function TextSection({
-  title,
-  children,
-  muted = false,
-}: {
-  title: string;
-  children: ReactNode;
-  muted?: boolean;
-}) {
+/** Keeps the last word together so "executá-la?" never breaks at its hyphen. */
+function HeroTitle({ text }: { text: string }) {
+  const cut = text.lastIndexOf(" ");
+  if (cut < 0) return <>{text}</>;
   return (
-    <section
-      className={`${sectionLayout.sectionY} ${
-        muted ? "bg-muted/[0.28] border-y border-border/60" : "bg-background"
-      }`}
-    >
-      <div className={sectionLayout.container}>
-        <div className={sectionLayout.headerToContent}>
-          <h2 className={sectionLayout.title}>{title}</h2>
-        </div>
-        {children}
-      </div>
-    </section>
+    <>
+      {text.slice(0, cut + 1)}
+      <span className="whitespace-nowrap">{text.slice(cut + 1)}</span>
+    </>
   );
 }
 
@@ -49,12 +39,12 @@ export default function Index() {
       <section className="relative min-h-[88vh] flex items-center overflow-hidden pt-20">
         <div className="absolute inset-0 bg-[#0a121a]" aria-hidden />
         <div className="absolute top-16 md:top-20 left-0 right-0 bottom-0 lg:left-[32%] overflow-hidden">
-          <img
-            src={denisSpeaking}
-            alt=""
-            className="absolute inset-0 w-full h-full object-cover object-[72%_38%] [filter:brightness(0.8)_contrast(1.15)_saturate(0.9)]"
-            aria-hidden
+          <HeroVideo
+            lang={lang}
+            mediaClassName="absolute inset-0 w-full h-full object-cover object-[50%_40%] [filter:brightness(0.72)_contrast(1.1)_saturate(0.9)]"
           />
+          {/* On narrow screens the text sits over the video, so darken it evenly. */}
+          <div className="absolute inset-0 bg-[rgba(10,18,30,0.45)] lg:bg-transparent" aria-hidden />
           <div
             className="absolute inset-0"
             style={{
@@ -67,8 +57,8 @@ export default function Index() {
 
         <div className={`${sectionLayout.container} w-full py-10 md:py-14 relative z-10`}>
           <div className="max-w-2xl">
-            <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold leading-[1.08] tracking-tight text-white mb-6">
-              {h.heroTitle}
+            <h1 className="text-4xl md:text-5xl lg:text-[3.5rem] font-bold leading-[1.06] tracking-tight text-white mb-6">
+              <HeroTitle text={h.heroTitle} />
             </h1>
             <p className="text-lg md:text-xl text-white font-light leading-relaxed mb-7 max-w-xl">
               {h.heroText}
@@ -94,58 +84,11 @@ export default function Index() {
         </div>
       </section>
 
-      <TextSection title={h.painsTitle}>
-        <p className={sectionLayout.subtitle}>{h.painsIntro}</p>
-        <div className="mt-12 grid sm:grid-cols-2 gap-x-8 md:gap-x-16 gap-y-5">
-          {h.pains.map((pain) => (
-            <p
-              key={pain}
-              className="border-t border-border/60 pt-4 text-base md:text-[17px] leading-relaxed text-foreground/88"
-            >
-              {pain}
-            </p>
-          ))}
-        </div>
-        <p
-          id="abordagem"
-          className="mt-12 scroll-mt-28 border-t border-border/60 pt-8 text-lg md:text-xl font-medium leading-snug tracking-tight text-foreground"
-        >
-          {h.painsClosing}
-        </p>
-      </TextSection>
+      <ClientStrip lang={lang} />
 
-      <MediaAuthorityCarousel />
+      <BottlenecksSection lang={lang} />
 
-      <section className={`${sectionLayout.sectionY} bg-background`}>
-        <div className={sectionLayout.container}>
-          <div className="grid gap-10 md:grid-cols-[0.95fr_1.05fr] md:items-start">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">
-                Caldeira Growth Index
-              </p>
-              <h2 className={`${sectionLayout.title} mt-4`}>
-                {h.diagnosticTitle}
-              </h2>
-            </div>
-            <div className="space-y-5">
-              {h.diagnosticBody.map((paragraph) => (
-                <p
-                  key={paragraph}
-                  className="text-base md:text-[17px] leading-[1.75] text-foreground/88"
-                >
-                  {paragraph}
-                </p>
-              ))}
-              <p className="border-l border-primary/30 pl-5 text-sm leading-relaxed text-muted-foreground">
-                {h.diagnosticNote}
-              </p>
-              <Button asChild size="lg" className="mt-2">
-                <Link to={localizedPath("cgi", lang)}>{h.diagnosticCta}</Link>
-              </Button>
-            </div>
-          </div>
-        </div>
-      </section>
+      <DiagnosticsSection lang={lang} />
 
       <section className={`${sectionLayout.sectionY} bg-background`}>
         <div className={sectionLayout.container}>
@@ -197,42 +140,9 @@ export default function Index() {
         </div>
       </section>
 
-      <section className={`${sectionLayout.sectionY} bg-background`}>
-        <div className={sectionLayout.container}>
-          <div className="grid gap-10 md:grid-cols-[0.95fr_1.05fr] md:items-start">
-            <div>
-              <h2 className={sectionLayout.title}>{h.differenceTitle}</h2>
-            </div>
-            <div className="space-y-6">
-              {h.differenceParagraphs.map((paragraph) => (
-                <p
-                  key={paragraph}
-                  className="text-base md:text-[17px] leading-[1.75] text-foreground/88"
-                >
-                  {paragraph}
-                </p>
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
+      <FounderSection lang={lang} />
 
-      <section className={`${sectionLayout.sectionY} bg-background border-y border-border/50`}>
-        <div className={sectionLayout.container}>
-          <div className="grid md:grid-cols-12 gap-12 md:gap-16">
-            <div className="md:col-span-5">
-              <h2 className={sectionLayout.title}>{h.credentialsTitle}</h2>
-            </div>
-            <div className="md:col-span-7 space-y-5">
-              {h.credentials.map((item) => (
-                <p key={item} className="border-b border-border/45 pb-5 text-base leading-relaxed text-foreground/88 last:border-0">
-                  {item}
-                </p>
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
+      <MediaAuthorityCarousel />
 
       <section className={`${sectionLayout.sectionY} bg-background`}>
         <div className={sectionLayout.container}>

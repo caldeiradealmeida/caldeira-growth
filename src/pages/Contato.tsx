@@ -6,6 +6,7 @@
  * e faça redeploy.
  */
 import { useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import SEO from "@/components/SEO";
@@ -46,7 +47,11 @@ export default function Contato() {
   const footer = content[lang].footer;
   const f = c.form;
   const { toast } = useToast();
-  const [topic, setTopic] = useState<string>("");
+  const [searchParams] = useSearchParams();
+  const requestedTopic = searchParams.get("tema") ?? "";
+  const [topic, setTopic] = useState<string>(() =>
+    c.topicOptions.some((o) => o.value === requestedTopic) ? requestedTopic : ""
+  );
   const [status, setStatus] = useState<FormStatus>("idle");
 
   const formReady = isContactFormConfigured();

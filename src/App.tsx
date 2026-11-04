@@ -23,6 +23,7 @@ import PrivacyPolicy from "./pages/PrivacyPolicy";
 import Campaign from "./pages/Campaign";
 import AmazonRedirect from "./pages/AmazonRedirect";
 import CGI from "./pages/CGI";
+import Relay from "./pages/Relay";
 import NotFound from "./pages/NotFound";
 
 // Lazy: keeps @supabase/supabase-js and the whole CRM module out of the
@@ -101,6 +102,7 @@ const App = () => (
             <Route path="/qr" element={<AmazonRedirect />} />
             <Route path="/amazon" element={<AmazonRedirect />} />
             <Route path="/cgi" element={<CGI />} />
+            <Route path="/relay" element={<Relay />} />
             <Route
               path="/cgi/relatorio"
               element={
@@ -149,6 +151,7 @@ const App = () => (
             <Route path="/en/contact" element={<Contato />} />
             <Route path="/en/privacy-policy" element={<PrivacyPolicy />} />
             <Route path="/en/cgi" element={<CGI />} />
+            <Route path="/en/relay" element={<Relay />} />
             <Route path="/en/cgi/relatorio" element={<Suspense fallback={<CrmLoadingFallback />}><CgiReportView /></Suspense>} />
             <Route path="/en/cgi/descadastrar" element={<Suspense fallback={<CrmLoadingFallback />}><CgiUnsubscribe /></Suspense>} />
             <Route path="/en/cgi/insights" element={<Suspense fallback={<CrmLoadingFallback />}><CgiInsightsOptIn /></Suspense>} />
@@ -171,6 +174,7 @@ const App = () => (
               element={<PrivacyPolicy />}
             />
             <Route path="/es/cgi" element={<CGI />} />
+            <Route path="/es/relay" element={<Relay />} />
             <Route path="/es/cgi/relatorio" element={<Suspense fallback={<CrmLoadingFallback />}><CgiReportView /></Suspense>} />
             <Route path="/es/cgi/descadastrar" element={<Suspense fallback={<CrmLoadingFallback />}><CgiUnsubscribe /></Suspense>} />
             <Route path="/es/cgi/insights" element={<Suspense fallback={<CrmLoadingFallback />}><CgiInsightsOptIn /></Suspense>} />
