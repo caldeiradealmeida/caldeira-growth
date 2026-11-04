@@ -12,7 +12,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { sectionLayout } from "@/lib/sectionLayout";
 import { localizedPath } from "@/lib/routing";
 import { homeContent, siteMeta, testimonials } from "@/data/strategicContent";
-import denisSpeaking from "@/assets/denis/speaking-denis.png";
+import HeroVideo from "@/components/home/HeroVideo";
 
 /** Keeps the last word together so "executá-la?" never breaks at its hyphen. */
 function HeroTitle({ text }: { text: string }) {
@@ -39,13 +39,11 @@ export default function Index() {
       <section className="relative min-h-[88vh] flex items-center overflow-hidden pt-20">
         <div className="absolute inset-0 bg-[#0a121a]" aria-hidden />
         <div className="absolute top-16 md:top-20 left-0 right-0 bottom-0 lg:left-[32%] overflow-hidden">
-          <img
-            src={denisSpeaking}
-            alt=""
-            className="absolute inset-0 w-full h-full object-cover object-[72%_38%] [filter:brightness(0.8)_contrast(1.15)_saturate(0.9)]"
-            aria-hidden
+          <HeroVideo
+            lang={lang}
+            mediaClassName="absolute inset-0 w-full h-full object-cover object-[50%_40%] [filter:brightness(0.72)_contrast(1.1)_saturate(0.9)]"
           />
-          {/* On narrow screens the text sits over the image, so darken it evenly. */}
+          {/* On narrow screens the text sits over the video, so darken it evenly. */}
           <div className="absolute inset-0 bg-[rgba(10,18,30,0.45)] lg:bg-transparent" aria-hidden />
           <div
             className="absolute inset-0"
