@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import SEO from "@/components/SEO";
+import ProductVideo from "@/components/ProductVideo";
 import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { relayContent } from "@/data/relayContent";
@@ -63,6 +64,25 @@ export default function Relay() {
                 <a href="#como-funciona">{r.secondaryCta}</a>
               </Button>
             </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Product video */}
+      <section className="border-b border-border/60 bg-[#f7f4ee] py-16 md:py-24">
+        <div className={sectionLayout.container}>
+          <div className="grid gap-10 md:grid-cols-[0.8fr_1.2fr] md:items-center md:gap-14">
+            <div>
+              <h2 className={sectionLayout.title}>{r.videoTitle}</h2>
+              <p className="mt-5 text-base leading-[1.75] text-foreground/85 md:text-[17px]">{r.videoText}</p>
+            </div>
+            <ProductVideo
+              src="/videos/relay-produto.mp4"
+              poster="/videos/relay-produto-poster.webp"
+              label={r.videoLabel}
+              durationLabel={r.videoDuration}
+              analyticsId="relay"
+            />
           </div>
         </div>
       </section>

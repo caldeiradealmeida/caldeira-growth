@@ -24,6 +24,7 @@ import Campaign from "./pages/Campaign";
 import AmazonRedirect from "./pages/AmazonRedirect";
 import CGI from "./pages/CGI";
 import Relay from "./pages/Relay";
+import Board from "./pages/Board";
 import NotFound from "./pages/NotFound";
 
 // Lazy: keeps @supabase/supabase-js and the whole CRM module out of the
@@ -103,6 +104,7 @@ const App = () => (
             <Route path="/amazon" element={<AmazonRedirect />} />
             <Route path="/cgi" element={<CGI />} />
             <Route path="/relay" element={<Relay />} />
+            <Route path="/board" element={<Board />} />
             <Route
               path="/cgi/relatorio"
               element={

@@ -25,6 +25,10 @@ export type RelayContent = {
   heroText: string;
   primaryCta: string;
   secondaryCta: string;
+  videoTitle: string;
+  videoText: string;
+  videoLabel: string;
+  videoDuration: string;
   gapTitle: string;
   gapParagraphs: string[];
   stepsTitle: string;
@@ -61,6 +65,10 @@ export const relayContent: Record<Language, RelayContent> = {
       "Toda a organização responde em 5 minutos. O painel mostra onde o trabalho quebra entre uma área e a outra, antes que o cliente sinta. E mede de novo para provar que mudou.",
     primaryCta: "Agendar uma demonstração",
     secondaryCta: "Como funciona",
+    videoTitle: "O Relay em 80 segundos",
+    videoText: "Vendas fez a parte dela. Contratos também. E, ainda assim, o cliente recebeu errado. Veja onde o trabalho se perde e como o painel mostra por onde começar.",
+    videoLabel: "Assistir ao vídeo do Caldeira Relay",
+    videoDuration: "1 min 18 s",
     gapTitle: "O que as pesquisas de clima não medem",
     gapParagraphs: [
       "Pesquisas de clima perguntam como cada pessoa se sente na própria área. O cliente, porém, não compra de uma área: compra de uma cadeia. Venda, contrato, documentação e operação podem ir bem isoladamente e, ainda assim, o pedido chegar errado ao fim da linha.",
@@ -135,6 +143,10 @@ export const relayContent: Record<Language, RelayContent> = {
       "The whole organization answers in 5 minutes. The dashboard shows where work breaks between one department and the next, before the client feels it. Then it measures again to prove it changed.",
     primaryCta: "Book a demo",
     secondaryCta: "How it works",
+    videoTitle: "Relay in 80 seconds",
+    videoText: "Sales did its part. So did contracts. And the client still got the wrong order. See where work gets lost and how the dashboard shows where to start.",
+    videoLabel: "Watch the Caldeira Relay video (in Portuguese)",
+    videoDuration: "1 min 18 s · in Portuguese",
     gapTitle: "What engagement surveys don't measure",
     gapParagraphs: [
       "Engagement surveys ask how each person feels in their own department. Clients, however, don't buy from a department: they buy from a chain. Sales, contracts, documentation and operations can each do well on their own, and the order can still arrive wrong at the end of the line.",
@@ -209,6 +221,10 @@ export const relayContent: Record<Language, RelayContent> = {
       "Toda la organización responde en 5 minutos. El panel muestra dónde se rompe el trabajo entre un área y la siguiente, antes de que el cliente lo sienta. Y vuelve a medir para demostrar que cambió.",
     primaryCta: "Agendar una demostración",
     secondaryCta: "Cómo funciona",
+    videoTitle: "Relay en 80 segundos",
+    videoText: "Ventas hizo su parte. Contratos también. Y, aun así, el cliente recibió mal el pedido. Vea dónde se pierde el trabajo y cómo el panel muestra por dónde empezar.",
+    videoLabel: "Ver el video de Caldeira Relay (en portugués)",
+    videoDuration: "1 min 18 s · en portugués",
     gapTitle: "Lo que las encuestas de clima no miden",
     gapParagraphs: [
       "Las encuestas de clima preguntan cómo se siente cada persona en su propia área. Pero el cliente no le compra a un área: le compra a una cadena. Ventas, contratos, documentación y operación pueden funcionar bien por separado y, aun así, el pedido llegar mal al final de la línea.",
