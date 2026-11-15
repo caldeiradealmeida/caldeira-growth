@@ -1,10 +1,5 @@
-/**
- * Formulário de contato → Google Sheets via Apps Script.
- *
- * A URL do endpoint vem de VITE_CONTACT_FORM_URL (veja src/constants/contactForm.ts).
- * Após alterar .env, reinicie `npm run dev`. No deploy (Vercel), defina a mesma variável
- * e faça redeploy.
- */
+/** Formulário protegido: validação no servidor, Supabase e fila de alertas. */
+import ContactVerification from "@/components/ContactVerification";
 import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import Header from "@/components/layout/Header";
@@ -47,6 +42,9 @@ export default function Contato() {
   const footer = content[lang].footer;
   const f = c.form;
   const { toast } = useToast();
+  const [verificationToken, setVerificationToken] = useState("");
+  const [verificationReset, setVerificationReset] = useState(0);
+  const [requestId, setRequestId] = useState(() => crypto.randomUUID());
   const [searchParams] = useSearchParams();
   const requestedTopic = searchParams.get("tema") ?? "";
   const [topic, setTopic] = useState<string>(() =>
@@ -88,13 +86,17 @@ export default function Contato() {
       return;
     }
 
-    if (!formReady) {
+    if (!formReady || !verificationToken) {
       return;
     }
 
     setStatus("loading");
 
     const payload = JSON.stringify({
+      request_id: requestId,
+      turnstile_token: verificationToken,
+      website: String(fd.get("website") ?? ""),
+      source_url: window.location.pathname + window.location.search,
       nome,
       email,
       empresa,
@@ -135,6 +137,7 @@ export default function Contato() {
       }
 
       setStatus("success");
+      setRequestId(crypto.randomUUID());
       form.reset();
       setTopic("");
     } catch (e) {
@@ -142,6 +145,9 @@ export default function Contato() {
         console.error("[Caldeira contact form] Erro no envio", e);
       }
       setStatus("error");
+    } finally {
+      setVerificationToken("");
+      setVerificationReset(v => v + 1);
     }
   };
 
@@ -170,12 +176,12 @@ export default function Contato() {
                 <AlertCircle className="h-4 w-4" />
                 <AlertTitle className="text-sm">
                   {lang === "pt"
-                    ? "Configuração"
+                    ? "Formulário temporariamente indisponível"
                     : lang === "en"
-                      ? "Configuration"
-                      : "Configuración"}
+                      ? "Form temporarily unavailable"
+                      : "Formulario temporalmente no disponible"}
                 </AlertTitle>
-                <AlertDescription>{f.notConfigured}</AlertDescription>
+                <AlertDescription><a href="mailto:contato@caldeiragrowth.com">contato@caldeiragrowth.com</a></AlertDescription>
               </Alert>
             )}
 
@@ -264,11 +270,13 @@ export default function Contato() {
                   className="resize-y min-h-[120px]"
                 />
               </div>
+              <div hidden aria-hidden="true"><label>Website<input name="website" tabIndex={-1} autoComplete="off" /></label></div>
+              {formReady && <ContactVerification onToken={setVerificationToken} resetKey={verificationReset} />}
               <Button
                 type="submit"
                 size="lg"
                 className="w-full sm:w-auto"
-                disabled={status === "loading" || !formReady}
+                disabled={status === "loading" || !formReady || !verificationToken}
               >
                 {status === "loading" ? (
                   <>

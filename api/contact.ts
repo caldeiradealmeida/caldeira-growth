@@ -1,61 +1,46 @@
-/**
- * Proxy do formulário → Google Apps Script (Web App).
- *
- * Runtime Node.js na Vercel (Edge + ESM às vezes não recebe env ou falha no deploy).
- *
- * Variáveis (defina no painel da Vercel → Environment Variables → Production):
- * - CONTACT_FORM_URL (recomendado no servidor, não exposto ao bundle do Vite)
- * - ou VITE_CONTACT_FORM_URL (mesma URL /exec; também funciona no runtime Node)
- */
-import type { VercelRequest, VercelResponse } from "@vercel/node";
+import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { createHmac } from 'node:crypto';
+import { contactDb, contactSchema, deliverContactJobs } from './_contact.js';
 
-function getAppsScriptUrl(): string {
-  return (
-    process.env.CONTACT_FORM_URL?.trim() ||
-    process.env.VITE_CONTACT_FORM_URL?.trim() ||
-    ""
-  );
-}
-
-export default async function handler(
-  req: VercelRequest,
-  res: VercelResponse
-): Promise<void> {
-  if (req.method === "GET") {
-    const configured = getAppsScriptUrl().length > 0;
-    res.status(200).json({ ok: true, configured });
-    return;
-  }
-
-  if (req.method !== "POST") {
-    res.status(405).json({ ok: false, error: "method_not_allowed" });
-    return;
-  }
-
-  const url = getAppsScriptUrl();
-  if (!url) {
-    res.status(503).json({
-      ok: false,
-      error: "not_configured",
-      hint: "Defina CONTACT_FORM_URL ou VITE_CONTACT_FORM_URL na Vercel e faça redeploy.",
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  res.setHeader('Cache-Control', 'no-store');
+  if (req.method !== 'POST') return res.status(405).json({ ok: false, error: 'method_not_allowed' });
+  try {
+    const raw = typeof req.body === 'string' ? req.body : JSON.stringify(req.body ?? {});
+    if (Buffer.byteLength(raw) > 16000) return res.status(413).json({ ok: false, error: 'payload_too_large' });
+    let body;
+    try { body = JSON.parse(raw); } catch { return res.status(400).json({ ok: false, error: 'invalid_payload' }); }
+    // Honeypot: no persistence or notifications.
+    if (typeof body?.website === 'string' && body.website.trim()) return res.status(200).json({ ok: true });
+    const parsed = contactSchema.safeParse(body);
+    if (!parsed.success) return res.status(400).json({ ok: false, error: 'validation' });
+    const secret = process.env.CONTACT_TURNSTILE_SECRET;
+    const rateSecret = process.env.CONTACT_RATE_SECRET;
+    if (!secret || !rateSecret) return res.status(503).json({ ok: false, error: 'not_configured' });
+    const origin = req.headers.origin;
+    const allowedHosts = ['www.caldeiragrowth.com', 'caldeiragrowth.com'];
+    if (origin && !allowedHosts.includes(new URL(origin).hostname)) return res.status(403).json({ ok: false, error: 'origin_rejected' });
+    const verification = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+      method: 'POST', signal: AbortSignal.timeout(8000),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ secret, response: parsed.data.turnstile_token }),
     });
-    return;
+    const result = await verification.json();
+    if (!verification.ok || !result.success || !allowedHosts.includes(result.hostname) || result.action !== 'contact') return res.status(403).json({ ok: false, error: 'verification_failed' });
+    const { request_id } = parsed.data;
+    const lead = { nome: parsed.data.nome, email: parsed.data.email, empresa: parsed.data.empresa,
+      cargo: parsed.data.cargo, tema: parsed.data.tema, mensagem: parsed.data.mensagem, source_url: parsed.data.source_url };
+    const ip = String(req.headers['x-vercel-forwarded-for'] ?? req.headers['x-forwarded-for'] ?? req.socket?.remoteAddress ?? 'unknown').split(',')[0].trim();
+    const hash = (value: string) => createHmac('sha256', rateSecret).update(value).digest('hex');
+    const db = contactDb();
+    const { data, error } = await db.rpc('submit_contact', { p_request_id: request_id, p_payload: lead, p_ip_hash: hash(ip), p_email_hash: hash(lead.email) });
+    if (error) throw new Error('contact_persistence_failed');
+    if (data.error === 'rate_limited') { res.setHeader('Retry-After', '900'); return res.status(429).json({ ok: false, error: 'rate_limited' }); }
+    // Delivery failure never loses an accepted lead; cron processes the outbox.
+    try { await deliverContactJobs(data.id); } catch { console.error('[contact] delivery deferred'); }
+    return res.status(200).json({ ok: true });
+  } catch {
+    console.error('[contact] request failed');
+    return res.status(503).json({ ok: false, error: 'temporarily_unavailable' });
   }
-
-  const body =
-    typeof req.body === "string"
-      ? req.body
-      : JSON.stringify(req.body ?? {});
-
-  const upstream = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "text/plain;charset=utf-8" },
-    body,
-  });
-
-  const text = await upstream.text();
-  const ct =
-    upstream.headers.get("content-type") ?? "application/json; charset=utf-8";
-  res.status(upstream.status).setHeader("Content-Type", ct);
-  res.send(text);
 }

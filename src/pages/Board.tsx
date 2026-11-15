@@ -1,3 +1,4 @@
+import ContactVerification from "@/components/ContactVerification";
 import { useRef, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { Check, X } from "lucide-react";
@@ -32,6 +33,9 @@ const selectClass =
 type Status = "idle" | "sending" | "success" | "error" | "invalid";
 
 export default function Board() {
+  const [verificationToken, setVerificationToken] = useState("");
+  const [verificationReset, setVerificationReset] = useState(0);
+  const [requestId, setRequestId] = useState(() => crypto.randomUUID());
   const [offer, setOffer] = useState<BoardOfferId>("pacote");
   const [status, setStatus] = useState<Status>("idle");
   const formStarted = useRef(false);
@@ -75,6 +79,8 @@ export default function Board() {
       return;
     }
 
+    if (!verificationToken) { setStatus("error"); return; }
+
     const chosen = boardOffers.find((o) => o.id === offer) ?? boardOffers[0];
     setStatus("sending");
 
@@ -83,6 +89,10 @@ export default function Board() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          request_id: requestId,
+          turnstile_token: verificationToken,
+          website: text("website"),
+          source_url: window.location.pathname + window.location.search,
           nome,
           email,
           empresa: "",
@@ -99,13 +109,17 @@ export default function Board() {
       });
       const raw = await res.text();
       const parsed: { ok?: boolean } = raw ? JSON.parse(raw) : {};
-      if (!res.ok || parsed.ok === false) throw new Error("request_failed");
+      if (!res.ok || parsed.ok !== true) throw new Error("request_failed");
 
       pushDataLayerEvent("board_form_submit", { offer, wealth_range: wealth, decides_how: how });
       setStatus("success");
+      setRequestId(crypto.randomUUID());
       form.reset();
     } catch {
       setStatus("error");
+    } finally {
+      setVerificationToken("");
+      setVerificationReset(v => v + 1);
     }
   };
 
@@ -400,10 +414,12 @@ export default function Board() {
                 </p>
               )}
 
+              <ContactVerification onToken={setVerificationToken} resetKey={verificationReset} />
+
               <Button
                 type="submit"
                 size="lg"
-                disabled={status === "sending"}
+                disabled={status === "sending" || !verificationToken}
                 className="bg-accent px-8 py-5 text-base font-semibold text-accent-foreground hover:bg-accent/85"
               >
                 {status === "sending" ? b.form.sending : b.form.submit}
