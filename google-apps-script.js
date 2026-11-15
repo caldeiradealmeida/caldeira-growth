@@ -3,7 +3,7 @@
  * Colunas: timestamp, nome, email, empresa, cargo, tema, mensagem
  */
 var SPREADSHEET_ID = '1NivGOjutCgJTGDjXxt8ydFiCeWrKvbbIdqmkVmwSC9M';
-var SCRIPT_VERSION = '2026-07-16-cgi-v5';
+var SCRIPT_VERSION = '2026-11-15-contact-v1';
 // Etapa 4 (CGI email automation): independent kill switches for the two
 // participant emails, checked in handleCgiSendEmailPost_ against the
 // payload's declared emailKind. Defense in depth alongside Vercel's own
@@ -134,6 +134,8 @@ function doPost(e) {
     var payload = parsePayload_(e);
     var action = String(payload.action || payload.type || '').trim().toLowerCase();
 
+    if (action === 'contact_delivery') return handleContactDelivery_(payload);
+
     if (action === 'article') {
       return handleArticlePost_(payload);
     }
@@ -147,22 +149,13 @@ function doPost(e) {
       return handleCgiSendEmailPost_(payload);
     }
 
-    var nome = String(payload.nome || '').trim();
-    var email = String(payload.email || '').trim();
-    if (!nome || !email) {
-      return jsonResponse_({ ok: false, error: 'validation' });
+    if (action) return jsonResponse_({ ok: false, error: 'unknown_action' });
+    // Temporary compatibility for the currently published site. Disable only
+    // after every /api/contact consumer has migrated to the protected backend.
+    if (PropertiesService.getScriptProperties().getProperty('CONTACT_LEGACY_DISABLED') === 'true') {
+      return jsonResponse_({ ok: false, error: 'contact_endpoint_retired' });
     }
-
-    var sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheets()[0];
-    var timestamp = new Date();
-    var empresa = String(payload.empresa || '').trim();
-    var cargo = String(payload.cargo || '').trim();
-    var tema = String(payload.tema || '').trim();
-    var mensagem = String(payload.mensagem || '').trim();
-
-    sheet.appendRow([timestamp, nome, email, empresa, cargo, tema, mensagem]);
-
-    return jsonResponse_({ ok: true });
+    return handleLegacyContact_(payload);
   } catch (err) {
     return jsonResponse_({ ok: false, error: String(err) });
   }
@@ -486,4 +479,57 @@ function jsonResponse_(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(
     ContentService.MimeType.JSON
   );
+}
+
+
+function handleContactDelivery_(payload) {
+  var props = PropertiesService.getScriptProperties();
+  var expected = String(props.getProperty('CONTACT_RELAY_TOKEN') || '');
+  if (!expected || payload.token !== expected) return jsonResponse_({ok:false,error:'unauthorized'});
+  var eventId = String(payload.event_id || '');
+  if (!/^[a-f0-9-]{36}$/i.test(eventId)) return jsonResponse_({ok:false,error:'invalid_event'});
+  var lock = LockService.getScriptLock();
+  lock.waitLock(15000);
+  try {
+    var receipts = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName('ContactDeliveryReceipts');
+    if (!receipts) {
+      receipts = SpreadsheetApp.openById(SPREADSHEET_ID).insertSheet('ContactDeliveryReceipts');
+      receipts.appendRow(['event_id','delivered_at']);
+    }
+    if (receipts.getRange('A:A').createTextFinder(eventId).matchEntireCell(true).findNext()) return jsonResponse_({ok:true});
+    var lead = payload.lead || {};
+    if (!lead.nome || !lead.email || !lead.mensagem) return jsonResponse_({ok:false,error:'validation'});
+    if (payload.destination === 'sheet') {
+      // Prevent spreadsheet formula injection in every user-controlled cell.
+      var safe = function(value) { var s = String(value || ''); return /^[=+@\-\t\r\n]/.test(s) ? "'" + s : s; };
+      SpreadsheetApp.openById(SPREADSHEET_ID).getSheets()[0].appendRow([
+        new Date(lead.created_at), safe(lead.nome), safe(lead.email), safe(lead.empresa), safe(lead.cargo), safe(lead.tema), safe(lead.mensagem)
+      ]);
+    } else if (payload.destination === 'email') {
+      var recipient = String(props.getProperty('CONTACT_NOTIFICATION_EMAIL') || 'deniscaldeira@caldeiragrowth.com,deniscaldeiradealmeida@gmail.com').trim();
+      if (!recipient) return jsonResponse_({ok:false,error:'recipient_not_configured'});
+      MailApp.sendEmail(recipient, 'Novo lead do site | ' + String(lead.tema).replace(/[\r\n]/g,' '),
+        ['Novo contato pelo site Caldeira Growth', 'ID: ' + lead.id, 'Nome: ' + lead.nome, 'E-mail: ' + lead.email,
+         'Empresa: ' + lead.empresa, 'Cargo: ' + lead.cargo, 'Tema: ' + lead.tema, '', lead.mensagem].join('\n'));
+    } else return jsonResponse_({ok:false,error:'unknown_destination'});
+    receipts.appendRow([eventId,new Date()]);
+    return jsonResponse_({ok:true});
+  } finally { lock.releaseLock(); }
+}
+
+
+/** Transitional compatibility only. Disable with CONTACT_LEGACY_DISABLED=true. */
+function handleLegacyContact_(payload) {
+  var nome = String(payload.nome || '').trim();
+  var email = String(payload.email || '').trim();
+  if (!nome || !email) return jsonResponse_({ ok: false, error: 'validation' });
+  var safe = function(value) {
+    var text = String(value || '').trim();
+    return /^[=+@\-\t\r\n]/.test(text) ? "'" + text : text;
+  };
+  SpreadsheetApp.openById(SPREADSHEET_ID).getSheets()[0].appendRow([
+    new Date(), safe(nome), safe(email), safe(payload.empresa), safe(payload.cargo),
+    safe(payload.tema), safe(payload.mensagem)
+  ]);
+  return jsonResponse_({ ok: true });
 }

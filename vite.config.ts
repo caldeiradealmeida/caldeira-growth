@@ -15,14 +15,6 @@ export default defineConfig(({ mode }) => {
       ? {
           ...(contactUrl
             ? {
-                "/api/contact": {
-                  target: new URL(contactUrl).origin,
-                  changeOrigin: true,
-                  secure: true,
-                  followRedirects: true,
-                  rewrite: () =>
-                    new URL(contactUrl).pathname + new URL(contactUrl).search,
-                },
                 "/api/content": {
                   target: new URL(contactUrl).origin,
                   changeOrigin: true,

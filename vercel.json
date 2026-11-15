@@ -7,6 +7,10 @@
     {
       "path": "/api/cgi/report-followup-sweep",
       "schedule": "0 12 * * *"
+    },
+    {
+      "path": "/api/contact",
+      "schedule": "30 12 * * *"
     }
   ],
   "headers": [
