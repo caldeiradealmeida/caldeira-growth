@@ -23,6 +23,18 @@ beforeEach(() => {
 });
 afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
 describe('contact boundary', () => {
+  it('requires cron authentication for GET recovery', async () => {
+    vi.stubEnv('CRON_SECRET', 'cron-test');
+    expect((await submit(undefined, { method: 'GET' })).status).toHaveBeenCalledWith(401);
+    expect(state.deliver).not.toHaveBeenCalled();
+    expect((await submit(undefined, { method: 'GET', headers: { authorization: 'Bearer cron-test' } })).status).toHaveBeenCalledWith(200);
+    expect(state.deliver).toHaveBeenCalledWith();
+  });
+  it('rejects recovery when no cron secret exists', async () => {
+    vi.stubEnv('CRON_SECRET', '');
+    expect((await submit(undefined, { method: 'GET', headers: { authorization: 'Bearer ' } })).status).toHaveBeenCalledWith(401);
+    expect(state.deliver).not.toHaveBeenCalled();
+  });
   it('rejects invalid JSON and incomplete data without network calls', async () => {
     expect((await submit('{')).status).toHaveBeenCalledWith(400);
     expect((await submit({ ...lead, email: 'invalid' })).status).toHaveBeenCalledWith(400);

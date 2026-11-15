@@ -9,7 +9,7 @@
       "schedule": "0 12 * * *"
     },
     {
-      "path": "/api/contact/delivery-sweep",
+      "path": "/api/contact",
       "schedule": "30 12 * * *"
     }
   ],

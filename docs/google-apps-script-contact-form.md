@@ -37,7 +37,7 @@ Alternativa ao Telegram: `CONTACT_COS_WEBHOOK_URL` (HTTPS) e `CONTACT_COS_WEBHOO
 
 ## Reprocessamento e garantias
 
-O envio inicial é imediato. `/api/contact/delivery-sweep` reprocessa até 30 entregas; exige GET com `Authorization: Bearer <CRON_SECRET>`. O cron incluído roda diariamente às 12:30 UTC para manter compatibilidade com cron diário; a recuperação automática pode, portanto, demorar até o próximo dia. Em plano compatível, aumentar a frequência para cada 15 minutos. Pode-se acionar o endpoint autenticado manualmente.
+O envio inicial é imediato. `/api/contact` reprocessa até 30 entregas; exige GET com `Authorization: Bearer <CRON_SECRET>`. O cron incluído roda diariamente às 12:30 UTC para manter compatibilidade com cron diário; a recuperação automática pode, portanto, demorar até o próximo dia. Em plano compatível, aumentar a frequência para cada 15 minutos. Pode-se acionar o endpoint autenticado manualmente.
 
 As entregas usam concessão temporária e `FOR UPDATE SKIP LOCKED` para evitar dois workers no mesmo trabalho. O Apps Script registra event_id em `ContactDeliveryReceipts` e serializa operações. Webhooks devem deduplicar `Idempotency-Key`. A entrega é pelo menos uma vez: se o processo cair entre enviar o e-mail/Telegram ou gravar a linha e registrar o comprovante, pode haver duplicação. Telegram não possui chave de idempotência para sendMessage; o ID do lead permite reconhecer repetição.
 
@@ -84,3 +84,5 @@ Denis forneceu integralmente o código v5 da conta corporativa. `google-apps-scr
 A versão `2026-11-15-contact-v1` é transitória: aceita o formulário antigo enquanto `CONTACT_LEGACY_DISABLED` não for `true`. A proteção só estará completa após migrar todos os consumidores de `/api/contact`, testar o fluxo novo e definir `CONTACT_LEGACY_DISABLED=true` nas propriedades do Apps Script de produção. Não confundir esse nome com a propriedade preparatória do projeto pessoal (`CONTACT_LEGACY_ENABLED`), que não é utilizada nesta versão.
 
 Enquanto a propriedade de bloqueio não for ativada, a entrada antiga continua sujeita a spam. Isso evita indisponibilidade durante a troca; não representa ativação da proteção.
+
+A rotina de recuperação usa GET autenticado na própria função `/api/contact`, para respeitar as 12 funções do plano Hobby. O POST permanece exclusivo para captura.
