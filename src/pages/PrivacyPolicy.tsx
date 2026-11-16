@@ -18,18 +18,18 @@ function MasterclassCallout({ className = "" }: { className?: string }) {
     >
       <div>
         <p className="text-sm font-semibold uppercase tracking-wide text-primary">
-          Masterclass · 29/10, 19h
+          Gravação · Masterclass fim da 6x1
         </p>
         <p className="mt-1 text-base md:text-lg text-foreground font-medium">
-          Veio pela masterclass sobre o fim da escala 6x1? O programa e a
-          inscrição estão aqui.
+          O plano de 60 dias do empregador antes de 16/12: lei, folha e
+          decisão econômica, na gravação completa da masterclass, por R$ 99.
         </p>
       </div>
       <a
         href={MASTERCLASS_HREF}
         className="inline-flex shrink-0 items-center justify-center rounded-md bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground hover:bg-primary/90 transition-colors"
       >
-        Ver a masterclass →
+        Ver a gravação →
       </a>
     </aside>
   );
