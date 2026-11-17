@@ -24,6 +24,7 @@ import {
   CONTACT_FORM_SUBMIT_URL,
   isContactFormConfigured,
 } from "@/constants/contactForm";
+import { pushDataLayerEvent } from "@/lib/analytics";
 import { sectionLayout } from "@/lib/sectionLayout";
 import {
   Instagram,
@@ -136,6 +137,8 @@ export default function Contato() {
         throw new Error(data.error || "request_failed");
       }
 
+      // Evento para o GTM: só o tema escolhido, nenhum dado pessoal.
+      pushDataLayerEvent("contact_form_submit", { topic });
       setStatus("success");
       setRequestId(crypto.randomUUID());
       form.reset();

@@ -6,6 +6,7 @@ import ProductVideo from "@/components/ProductVideo";
 import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { relayContent } from "@/data/relayContent";
+import { pushDataLayerEvent } from "@/lib/analytics";
 import { localizedPath } from "@/lib/routing";
 import { sectionLayout } from "@/lib/sectionLayout";
 import type { RelayPanelImage } from "@/data/relayContent";
@@ -17,6 +18,13 @@ import organizacao from "@/assets/relay/organizacao.webp";
 import dimensoesPorArea from "@/assets/relay/dimensoes-por-area.webp";
 import evolucao from "@/assets/relay/evolucao.webp";
 import acordos from "@/assets/relay/acordos.webp";
+
+/**
+ * Eventos enviados ao dataLayer do GTM (sem dados pessoais):
+ *   relay_cta_click      { location }  clique em "Agendar uma demonstração"
+ *   product_video_*      { product: "relay" }  (ver ProductVideo)
+ * O envio do formulário é medido em Contato.tsx (contact_form_submit).
+ */
 
 /** Dashboard screens from the Relay prospectus (fictitious demo data). */
 const PANEL_IMAGES: Record<RelayPanelImage, { src: string; width: number; height: number; wide?: boolean }> = {
@@ -34,6 +42,9 @@ export default function Relay() {
   const { lang } = useLanguage();
   const r = relayContent[lang];
   const demoHref = `${localizedPath("contact", lang)}?tema=relay`;
+  const trackDemoClick = (location: string) => {
+    pushDataLayerEvent("relay_cta_click", { location });
+  };
 
   return (
     <main className="min-h-screen bg-background">
@@ -53,7 +64,7 @@ export default function Relay() {
                 asChild
                 className="bg-accent px-7 py-5 text-base font-semibold text-accent-foreground hover:bg-accent/85"
               >
-                <Link to={demoHref}>{r.primaryCta}</Link>
+                <Link to={demoHref} onClick={() => trackDemoClick("hero")}>{r.primaryCta}</Link>
               </Button>
               <Button
                 size="lg"
@@ -243,7 +254,7 @@ export default function Relay() {
             asChild
             className="mt-10 bg-accent px-8 py-6 font-semibold text-accent-foreground hover:bg-accent/90"
           >
-            <Link to={demoHref}>{r.finalCta}</Link>
+            <Link to={demoHref} onClick={() => trackDemoClick("final")}>{r.finalCta}</Link>
           </Button>
         </div>
       </section>
