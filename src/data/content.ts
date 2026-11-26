@@ -253,6 +253,7 @@ export const content: ContentByLang = {
       },
       topicOptions: [
         { value: "growth", label: "Crescimento e estratégia" },
+        { value: "mentoria", label: "Mentoria executiva" },
         { value: "relay", label: "Caldeira Relay" },
         {
           value: "path-to-grow",
@@ -558,6 +559,7 @@ export const content: ContentByLang = {
       },
       topicOptions: [
         { value: "growth", label: "Growth and strategy" },
+        { value: "mentoria", label: "Executive mentoring" },
         { value: "relay", label: "Caldeira Relay" },
         {
           value: "path-to-grow",
@@ -816,7 +818,8 @@ content.es = {
     },
     topicOptions: [
       { value: "growth", label: "Crecimiento y estrategia" },
-      { value: "relay", label: "Caldeira Relay" },
+      { value: "mentoria", label: "Mentoría ejecutiva" },
+        { value: "relay", label: "Caldeira Relay" },
       {
         value: "path-to-grow",
         label: "Programa de Desarrollo Ejecutivo",

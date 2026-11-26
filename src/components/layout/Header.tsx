@@ -25,6 +25,7 @@ import { bookSiteLinkProps } from "@/constants/book";
 
 const mainNav: Array<{ key: keyof typeof navigation.pt; route: RouteKey }> = [
   { key: "home", route: "home" },
+  { key: "mentoring", route: "mentoring" },
   { key: "consulting", route: "consulting" },
   { key: "executiveDevelopment", route: "executiveDevelopment" },
   { key: "speaking", route: "speaking" },
@@ -57,7 +58,7 @@ export default function Header() {
 
           {/* Desktop nav */}
           <nav className="hidden md:flex items-center gap-1">
-            {mainNav.slice(0, 4).map((item) => (
+            {mainNav.slice(0, 5).map((item) => (
               <Link
                 key={item.route}
                 to={localizedPath(item.route, lang)}
@@ -88,7 +89,7 @@ export default function Header() {
                 </DropdownMenuContent>
               </DropdownMenu>
             ) : null}
-            {mainNav.slice(4).map((item) => (
+            {mainNav.slice(5).map((item) => (
               <Link
                 key={item.route}
                 to={localizedPath(item.route, lang)}
@@ -143,7 +144,7 @@ export default function Header() {
         {open && (
           <nav className="md:hidden py-4 border-t border-border animate-in fade-in slide-in-from-top duration-200">
             <div className="flex flex-col gap-1">
-              {mainNav.slice(0, 4).map((item) => (
+              {mainNav.slice(0, 5).map((item) => (
                   <Link
                     key={item.route}
                     to={localizedPath(item.route, lang)}
@@ -190,7 +191,7 @@ export default function Header() {
                   </div>
                 </>
               ) : null}
-              {mainNav.slice(4).map((item) => (
+              {mainNav.slice(5).map((item) => (
                 <Link
                   key={item.route}
                   to={localizedPath(item.route, lang)}

@@ -24,6 +24,7 @@ import Campaign from "./pages/Campaign";
 import AmazonRedirect from "./pages/AmazonRedirect";
 import CGI from "./pages/CGI";
 import Relay from "./pages/Relay";
+import Mentoria from "./pages/Mentoria";
 import Board from "./pages/Board";
 import NotFound from "./pages/NotFound";
 
@@ -104,6 +105,7 @@ const App = () => (
             <Route path="/amazon" element={<AmazonRedirect />} />
             <Route path="/cgi" element={<CGI />} />
             <Route path="/relay" element={<Relay />} />
+            <Route path="/mentoria" element={<Mentoria />} />
             <Route path="/board" element={<Board />} />
             <Route
               path="/cgi/relatorio"
@@ -154,6 +156,7 @@ const App = () => (
             <Route path="/en/privacy-policy" element={<PrivacyPolicy />} />
             <Route path="/en/cgi" element={<CGI />} />
             <Route path="/en/relay" element={<Relay />} />
+            <Route path="/en/mentoring" element={<Mentoria />} />
             <Route path="/en/cgi/relatorio" element={<Suspense fallback={<CrmLoadingFallback />}><CgiReportView /></Suspense>} />
             <Route path="/en/cgi/descadastrar" element={<Suspense fallback={<CrmLoadingFallback />}><CgiUnsubscribe /></Suspense>} />
             <Route path="/en/cgi/insights" element={<Suspense fallback={<CrmLoadingFallback />}><CgiInsightsOptIn /></Suspense>} />
@@ -177,6 +180,7 @@ const App = () => (
             />
             <Route path="/es/cgi" element={<CGI />} />
             <Route path="/es/relay" element={<Relay />} />
+            <Route path="/es/mentoria" element={<Mentoria />} />
             <Route path="/es/cgi/relatorio" element={<Suspense fallback={<CrmLoadingFallback />}><CgiReportView /></Suspense>} />
             <Route path="/es/cgi/descadastrar" element={<Suspense fallback={<CrmLoadingFallback />}><CgiUnsubscribe /></Suspense>} />
             <Route path="/es/cgi/insights" element={<Suspense fallback={<CrmLoadingFallback />}><CgiInsightsOptIn /></Suspense>} />
