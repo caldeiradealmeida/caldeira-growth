@@ -14,6 +14,8 @@ import { sectionLayout } from "@/lib/sectionLayout";
 import { localizedPath } from "@/lib/routing";
 import { homeContent, siteMeta, testimonials } from "@/data/strategicContent";
 import HeroVideo from "@/components/home/HeroVideo";
+import MentoringSection from "@/components/home/MentoringSection";
+import { mentoringContent } from "@/data/mentoringContent";
 
 /** Keeps the last word together so "executá-la?" never breaks at its hyphen. */
 function HeroTitle({ text }: { text: string }) {
@@ -70,7 +72,7 @@ export default function Index() {
                 asChild
                 className="bg-accent hover:bg-accent/85 text-accent-foreground font-semibold text-base px-7 py-5 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-[1.02]"
               >
-                <Link to={localizedPath("contact", lang)}>{h.primaryCta}</Link>
+                <Link to={localizedPath("mentoring", lang)}>{mentoringContent[lang].home.heroCta}</Link>
               </Button>
               <Button
                 size="lg"
@@ -86,6 +88,8 @@ export default function Index() {
       </section>
 
       <ClientStrip lang={lang} />
+
+      <MentoringSection lang={lang} />
 
       <BottlenecksSection lang={lang} />
 

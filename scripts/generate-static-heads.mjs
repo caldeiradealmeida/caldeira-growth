@@ -15,6 +15,7 @@ const spanishIndexableKeys = new Set([
   "about",
   "contact",
   "relay",
+  "mentoring",
   "privacy",
 ]);
 
@@ -233,6 +234,27 @@ const pages = [
         title: "Caldeira Relay | Diagnóstico de integración entre áreas",
         description:
           "Toda la organización responde en 5 minutos. El panel muestra dónde se rompe el trabajo entre un área y otra antes de que el cliente lo sienta, y vuelve a medir para demostrar que cambió.",
+      },
+    },
+  },
+  {
+    key: "mentoring",
+    paths: { pt: "/mentoria", en: "/en/mentoring", es: "/es/mentoria" },
+    meta: {
+      pt: {
+        title: "Mentoria Executiva | Denis Caldeira",
+        description:
+          "Mentoria individual para CEOs, fundadores e executivos. Um interlocutor que já esteve na cadeira, para as decisões que você hoje toma sozinho.",
+      },
+      en: {
+        title: "Executive Mentoring | Denis Caldeira",
+        description:
+          "One-to-one mentoring for CEOs, founders and executives. A thinking partner who has held the role, for the decisions you now make alone.",
+      },
+      es: {
+        title: "Mentoría Ejecutiva | Denis Caldeira",
+        description:
+          "Mentoría individual para CEOs, fundadores y ejecutivos. Un interlocutor que ya estuvo en el cargo, para las decisiones que hoy usted toma solo.",
       },
     },
   },

@@ -29,6 +29,7 @@ export const siteMeta: Localized<{
 export const navigation: Localized<{
   home: string;
   consulting: string;
+  mentoring: string;
   executiveDevelopment: string;
   speaking: string;
   content: string;
@@ -42,6 +43,7 @@ export const navigation: Localized<{
   pt: {
     home: "Início",
     consulting: "Consultoria",
+    mentoring: "Mentoria",
     executiveDevelopment: "Desenvolvimento Executivo",
     speaking: "Palestras",
     content: "Conteúdo",
@@ -55,6 +57,7 @@ export const navigation: Localized<{
   en: {
     home: "Home",
     consulting: "Consulting",
+    mentoring: "Mentoring",
     executiveDevelopment: "Executive Development",
     speaking: "Speaking",
     content: "Content",
@@ -68,6 +71,7 @@ export const navigation: Localized<{
   es: {
     home: "Inicio",
     consulting: "Consultoría",
+    mentoring: "Mentoría",
     executiveDevelopment: "Desarrollo Ejecutivo",
     speaking: "Conferencias",
     content: "Contenidos",
